@@ -1,0 +1,17 @@
+<div class="bsp-demo">
+  <div class="bsp-demo__viewport">
+    <canvas #canvas class="bsp-demo__canvas" width="1280" height="720"></canvas>
+    <canvas #hud class="bsp-demo__hud" aria-hidden="true"></canvas>
+
+    <output class="bsp-demo__fps">
+      {{ fps() }} FPS · {{ frameMs() }} ms (max {{ frameMaxMs() }}) · {{ threads() }} thread(s) ·
+      textures:
+      {{ texturesLoaded() ? 'WebP' : 'procédural' }}
+    </output>
+  </div>
+
+  <p class="bsp-demo__hint">
+    Z/W/S = avancer · A/Q/D/←→ = strafe · clic = souris · F = plein écran · H/J = HP −/+ · G =
+    stress (debug)
+  </p>
+</div>

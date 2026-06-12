@@ -1,0 +1,147 @@
+{
+  "projectiles": {
+    "staple": {
+      "sprite": "/game/weapons/effects/projectiles/proj_staple.webp",
+      "w": 171,
+      "h": 376,
+      "size": 0.4,
+      "anchorX": 0.5,
+      "drop": 0.24,
+      "billboard": true,
+      "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
+    },
+    "nail": {
+      "sprite": "/game/weapons/effects/projectiles/proj_nail.webp",
+      "w": 192,
+      "h": 316,
+      "size": 0.45,
+      "anchorX": 0.5,
+      "drop": 0.24,
+      "billboard": true,
+      "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
+    },
+    "rocket": {
+      "sprite": "/game/weapons/effects/projectiles/proj_rocket.webp",
+      "w": 368,
+      "h": 697,
+      "size": 1,
+      "anchorX": 0.5,
+      "drop": 0.12,
+      "billboard": true,
+      "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
+    },
+    "plasma": {
+      "sprite": "/game/weapons/effects/projectiles/proj_plasma.webp",
+      "w": 525,
+      "h": 264,
+      "size": 0.5,
+      "anchorX": 0.6,
+      "drop": 0.12,
+      "billboard": true,
+      "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
+    },
+    "bfg": {
+      "sprite": "/game/weapons/effects/projectiles/proj_bfg.webp",
+      "w": 796,
+      "h": 438,
+      "size": 1.3,
+      "anchorX": 0.6,
+      "drop": 0.12,
+      "billboard": true,
+      "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
+    }
+  },
+  "impacts": {
+    "impact_metal": {
+      "sheet": "/game/weapons/effects/impacts/impact_metal_strip.webp",
+      "frames": 3,
+      "frameWidth": 159,
+      "frameHeight": 93,
+      "size": 1,
+      "widthScale": 1,
+      "frameDuration_s": 0.05,
+      "loop": false,
+      "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
+    },
+    "impact_frost": {
+      "sheet": "/game/weapons/effects/impacts/impact_frost_strip.webp",
+      "frames": 3,
+      "frameWidth": 173,
+      "frameHeight": 123,
+      "size": 1,
+      "widthScale": 1,
+      "frameDuration_s": 0.05,
+      "loop": false,
+      "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
+    },
+    "explosion": {
+      "sheet": "/game/weapons/effects/impacts/explosion_strip.webp",
+      "frames": 4,
+      "frameWidth": 141,
+      "frameHeight": 129,
+      "size": 1,
+      "widthScale": 1,
+      "frameDuration_s": 0.05,
+      "loop": false,
+      "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
+    },
+    "impact_plasma": {
+      "sheet": "/game/weapons/effects/impacts/impact_plasma_strip.webp",
+      "frames": 3,
+      "frameWidth": 150,
+      "frameHeight": 117,
+      "size": 1,
+      "widthScale": 1,
+      "frameDuration_s": 0.05,
+      "loop": false,
+      "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
+    },
+    "explosion_bfg": {
+      "sheet": "/game/weapons/effects/impacts/explosion_bfg_strip.webp",
+      "frames": 4,
+      "frameWidth": 211,
+      "frameHeight": 215,
+      "size": 1.4,
+      "widthScale": 2.4,
+      "frameDuration_s": 0.05,
+      "loop": false,
+      "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
+    }
+  },
+  "weapon_mapping": {
+    "fist": {
+      "melee": true,
+      "hitEffect": "impact_metal"
+    },
+    "chainsaw": {
+      "melee": true,
+      "hitEffect": "impact_metal"
+    },
+    "pistol": {
+      "projectile": "staple",
+      "impact": "impact_metal"
+    },
+    "chaingun": {
+      "projectile": "nail",
+      "impact": "impact_metal"
+    },
+    "shotgun": {
+      "hitscan": true,
+      "impact": "impact_metal"
+    },
+    "rocket": {
+      "projectile": "rocket",
+      "impact": "explosion",
+      "aoe": true
+    },
+    "plasma": {
+      "projectile": "plasma",
+      "impact": "impact_plasma"
+    },
+    "bfg": {
+      "projectile": "bfg",
+      "impact": "explosion_bfg",
+      "aoe": true
+    }
+  }
+}

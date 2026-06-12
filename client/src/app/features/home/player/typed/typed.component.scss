@@ -1,0 +1,27 @@
+:host {
+	display: inline;
+}
+
+.typed__ghost {
+	visibility: hidden;
+}
+
+.typed__caret {
+	position: relative;
+	display: inline-block;
+	width: 0;
+
+	// The caret is an empty inline-block, so its baseline is its bottom edge — it sits ON the
+	// text baseline. Anchor the bar to that baseline (`bottom`) and grow it upward over the
+	// glyph height; anchoring with `top` instead dropped the caret a full line below the text.
+	&::after {
+		content: '';
+		position: absolute;
+		bottom: -0.1em;
+		left: 0;
+		width: 0.5em;
+		height: 1.1em;
+		background: currentcolor;
+		animation: blink 1s steps(1) infinite;
+	}
+}

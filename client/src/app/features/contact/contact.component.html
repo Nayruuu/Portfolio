@@ -1,0 +1,172 @@
+@let content = i18n.content().contact;
+<section class="tabview" data-screen-label="10 Tab — contact">
+  <div class="tabview__head">
+    <div>
+      <h2 class="tabview__title">
+        <span>{{ content.heading }}</span>
+      </h2>
+      <p class="tabview__sub">{{ content.subtitle }}</p>
+    </div>
+  </div>
+
+  <div class="contact-grid">
+    <div>
+      <div class="contact-avail">
+        <div class="contact-avail__l">
+          <div class="contact-avail__status">
+            <span class="contact-avail__dot"></span>
+            {{ content.avail.status }}
+          </div>
+          <div class="contact-avail__title">{{ content.avail.title }}</div>
+          <div class="contact-avail__sub">{{ content.avail.subtitle }}</div>
+        </div>
+        <div class="contact-avail__r">
+          <div class="contact-avail__rt">
+            {{ content.responseTimeLabel }}
+          </div>
+          <div class="contact-avail__rt-v">{{ content.responseTime }}</div>
+        </div>
+      </div>
+
+      <form class="contact-form" #form="ngForm" (ngSubmit)="submit(form)">
+        <div class="contact-form__head">
+          <span class="contact-form__head-dot contact-form__head-dot--red"></span>
+          <span class="contact-form__head-dot contact-form__head-dot--yellow"></span>
+          <span class="contact-form__head-dot contact-form__head-dot--green"></span>
+          <span class="contact-form__head-title"> message.compose — {{ content.composeNew }} </span>
+        </div>
+        <div class="contact-form__body">
+          <label>
+            <span class="contact-form__lbl">
+              <span>$</span>
+              {{ content.formLabels.name }}
+            </span>
+            <input
+              #nameModel="ngModel"
+              [(ngModel)]="name"
+              name="name"
+              required
+              [class.is-error]="submitted() && nameModel.invalid"
+              [attr.aria-invalid]="submitted() && nameModel.invalid"
+              [attr.aria-describedby]="submitted() && nameModel.invalid ? 'err-name' : null"
+            />
+            @if (submitted() && nameModel.invalid) {
+              <span id="err-name" class="contact-form__error" role="alert">{{
+                content.formLabels.required
+              }}</span>
+            }
+          </label>
+          <label>
+            <span class="contact-form__lbl">
+              <span>$</span>
+              {{ content.formLabels.email }}
+            </span>
+            <input
+              #emailModel="ngModel"
+              type="email"
+              [(ngModel)]="email"
+              name="email"
+              required
+              email
+              [class.is-error]="submitted() && emailModel.invalid"
+              [attr.aria-invalid]="submitted() && emailModel.invalid"
+              [attr.aria-describedby]="submitted() && emailModel.invalid ? 'err-email' : null"
+            />
+            @if (submitted() && emailModel.invalid) {
+              <span id="err-email" class="contact-form__error" role="alert">{{
+                emailModel.errors?.['required']
+                  ? content.formLabels.required
+                  : content.formLabels.invalidEmail
+              }}</span>
+            }
+          </label>
+          <label>
+            <span class="contact-form__lbl">
+              <span>$</span>
+              {{ content.formLabels.subject }}
+            </span>
+            <select [(ngModel)]="subject" name="subject">
+              @for (subjectOption of content.subjects; track subjectOption) {
+                <option>{{ subjectOption }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            <span class="contact-form__lbl">
+              <span>$</span>
+              {{ content.formLabels.message }}
+            </span>
+            <textarea
+              #messageModel="ngModel"
+              rows="6"
+              [(ngModel)]="message"
+              name="message"
+              required
+              [placeholder]="placeholder()"
+              [class.is-error]="submitted() && messageModel.invalid"
+              [attr.aria-invalid]="submitted() && messageModel.invalid"
+              [attr.aria-describedby]="submitted() && messageModel.invalid ? 'err-message' : null"
+            ></textarea>
+            @if (submitted() && messageModel.invalid) {
+              <span id="err-message" class="contact-form__error" role="alert">{{
+                content.formLabels.required
+              }}</span>
+            }
+          </label>
+          <div class="contact-form__actions">
+            <button type="submit" class="btn btn--accent" [disabled]="state() !== 'idle'">
+              @switch (state()) {
+                @case ('idle') {
+                  <sd-icon name="mail" [size]="14" />
+                  {{ content.formLabels.send }}
+                }
+                @case ('sending') {
+                  <span>{{ content.formLabels.sending }}</span>
+                }
+                @case ('sent') {
+                  <span>✔ {{ shortSent() }}</span>
+                }
+              }
+            </button>
+            <span class="contact-form__hint">
+              {{ content.orVia }}
+              <a href="mailto:contact&#64;super-dev.app">contact&#64;super-dev.app</a>
+            </span>
+          </div>
+          <p class="contact-form__status" role="status" aria-live="polite">
+            @if (state() === 'sent') {
+              ✔ {{ content.formLabels.sent }}
+            }
+          </p>
+        </div>
+      </form>
+    </div>
+
+    <aside class="contact-side">
+      <div class="contact-side__head">
+        {{ content.otherChannels }}
+      </div>
+      <ul class="contact-side__list">
+        @for (method of content.altMethods; track method.label) {
+          <li class="contact-side__row">
+            <div class="contact-side__icon">{{ iconOf(method.kind) }}</div>
+            <div>
+              <a
+                [href]="linkOf(method)"
+                [attr.target]="method.kind === 'mail' ? null : '_blank'"
+                rel="noopener noreferrer"
+                class="contact-side__lbl"
+                >{{ method.label }}</a
+              >
+              <div class="contact-side__sub">{{ method.subtitle }}</div>
+            </div>
+          </li>
+        }
+      </ul>
+      <div class="contact-side__hint">
+        <span>// </span>
+        {{ content.pgp }}
+      </div>
+    </aside>
+  </div>
+</section>

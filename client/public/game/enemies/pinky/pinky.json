@@ -1,0 +1,165 @@
+{
+  "id": "zombie",
+  "name": "Corporate Husk",
+  "type": "enemy",
+  "anchor": "feet_ground_center",
+  "cell": [
+    512,
+    716
+  ],
+  "anchor_px": [
+    268,
+    703
+  ],
+  "filter": "nearest",
+  "states": {
+    "walk": {
+      "atlas": "atlas/zombie_walk_atlas.png",
+      "frames": 4,
+      "loop": true,
+      "fps": 6,
+      "rows": [
+        "front",
+        "34front",
+        "side",
+        "34back",
+        "back"
+      ],
+      "rotation_map": {
+        "1": {
+          "row": "front",
+          "flip": false
+        },
+        "2": {
+          "row": "34front",
+          "flip": false
+        },
+        "3": {
+          "row": "side",
+          "flip": false
+        },
+        "4": {
+          "row": "34back",
+          "flip": false
+        },
+        "5": {
+          "row": "back",
+          "flip": false
+        },
+        "6": {
+          "row": "34back",
+          "flip": true
+        },
+        "7": {
+          "row": "side",
+          "flip": true
+        },
+        "8": {
+          "row": "34front",
+          "flip": true
+        }
+      }
+    },
+    "attack": {
+      "atlas": "atlas/zombie_attack_atlas.png",
+      "frames": 5,
+      "loop": false,
+      "fps": 10,
+      "contact_frame": 3,
+      "rows": [
+        "front",
+        "34front",
+        "side"
+      ],
+      "rotation_map": {
+        "1": {
+          "row": "front",
+          "flip": false
+        },
+        "2": {
+          "row": "34front",
+          "flip": false
+        },
+        "3": {
+          "row": "side",
+          "flip": false
+        },
+        "4": {
+          "row": "34front",
+          "flip": false
+        },
+        "5": {
+          "row": "34front",
+          "flip": false
+        },
+        "6": {
+          "row": "34front",
+          "flip": true
+        },
+        "7": {
+          "row": "side",
+          "flip": true
+        },
+        "8": {
+          "row": "34front",
+          "flip": true
+        }
+      }
+    },
+    "pain": {
+      "atlas": "atlas/zombie_pain_atlas.png",
+      "frames": 1,
+      "loop": false,
+      "duration_ms": 130,
+      "rows": [
+        "front"
+      ],
+      "rotation_map": {
+        "1": {
+          "row": "front",
+          "flip": false
+        },
+        "2": {
+          "row": "front",
+          "flip": false
+        },
+        "3": {
+          "row": "front",
+          "flip": false
+        },
+        "4": {
+          "row": "front",
+          "flip": false
+        },
+        "5": {
+          "row": "front",
+          "flip": false
+        },
+        "6": {
+          "row": "front",
+          "flip": false
+        },
+        "7": {
+          "row": "front",
+          "flip": false
+        },
+        "8": {
+          "row": "front",
+          "flip": false
+        }
+      }
+    },
+    "death": {
+      "atlas": "atlas/zombie_death_atlas.png",
+      "frames": 6,
+      "loop": false,
+      "fps": 9,
+      "persist_last": true,
+      "rows": [
+        "front"
+      ],
+      "single_angle": true
+    }
+  },
+  "_note": "One global cell + feet/ground anchor. rotation_map: row+flip(mirror); rot 4-6 of attack/pain fall back to nearest drawn row; death single front angle."
+}

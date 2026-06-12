@@ -1,0 +1,16 @@
+<nav class="tabs" data-screen-label="02 Channel tabs" role="tablist">
+  @for (label of content().tabs; track label; let index = $index) {
+    <a
+      class="tab"
+      role="tab"
+      [routerLink]="links()[index]"
+      routerLinkActive
+      #routerLinkActiveDirective="routerLinkActive"
+      [routerLinkActiveOptions]="{ exact: index === 0 }"
+      [attr.aria-selected]="routerLinkActiveDirective.isActive"
+    >
+      <sd-icon class="tab__icon" [name]="icons[index]" [size]="22" aria-hidden="true" />
+      <span class="tab__label">{{ label }}</span>
+    </a>
+  }
+</nav>

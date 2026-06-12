@@ -1,0 +1,157 @@
+@use 'breakpoints' as bp;
+
+.pgrid {
+	display: grid;
+	// `min(360px, 100%)` clamps the track to the container so a single card never overflows
+	// the 360px floor (a bare `minmax(360px, …)` forces horizontal scroll).
+	grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+	gap: 16px;
+}
+
+.pcard {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0;
+	color: inherit;
+	background: var(--surface);
+	border: 1px solid var(--border-soft);
+	border-radius: var(--r-md);
+	overflow: hidden;
+	transition: border-color 0.15s;
+
+	&__thumb {
+		position: relative;
+		aspect-ratio: 16 / 11;
+		background: #0a0a0c;
+		padding: 8px 8px 6px 0;
+	}
+
+	&__stack {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		perspective: 800px;
+	}
+
+	&__stack-l1,
+	&__stack-l2,
+	&__stack-l3 {
+		position: absolute;
+		border-radius: 4px;
+		border: 1px solid rgb(0 0 0 / 40%);
+	}
+
+	&__stack-l3 {
+		inset: -6px -14px 14px 6px;
+		opacity: 0.35;
+	}
+
+	&__stack-l2 {
+		inset: -3px -7px 7px 3px;
+		opacity: 0.55;
+	}
+
+	&__stack-l1 {
+		inset: 0;
+		border: 1px solid rgb(255 255 255 / 8%);
+		display: grid;
+		place-items: center;
+	}
+
+	&__stack-sym {
+		font-family: var(--f-mono);
+		font-size: 38px;
+		font-weight: 700;
+		text-shadow: 0 0 24px currentcolor;
+	}
+
+	&__badge {
+		position: absolute;
+		bottom: 10px;
+		left: 10px;
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		background: rgb(0 0 0 / 78%);
+		border-radius: 4px;
+		padding: 3px 8px;
+		font-family: var(--f-mono);
+		font-size: 10.5px;
+		color: #fff;
+	}
+
+	&__body {
+		padding: 14px 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	&__title {
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		margin: 0;
+		line-height: 1.25;
+	}
+
+	&__meta {
+		display: flex;
+		gap: 8px;
+		font-family: var(--f-mono);
+		font-size: 11px;
+		color: var(--text-faint);
+	}
+
+	&__desc {
+		font-size: 12.5px;
+		color: var(--text-dim);
+		margin: 4px 0 0;
+		line-height: 1.5;
+		flex: 1;
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	&__cta {
+		align-self: flex-start;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		color: var(--text);
+		padding: 6px 10px;
+		border-radius: 999px;
+		cursor: pointer;
+		margin-top: 8px;
+		transition: background 0.15s;
+
+		&:hover {
+			background: var(--surface-3);
+		}
+	}
+}
+
+@include bp.from(md) {
+	.pcard {
+		grid-template-columns: 200px 1fr;
+	}
+}
+
+// Card hover (border lift, plus the light-theme shadow) only with a real pointer, so it
+// never sticks after a tap on touch devices.
+@media (hover: hover) {
+	.pcard:hover {
+		border-color: var(--border);
+	}
+
+	/* Light theme override (co-located). */
+	:host-context([data-theme='light']) .pcard:hover {
+		box-shadow: var(--sh-1);
+	}
+}

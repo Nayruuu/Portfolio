@@ -1,0 +1,106 @@
+<div class="scene scene--fit" [class.scene--on]="active()">
+  <div class="scene-projects-rich">
+    <div class="scene-projects-rich__head">
+      <div class="scene-projects-rich__cmd">{{ titleTyped() }}<span class="cursor">_</span></div>
+      <div class="scene-projects-rich__sub" [style]="reveal(elapsed(), schedule().subtitleAt, 0.3)">
+        <span>→</span>&ngsp;<sd-typed
+          [elapsed]="elapsed()"
+          [at]="schedule().subtitleAt"
+          [text]="data().subtitle"
+          [cps]="cps"
+        />
+      </div>
+    </div>
+    <div class="scene-projects-rich__list">
+      @for (project of projects(); track project.number; let index = $index) {
+        <div
+          class="proj-card"
+          [class.is-focus]="focusIndex() === index"
+          [style]="reveal(elapsed(), schedule().cards[index].numberAt, 0.3)"
+        >
+          <div class="proj-card__l">
+            <div class="proj-card__num">
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().cards[index].numberAt"
+                [text]="project.number"
+                [cps]="cps"
+              />
+            </div>
+            <div class="proj-card__tag">
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().cards[index].tagAt"
+                [text]="project.tag"
+                [cps]="cps"
+              />
+            </div>
+          </div>
+          <div class="proj-card__r">
+            <div
+              class="proj-card__head"
+              [class.is-pending]="elapsed() < schedule().cards[index].nameAt"
+            >
+              <div class="proj-card__name">
+                <sd-typed
+                  [elapsed]="elapsed()"
+                  [at]="schedule().cards[index].nameAt"
+                  [text]="project.name"
+                  [cps]="cps"
+                />
+              </div>
+              <div class="proj-card__metric">
+                <sd-typed
+                  [elapsed]="elapsed()"
+                  [at]="schedule().cards[index].metricAt"
+                  [text]="project.metric"
+                  [cps]="cps"
+                />
+              </div>
+            </div>
+            <div
+              class="proj-card__role"
+              [class.is-pending]="elapsed() < schedule().cards[index].roleAt"
+            >
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().cards[index].roleAt"
+                [text]="project.role"
+                [cps]="cps"
+              />
+            </div>
+            <div
+              class="proj-card__desc"
+              [class.is-pending]="elapsed() < schedule().cards[index].descriptionAt"
+            >
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().cards[index].descriptionAt"
+                [text]="project.description"
+                [cps]="cps"
+              />
+            </div>
+            <div
+              class="proj-card__stack"
+              [class.is-pending]="elapsed() < schedule().cards[index].chipAts[0]"
+            >
+              @for (chip of project.stack; track chip; let chipIndex = $index) {
+                <span
+                  class="stack-chip"
+                  [style]="reveal(elapsed(), schedule().cards[index].chipAts[chipIndex], 0.3)"
+                >
+                  <sd-typed
+                    [elapsed]="elapsed()"
+                    [at]="schedule().cards[index].chipAts[chipIndex]"
+                    [text]="chip"
+                    [cps]="cps"
+                  />
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

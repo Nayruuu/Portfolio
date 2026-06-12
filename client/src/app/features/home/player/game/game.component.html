@@ -1,0 +1,153 @@
+@let content = i18n.content();
+<!-- Stop in-game clicks (exit / mute / canvas) bubbling to the player's `(click)` toggle-play: by the
+     time an exit click reaches it, `game.exit()` has already flipped the mode, so its `game.running()`
+     guard would miss and re-pause the just-resumed video. -->
+<div class="game" (click)="$event.stopPropagation()">
+  <canvas
+    #canvas
+    class="game__canvas"
+    width="640"
+    height="360"
+    (mousedown)="onCanvasPointerDown($event)"
+    (contextmenu)="onContextMenu($event)"
+  ></canvas>
+
+  <!-- Chain-detonation blue flash — the shell drives its opacity directly (no signal churn) on a plasma
+       chain hop, fading per frame. Purely decorative → aria-hidden. -->
+  <div #flash class="game__flash" aria-hidden="true"></div>
+
+  <!-- Zone-transition black fade — the shell drives its opacity directly while the exit airlock opens (fade
+       to black) and on the new zone (fade back in). Purely decorative → aria-hidden. -->
+  <div #fade class="game__fade" aria-hidden="true"></div>
+
+  <!-- Compact keyboard-controls recap (top-left). The i18n string is ` · `-split into one row per control;
+       hidden on touch (coarse pointers play with the on-screen buttons). Decorative → aria-hidden. -->
+  <div class="game__controls" aria-hidden="true">
+    @for (control of content.gameControls.split(' · '); track $index) {
+      <span class="game__control">{{ control }}</span>
+    }
+  </div>
+
+  <button
+    class="game__mute"
+    type="button"
+    [attr.aria-label]="musicMuted() ? content.aria.gameUnmute : content.aria.gameMute"
+    (click)="toggleMusic()"
+  >
+    <sd-icon [name]="musicMuted() ? 'volume-off' : 'volume'" [size]="20" />
+  </button>
+
+  <button
+    class="game__exit"
+    type="button"
+    [attr.aria-label]="content.aria.gameExit"
+    (click)="exited.emit()"
+  >
+    <sd-icon name="exit" [size]="20" />
+  </button>
+
+  @if (fullscreenAvailable()) {
+    <button
+      class="game__fullscreen"
+      type="button"
+      [attr.aria-label]="fullscreen() ? content.aria.exitFullscreen : content.aria.fullscreen"
+      (click)="fullscreenToggle.emit()"
+    >
+      <sd-icon [name]="fullscreen() ? 'full-exit' : 'full'" [size]="20" />
+    </button>
+  }
+
+  <!-- Mobile dual-thumb overlay (CSS-hidden on fine pointers). The start handlers go through the
+       component (they fire the audio gesture); move/end are pure input. -->
+  <div class="game__touch" aria-hidden="true">
+    <div
+      class="game__joystick"
+      (touchstart)="onJoyStart($event)"
+      (touchmove)="input.joyMove($event)"
+      (touchend)="input.joyEnd()"
+      (touchcancel)="input.joyEnd()"
+    ></div>
+    <div
+      class="game__look"
+      (touchstart)="onLookStart($event)"
+      (touchmove)="input.lookMove($event)"
+      (touchend)="input.lookEnd()"
+      (touchcancel)="input.lookEnd()"
+    ></div>
+
+    <!-- Visible joystick — appears under the left thumb, knob follows it. -->
+    @if (input.joyBase(); as base) {
+      <div class="game__stick" [style.left.px]="base.x" [style.top.px]="base.y">
+        <span
+          class="game__stick-knob"
+          [style.transform]="'translate(' + input.joyKnob().x + 'px, ' + input.joyKnob().y + 'px)'"
+        ></span>
+      </div>
+    }
+  </div>
+
+  <!-- Right-thumb fire button — a real control, so outside the aria-hidden touch overlay (coarse
+       pointers only; on desktop you fire by clicking the locked canvas). Press holds the trigger
+       (auto weapons burst while held); release/cancel drops it — a tap is one shot for a semi weapon. -->
+  <button
+    class="game__fire"
+    type="button"
+    [attr.aria-label]="content.aria.gameFire"
+    (touchstart)="onFireDown()"
+    (touchend)="onFireUp()"
+    (touchcancel)="onFireUp()"
+  ></button>
+
+  <!-- Right-thumb use button (coarse pointers only) — open the exit switch you're facing. Outside the
+       aria-hidden overlay (a real control); on desktop you use it by pressing E. -->
+  <button
+    class="game__use"
+    type="button"
+    [attr.aria-label]="content.aria.gameUse"
+    (touchstart)="use()"
+  ></button>
+
+  <!-- Right-thumb weapon-switch button (coarse pointers only) — cycle the keyboard ⇄ chainsaw ⇄ stapler.
+       Outside the aria-hidden overlay (a real control); on desktop you switch with the 1 key or the wheel. -->
+  <button
+    class="game__switch"
+    type="button"
+    [attr.aria-label]="content.aria.gameSwitch"
+    (touchstart)="onSwitch()"
+  ></button>
+
+  <!-- Right-thumb reload button (coarse pointers only) — only shown for a magazine weapon (the stapler),
+       so a melee weapon never offers a pointless reload. Outside the aria-hidden overlay (a real control);
+       on desktop you reload with the R key. -->
+  @if (weaponUsesMag()) {
+    <button
+      class="game__reload"
+      type="button"
+      [attr.aria-label]="content.aria.gameReload"
+      (touchstart)="onReload()"
+    ></button>
+  }
+
+  <!-- DOOM-style image HUD — the whole status bar composited into one canvas (health/mental digits, the
+       dev-face mugshot, the arms grid, the weapon + ammo readout, keycards). The component sizes its
+       backing store to the displayed pixel size (DPR-aware, capped at the x1.0 native width); `DoomHud`
+       picks the matching art tier and resolves every zone from normalized fractions, so it stays crisp at
+       any scale. The SCSS drives the display size. Purely decorative → aria-hidden. -->
+  <canvas #hud class="game__hud" aria-hidden="true"></canvas>
+
+  @if (dead()) {
+    <div class="game__gameover" role="alert">{{ content.gameOver }}</div>
+  }
+
+  <!-- Asset-preload overlay — covers everything until every served game image is decoded, then the loop
+       starts. Language-neutral (a bar + a percentage), so it needs no translated string; the percentage
+       doubles as the accessible label on the live status region. -->
+  @if (loading()) {
+    <div class="game__loading" role="status" aria-live="polite" [attr.aria-label]="loadPct() + '%'">
+      <div class="game__loading-track">
+        <div class="game__loading-fill" [style.width.%]="loadPct()"></div>
+      </div>
+      <span class="game__loading-pct">{{ loadPct() }}%</span>
+    </div>
+  }
+</div>

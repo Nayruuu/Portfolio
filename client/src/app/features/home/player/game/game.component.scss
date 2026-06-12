@@ -1,0 +1,287 @@
+:host {
+	position: absolute;
+	inset: 0;
+	display: block;
+}
+
+.game {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background: var(--bg);
+	// A size container, so the HUD bar sizes against the GAME area (`cqh`), NOT the viewport (`vh`):
+	// otherwise windowed / embedded play (game ≠ viewport) scales the bar differently than fullscreen and
+	// it swallows the weapon's hands. With `cqh`, fullscreen / windowed / mobile are identical.
+	container-type: size;
+	// Swallow native gestures (page scroll / rubber-band / pinch-zoom) so dragging plays the game.
+	touch-action: none;
+	overscroll-behavior: none;
+	// No long-press selection or iOS callout menu while dragging the controls (explicit `-webkit-`
+	// for older iOS Safari, not relying on autoprefixer).
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-touch-callout: none;
+}
+
+.game__canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+	// Higher-res backing (`MAX_BACKING_WIDTH`) + `pixelated` so the canvas-to-display upscale is
+	// nearest-neighbour, not bilinear → crisp wall/riser texels (DOOM-like), never a smeared stretch.
+	image-rendering: pixelated;
+	cursor: crosshair;
+}
+
+// Punch-flash overlay — a full-frame glow over the world, under the HUD bar. Opacity is driven inline by
+// the loop (0 at rest, so it costs nothing and never shows in the visual baselines). Blue by default (the
+// plasma chain detonation); the `--charge` modifier turns it green for the datacenter BFG's charge buildup
+// + discharge (the shell toggles the class). The green is intentional — kept vivid, not desaturated.
+.game__flash {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	opacity: 0;
+	background: radial-gradient(circle, rgb(90 150 255 / 55%), rgb(30 70 200 / 0%) 72%);
+	pointer-events: none;
+}
+
+.game__flash--charge {
+	background: radial-gradient(circle, rgb(150 255 120 / 82%), rgb(30 200 60 / 0%) 92%);
+}
+
+// Zone-transition blackout — a full-screen black veil the loop fades in/out (inline opacity) while the exit
+// airlock opens and the next zone loads. Above the HUD (z-index 3) so the whole screen blacks out; opacity 0
+// at rest, so it costs nothing and never shows in the visual baselines.
+.game__fade {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	opacity: 0;
+	background: #000;
+	pointer-events: none;
+}
+
+.game__exit,
+.game__fullscreen,
+.game__mute {
+	position: absolute;
+	top: 10px;
+	z-index: 2;
+	width: 36px;
+	height: 36px;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	background: rgb(0 0 0 / 45%);
+	border: 1px solid var(--border);
+	color: var(--text);
+	cursor: pointer;
+}
+
+// Top-right cluster, right→left: exit (the door, most reachable), fullscreen, then mute.
+.game__exit {
+	right: 10px;
+}
+
+.game__fullscreen {
+	right: 54px;
+}
+
+.game__mute {
+	right: 98px;
+}
+
+// Compact keyboard-controls recap, pinned top-left — a faint reference (one row per control), keyboard-only
+// so it's hidden on touch (see the coarse-pointer block). Decorative → no pointer.
+.game__controls {
+	position: absolute;
+	top: 10px;
+	left: 10px;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 5px 8px;
+	border-radius: 6px;
+	background: rgb(0 0 0 / 38%);
+	border: 1px solid var(--border);
+	color: var(--text);
+	font: 500 11px/1.5 var(--f-mono);
+	opacity: 0.62;
+	pointer-events: none;
+}
+
+.game__control {
+	white-space: nowrap;
+}
+
+.game__fire,
+.game__use,
+.game__switch,
+.game__reload {
+	position: absolute;
+	right: 24px;
+	z-index: 2;
+	width: 72px;
+	height: 72px;
+	border-radius: 999px;
+	background: rgb(0 0 0 / 35%);
+	display: none;
+}
+
+.game__fire {
+	bottom: 90px;
+	border: 2px solid var(--accent);
+}
+
+.game__use {
+	bottom: 174px;
+	border: 2px solid var(--text);
+}
+
+.game__switch {
+	bottom: 258px;
+	border: 2px solid var(--info);
+}
+
+.game__reload {
+	bottom: 342px;
+	border: 2px solid var(--warn);
+}
+
+.game__touch {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	display: none;
+	touch-action: none;
+}
+
+.game__joystick {
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	width: 50%;
+	height: 65%;
+}
+
+.game__look {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	width: 50%;
+	height: 65%;
+}
+
+/* Visible floating joystick — `left`/`top` track the thumb (set inline); the negative margins
+   centre the 96px base on that point, and the knob translates by the clamped thumb offset. */
+.game__stick {
+	position: absolute;
+	width: 96px;
+	height: 96px;
+	margin: -48px 0 0 -48px;
+	border-radius: 999px;
+	border: 2px solid rgb(255 255 255 / 30%);
+	background: rgb(255 255 255 / 8%);
+	pointer-events: none;
+}
+
+.game__stick-knob {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 44px;
+	height: 44px;
+	margin: -22px 0 0 -22px;
+	border-radius: 999px;
+	background: var(--accent);
+	opacity: 0.85;
+}
+
+/* Touch devices only — expose the two control zones + the fire button. */
+@media (pointer: coarse) {
+	.game__touch {
+		display: block;
+	}
+
+	.game__fire,
+	.game__use,
+	.game__switch,
+	.game__reload {
+		display: block;
+	}
+
+	.game__controls {
+		display: none; // keyboard recap is irrelevant with the on-screen controls
+	}
+}
+
+/* DOOM image HUD — the composited status bar, pinned to the bottom edge. The bar is a fixed 5.24:1
+   bitmap, sized by its own HEIGHT as a fraction of the GAME area (`20cqh`, via the `.game` size container)
+   — NOT the viewport (`vh`), so fullscreen, windowed/embedded, and mobile all give the bar the SAME height
+   fraction. That `20cqh` is the single source of truth for the bar's height: `HUD_BAR_HEIGHT_FRAC` (0.2)
+   in `weapon-view.ts` matches it so the weapon's base sits exactly on the bar's top edge — the whole
+   weapon sprite stays visible above the bar. The aspect-ratio derives the width from the height;
+   `max-width:100%` keeps it from overflowing a narrow/tall game area (then it's width-limited and a touch
+   shorter, leaving a small gap below the weapon — never an overlap), and `margin-inline:auto` centres it.
+   This drives the DISPLAY size only — the component sizes the backing store to match it (DPR-aware) +
+   `DoomHud` picks the art tier, so the canvas is near 1:1 and smooth scaling keeps the art clean (no
+   magnified speckle); purely decorative → no pointer. */
+.game__hud {
+	position: absolute;
+	inset: auto 0 0;
+	z-index: 2;
+	height: 20cqh;
+	width: auto;
+	max-width: 100%;
+	margin-inline: auto;
+	aspect-ratio: 2117 / 404;
+	pointer-events: none;
+}
+
+.game__gameover {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	display: grid;
+	place-items: center;
+	background: rgb(40 0 0 / 70%);
+	color: var(--accent-hot);
+	font: 800 32px var(--f-mono);
+	letter-spacing: 2px;
+}
+
+// Asset-preload overlay — a full-screen veil above everything (z-index 4, over the fade + game-over) with a
+// centred progress bar + percentage, shown until every served image is decoded and the loop starts.
+.game__loading {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	display: grid;
+	gap: 14px;
+	place-content: center;
+	justify-items: center;
+	background: rgb(0 0 0 / 92%);
+	color: var(--accent-hot);
+	font: 700 16px var(--f-mono);
+	letter-spacing: 2px;
+}
+
+.game__loading-track {
+	width: 200px;
+	height: 6px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: rgb(255 255 255 / 12%);
+}
+
+.game__loading-fill {
+	height: 100%;
+	background: var(--accent-hot);
+	transition: width 0.1s linear;
+}
+
+.game__loading-pct {
+	font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,53 @@
+@let content = i18n.content();
+<section class="video-meta" data-screen-label="03 Video meta">
+  <h2 class="video-meta__title">{{ content.featuredTitle }}</h2>
+  <div class="video-meta__row">
+    <div class="video-meta__author">
+      <div class="video-meta__author-av">S</div>
+      <div class="video-meta__author-meta">
+        <span class="video-meta__author-name">{{ content.author }} <span>✓</span></span>
+        <span class="video-meta__author-sub"
+          >{{ content.subscribersCount }} {{ content.subscribers }}</span
+        >
+      </div>
+    </div>
+    <div class="video-meta__actions">
+      <sd-like-bar />
+      <button class="btn btn--sm"><sd-icon name="share" [size]="14" /> {{ content.share }}</button>
+      <button class="btn btn--sm"><sd-icon name="download" [size]="14" /> {{ content.cv }}</button>
+    </div>
+  </div>
+
+  <p class="video-meta__bio">{{ content.bio }}</p>
+
+  <div class="description">
+    <div class="description__meta">
+      @for (meta of content.descriptionMeta; track meta; let index = $index) {
+        <div>
+          <span>{{ meta }}:</span>{{ content.descriptionMetaValues[index] }}
+        </div>
+      }
+      <div>
+        <span>{{ content.tagsLabel }}:</span>{{ tagLine() }}
+      </div>
+    </div>
+    <p class="description__body">{{ content.descriptionBody }}</p>
+
+    <div class="description__chapters">
+      <div class="description__chapters-title">
+        {{ content.chaptersLabel }}
+        <span>({{ content.chapters.length }})</span>
+      </div>
+      @for (chapter of content.chapters; track chapter.id) {
+        <div
+          class="chap"
+          [class.is-active]="player.currentChapter().id === chapter.id"
+          (click)="player.seek(chapter.seconds)"
+        >
+          <span class="chap__ts">{{ chapter.timestamp }}</span>
+          <span class="chap__title">{{ chapter.title }}</span>
+        </div>
+      }
+    </div>
+  </div>
+</section>

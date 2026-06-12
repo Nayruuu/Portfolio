@@ -1,0 +1,27 @@
+// Global stylesheet — the SHARED layer only: design tokens, reset, and the primitives/classes
+// rendered across several components (with their light-theme overrides). Component-local styles
+// live in each component's own .scss. Split into focused partials under `styles/`.
+
+// The @use order is CASCADE-SIGNIFICANT and mirrors the original source order — notably
+// `theme-light` must come after `tokens` (its `[data-theme='light']` block re-declares the same
+// custom properties as `:root`, at equal specificity, so the later one wins). Keep this order.
+
+@use 'styles/tokens';
+@use 'styles/base';
+@use 'styles/boot';
+@use 'styles/buttons';
+@use 'styles/tabs';
+@use 'styles/layout';
+@use 'styles/tabview';
+@use 'styles/feature-bits';
+@use 'styles/theme-light';
+@use 'styles/overlays';
+@use 'styles/scenes';
+@use 'styles/scene-rich';
+@use 'styles/code-block';
+@use 'styles/dots';
+@use 'styles/likebar';
+@use 'styles/comment';
+@use 'styles/cards';
+@use 'styles/symbol-box';
+@use 'styles/loadbar';

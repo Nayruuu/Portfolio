@@ -1,0 +1,57 @@
+.btn {
+	--bg: var(--surface-2);
+	--bd: var(--border);
+	--fg: var(--text);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 16px;
+	height: 38px;
+	border-radius: 999px;
+	border: 1px solid var(--bd);
+	background: var(--bg);
+	color: var(--fg);
+	font: inherit;
+	font-weight: 500;
+	font-size: 13px;
+	cursor: pointer;
+	transition: all 0.15s;
+	white-space: nowrap;
+
+	&:hover {
+		filter: brightness(1.15);
+	}
+
+	&--primary {
+		--bg: var(--text);
+		--bd: var(--text);
+		--fg: #0a0a0b;
+		font-weight: 600;
+
+		&:hover {
+			--bg: #fff;
+			--bd: #fff;
+		}
+	}
+
+	&--accent {
+		--bg: var(--accent);
+		--bd: var(--accent);
+		--fg: #0a0a0b;
+		font-weight: 600;
+	}
+
+	&--ghost {
+		--bg: transparent;
+	}
+
+	&--sm {
+		height: 32px;
+		font-size: 12px;
+		padding: 0 12px;
+	}
+
+	&--grow {
+		flex: 1 1 auto;
+	}
+}

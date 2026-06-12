@@ -1,0 +1,236 @@
+@use 'breakpoints' as bp;
+
+// MOBILE (base) = "montage": only the focused card is shown, blown up ~2× so it lands legible once
+// the 760px scene box is downscaled into the phone player (one project after another, video-style).
+// The compact full list (all cards, real size) returns at `md`, where the scene is not downscaled.
+
+.scene-projects-rich {
+	width: 100%;
+	max-width: 840px;
+}
+
+.scene-projects-rich__head {
+	margin-bottom: 18px;
+}
+
+.scene-projects-rich__sub {
+	font-family: var(--f-mono);
+	font-size: 17px;
+	color: var(--text-dim);
+}
+
+.scene-projects-rich__list {
+	display: grid;
+	gap: 6px;
+}
+
+.proj-card {
+	display: grid;
+	grid-template-columns: 96px 1fr;
+	gap: 22px;
+	background: rgb(20 20 22 / 55%);
+	border: 1px solid var(--border);
+	border-radius: var(--r-lg);
+	padding: 22px 26px;
+}
+
+// Montage: hide every card but the one currently being typed.
+.proj-card:not(.is-focus) {
+	display: none;
+}
+
+// Montage growth: collapse a row until its text starts, so the card frame grows item-by-item
+// (the border appears little by little) instead of standing as a half-empty box. Mobile only —
+// restored at `md`, where the full list is shown at once with its reserved layout.
+.proj-card__head.is-pending,
+.proj-card__role.is-pending,
+.proj-card__desc.is-pending,
+.proj-card__stack.is-pending {
+	display: none;
+}
+
+.proj-card__l {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.proj-card__num {
+	font-family: var(--f-mono);
+	font-size: 38px;
+	font-weight: 700;
+	color: var(--accent);
+	line-height: 1;
+}
+
+.proj-card__tag {
+	font-family: var(--f-mono);
+	font-size: 15px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	border: 1px solid var(--border);
+	padding: 3px 9px;
+	border-radius: 4px;
+}
+
+.proj-card__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+.proj-card__name {
+	font-size: 27px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	color: var(--text);
+	line-height: 1.2;
+}
+
+.proj-card__metric {
+	font-family: var(--f-mono);
+	font-size: 18px;
+	color: var(--ok);
+	white-space: nowrap;
+	padding: 3px 11px;
+	background: oklch(78% 0.16 145deg / 10%);
+	border-radius: 5px;
+	border: 1px solid oklch(78% 0.16 145deg / 30%);
+	align-self: flex-start;
+	flex-shrink: 0;
+}
+
+.proj-card__role {
+	font-family: var(--f-mono);
+	font-size: 16px;
+	color: var(--text-faint);
+	margin-top: 8px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	display: block;
+	clear: both;
+}
+
+.proj-card__desc {
+	font-size: 21px;
+	color: var(--text-dim);
+	margin-top: 10px;
+	line-height: 1.4;
+}
+
+.proj-card__stack {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+	margin-top: 16px;
+}
+
+.stack-chip {
+	font-family: var(--f-mono);
+	font-size: 16px;
+	letter-spacing: 0.04em;
+	color: var(--text);
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	padding: 4px 11px;
+	border-radius: 5px;
+}
+
+// DESKTOP (`md`+) = the original compact full list, all cards visible at real size.
+@include bp.from(md) {
+	.scene-projects-rich__head {
+		margin-bottom: 10px;
+	}
+
+	.scene-projects-rich__sub {
+		font-size: 11px;
+	}
+
+	.proj-card {
+		grid-template-columns: 56px 1fr;
+		gap: 12px;
+		border-radius: var(--r-md);
+		padding: 4px 10px;
+	}
+
+	.proj-card:not(.is-focus) {
+		display: grid;
+	}
+
+	.proj-card__l {
+		gap: 4px;
+	}
+
+	.proj-card__num {
+		font-size: 18px;
+	}
+
+	.proj-card__tag {
+		font-size: 8.5px;
+		padding: 1px 5px;
+		border-radius: 3px;
+	}
+
+	.proj-card__head {
+		gap: 12px;
+	}
+
+	.proj-card__name {
+		font-size: 13px;
+		letter-spacing: -0.005em;
+		line-height: 1.25;
+	}
+
+	.proj-card__metric {
+		font-size: 10px;
+		padding: 1px 6px;
+		border-radius: 3px;
+	}
+
+	.proj-card__role {
+		font-size: 9.5px;
+		margin-top: 1px;
+	}
+
+	.proj-card__desc {
+		font-size: 11px;
+		margin-top: 2px;
+		line-height: 1.35;
+		display: -webkit-box;
+		-webkit-line-clamp: 1;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	.proj-card__stack {
+		gap: 3px;
+		margin-top: 2px;
+	}
+
+	.stack-chip {
+		font-size: 9.5px;
+		padding: 1px 6px;
+		border-radius: 3px;
+	}
+
+	// Desktop shows the full list at once — the montage "grow" collapse is mobile-only.
+	.proj-card__head.is-pending {
+		display: flex;
+	}
+
+	.proj-card__role.is-pending {
+		display: block;
+	}
+
+	.proj-card__desc.is-pending {
+		display: -webkit-box;
+	}
+
+	.proj-card__stack.is-pending {
+		display: flex;
+	}
+}

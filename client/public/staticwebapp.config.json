@@ -1,0 +1,16 @@
+{
+  "trailingSlash": "auto",
+  "globalHeaders": {
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "require-corp"
+  },
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/*.{css,js,mjs,json,svg,ico,png,jpg,jpeg,webp,gif,woff,woff2,ttf,eot,map,txt,xml}",
+      "/assets/*"
+    ]
+  },
+  "responseOverrides": { "404": { "rewrite": "/index.html", "statusCode": 200 } },
+  "mimeTypes": { ".json": "application/json", ".webp": "image/webp", ".svg": "image/svg+xml" }
+}

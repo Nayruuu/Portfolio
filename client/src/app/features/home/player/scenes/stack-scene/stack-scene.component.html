@@ -1,0 +1,59 @@
+<div class="scene scene--fit" [class.scene--on]="active()">
+  <div class="scene-stack-rich">
+    <div class="scene-stack-rich__head">
+      <div class="scene-stack-rich__cmd">{{ titleTyped() }}<span class="cursor">_</span></div>
+      <div class="scene-stack-rich__sub" [style]="reveal(elapsed(), schedule().subtitleAt, 0.3)">
+        <span>→</span>&ngsp;<sd-typed
+          [elapsed]="elapsed()"
+          [at]="schedule().subtitleAt"
+          [text]="data().subtitle"
+          [cps]="cps"
+        />
+      </div>
+    </div>
+    <div class="scene-stack-rich__grid">
+      @for (card of data().cards; track card.title; let index = $index) {
+        <div
+          class="stack-card"
+          [class.is-focus]="focusIndex() === index"
+          [style.borderColor]="card.accentColor + '40'"
+          [style]="reveal(elapsed(), schedule().cards[index].titleAt, 0.3)"
+        >
+          <div class="stack-card__head" [style.color]="card.accentColor">
+            <span class="stack-card__tag">
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().cards[index].titleAt"
+                [text]="card.title"
+                [cps]="cps"
+              />
+            </span>
+            <span class="stack-card__main">
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().cards[index].mainAt"
+                [text]="card.mainLabel"
+                [cps]="cps"
+              />
+            </span>
+          </div>
+          <ul class="stack-card__list">
+            @for (item of card.items; track item; let innerIndex = $index) {
+              <li
+                [class.is-pending]="elapsed() < schedule().cards[index].itemAts[innerIndex]"
+                [style]="reveal(elapsed(), schedule().cards[index].itemAts[innerIndex], 0.3)"
+              >
+                <span [style.color]="card.accentColor">•</span>&ngsp;<sd-typed
+                  [elapsed]="elapsed()"
+                  [at]="schedule().cards[index].itemAts[innerIndex]"
+                  [text]="item"
+                  [cps]="cps"
+                />
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+  </div>
+</div>

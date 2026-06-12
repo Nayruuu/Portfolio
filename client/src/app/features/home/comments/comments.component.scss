@@ -1,0 +1,122 @@
+@use 'breakpoints' as bp;
+
+.comments {
+	margin-top: 36px;
+
+	// Reset the toggle button so the head renders exactly like the former plain <div>.
+	&__head {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		width: 100%;
+		margin-bottom: 18px;
+		padding: 0;
+		appearance: none;
+		background: transparent;
+		border: 0;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	&__count {
+		font-size: 16px;
+		font-weight: 600;
+
+		b {
+			color: var(--text);
+		}
+	}
+
+	&__sort {
+		font-family: var(--f-mono);
+		font-size: 11px;
+		color: var(--text-faint);
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+
+	&__chevron {
+		margin-left: auto;
+		color: var(--text-faint);
+	}
+
+	&__input {
+		display: grid;
+		grid-template-columns: 36px 1fr;
+		gap: 12px;
+		margin-bottom: 24px;
+		padding-bottom: 18px;
+		border-bottom: 1px solid var(--border-soft);
+	}
+
+	// While typing, a 3rd track holds the send button; the empty/default row keeps the original 2-col
+	// grid, so the desktop home baseline stays byte-identical.
+	&__input--posting {
+		grid-template-columns: 36px 1fr auto;
+	}
+
+	// Appears only once the field holds text; Enter submits too.
+	&__input-send {
+		align-self: center;
+		appearance: none;
+		background: transparent;
+		border: 0;
+		padding: 6px 4px;
+		color: var(--accent);
+		font-family: var(--f-mono);
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		cursor: pointer;
+	}
+
+	&__input-av {
+		width: 36px;
+		height: 36px;
+		border-radius: 999px;
+		background: var(--surface-3);
+		display: grid;
+		place-items: center;
+		font-family: var(--f-mono);
+		color: var(--text-faint);
+		font-size: 12px;
+	}
+
+	&__input-field {
+		background: transparent;
+		border: 0;
+		border-bottom: 1px solid var(--border);
+		color: var(--text);
+		font: inherit;
+		padding: 8px 0;
+		outline: 0;
+		width: 100%;
+
+		&:focus {
+			border-bottom-color: var(--text);
+		}
+
+		&::placeholder {
+			color: var(--text-faint);
+		}
+	}
+}
+
+/* Desktop always shows the full thread — the collapse toggle is mobile-only. */
+@include bp.from(md) {
+	.comments__chevron {
+		display: none;
+	}
+}
+
+/* Light theme overrides (co-located). */
+:host-context([data-theme='light']) .comments__input-field {
+	border-bottom-color: var(--border);
+
+	&:focus {
+		border-bottom-color: var(--text);
+	}
+}

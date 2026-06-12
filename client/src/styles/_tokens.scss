@@ -1,0 +1,51 @@
+@use 'breakpoints' as bp;
+
+:root {
+	/* surfaces */
+	--bg: #0a0a0b;
+	--surface: #131316;
+	--surface-2: #1a1a1e;
+	--surface-3: #232328;
+	--border: #2a2a30;
+	--border-soft: #1f1f24;
+
+	/* text */
+	--text: #f1f1ef;
+	--text-dim: #a4a4a8;
+	--text-faint: #85858c;
+	--text-mute: #45454a;
+
+	/* accents */
+	--accent: oklch(66% 0.22 22deg); /* warm red, our own */
+	--accent-hot: oklch(74% 0.24 28deg);
+	--accent-deep: oklch(42% 0.18 22deg);
+	--accent-glow: oklch(66% 0.22 22deg / 18%);
+
+	--ok: oklch(78% 0.16 145deg);
+	--warn: oklch(82% 0.16 80deg);
+	--info: oklch(72% 0.13 230deg);
+
+	/* type */
+	--f-sans: 'IBM Plex Sans', system-ui, sans-serif;
+	--f-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+
+	/* layout */
+	--page-w: 1440px;
+	--pad: 16px; /* mobile-first base; restored to 32px at md+ */
+
+	/* radii */
+	--r-sm: 6px;
+	--r-md: 10px;
+	--r-lg: 14px;
+	--r-xl: 18px;
+
+	/* shadows */
+	--sh-1: 0 1px 2px rgb(0 0 0 / 40%);
+	--sh-2: 0 6px 24px rgb(0 0 0 / 50%);
+}
+
+@include bp.from(md) {
+	:root {
+		--pad: 32px;
+	}
+}

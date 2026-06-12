@@ -1,0 +1,27 @@
+<header class="nav" data-screen-label="00 Top nav">
+  <div class="nav__brand">
+    <span class="nav__brand-mark" aria-hidden>>_</span>
+    <span
+      >super-dev<span class="nav__brand-tld">{{ content().brandTld }}</span></span
+    >
+  </div>
+
+  <div class="nav__search" role="search" (click)="focusInput()">
+    <span class="nav__search-icon"><sd-icon name="search" [size]="16" /></span>
+    <input
+      #input
+      class="nav__search-input"
+      type="search"
+      [attr.aria-label]="content().search"
+      [placeholder]="content().search"
+      [value]="search.query()"
+      (input)="onSearch(input.value)"
+    />
+    <span class="nav__search-kbd">/</span>
+  </div>
+
+  <div class="nav__actions">
+    <sd-prefs />
+    <div class="nav__avatar" aria-hidden="true">S</div>
+  </div>
+</header>
