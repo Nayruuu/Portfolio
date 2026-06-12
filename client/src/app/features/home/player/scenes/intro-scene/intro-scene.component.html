@@ -1,0 +1,56 @@
+<div class="scene scene--fit" [class.scene--on]="active()">
+  <div class="scene-intro__wrap">
+    <div class="scene-intro__hi">{{ typedHi() }}<span class="cursor">_</span></div>
+    <h2 class="scene-intro__name" [style]="reveal(elapsed(), schedule().nameAt, 0.3)">
+      <sd-typed
+        [elapsed]="elapsed()"
+        [at]="schedule().nameAt"
+        [text]="data().name"
+        [cps]="cps"
+      /><span>.</span
+      ><sd-typed [elapsed]="elapsed()" [at]="schedule().roleAt" [text]="data().role" [cps]="cps" />
+    </h2>
+    <div class="scene-intro__tagline">
+      <sd-typed
+        [elapsed]="elapsed()"
+        [at]="schedule().taglineAt"
+        [text]="data().tagline"
+        [cps]="cps"
+      />
+    </div>
+    <div class="scene-intro__tags">
+      @for (tag of data().tags; track tag; let index = $index) {
+        <span class="tag" [style]="reveal(elapsed(), schedule().tagAts[index], 0.3)">
+          <sd-typed
+            [elapsed]="elapsed()"
+            [at]="schedule().tagAts[index]"
+            [text]="tag"
+            [cps]="cps"
+          />
+        </span>
+      }
+    </div>
+    <div class="scene-intro__metrics">
+      @for (metric of data().metrics; track metric.label; let index = $index) {
+        <div class="metric" [style]="reveal(elapsed(), schedule().metrics[index].valueAt, 0.3)">
+          <div class="metric__v">
+            <sd-typed
+              [elapsed]="elapsed()"
+              [at]="schedule().metrics[index].valueAt"
+              [text]="metric.value"
+              [cps]="cps"
+            />
+          </div>
+          <div class="metric__lbl">
+            <sd-typed
+              [elapsed]="elapsed()"
+              [at]="schedule().metrics[index].labelAt"
+              [text]="metric.label"
+              [cps]="cps"
+            />
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

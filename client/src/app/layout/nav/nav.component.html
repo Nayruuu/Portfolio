@@ -1,0 +1,59 @@
+<header class="nav" data-screen-label="00 Top nav">
+  <button
+    class="nav__icon-btn"
+    [attr.aria-label]="content().aria.menu"
+    [attr.aria-expanded]="isCompact() ? menuOpen() : null"
+    [attr.aria-controls]="isCompact() ? 'nav-menu' : null"
+    (click)="toggleMenu()"
+  >
+    <sd-icon name="menu" />
+  </button>
+
+  <div class="nav__brand">
+    <span class="nav__brand-mark" aria-hidden>>_</span>
+    <span
+      >super-dev<span class="nav__brand-tld">{{ content().brandTld }}</span></span
+    >
+  </div>
+
+  <div id="nav-menu" class="nav__collapsible" [class.nav__collapsible--open]="menuOpen()">
+    <div class="nav__search" role="search" (click)="focusInput()">
+      <span class="nav__search-icon"><sd-icon name="search" [size]="16" /></span>
+      <input
+        #input
+        class="nav__search-input"
+        type="search"
+        [attr.aria-label]="content().search"
+        [placeholder]="content().search"
+        [value]="search.query()"
+        (input)="onSearch(input.value)"
+      />
+      <span class="nav__search-kbd">/</span>
+    </div>
+
+    <div class="nav__actions">
+      <button
+        class="nav__icon-btn"
+        [attr.aria-label]="content().themeToggleAria"
+        [title]="theme.theme() === 'light' ? content().themeToDark : content().themeToLight"
+        (click)="theme.toggle()"
+      >
+        <sd-icon [name]="theme.theme() === 'light' ? 'moon' : 'sun'" />
+      </button>
+
+      <div class="nav__lang">
+        <button [attr.aria-pressed]="i18n.lang() === 'fr'" (click)="switchLang('fr')">FR</button>
+        <button [attr.aria-pressed]="i18n.lang() === 'en'" (click)="switchLang('en')">EN</button>
+      </div>
+
+      <button class="nav__icon-btn" [attr.aria-label]="content().aria.notifications">
+        <sd-icon name="bell" />
+      </button>
+      <div class="nav__avatar" aria-hidden="true">S</div>
+    </div>
+  </div>
+</header>
+
+@if (menuOpen()) {
+  <div class="nav__scrim" aria-hidden="true" (click)="closeMenu()"></div>
+}

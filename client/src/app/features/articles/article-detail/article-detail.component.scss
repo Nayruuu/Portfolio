@@ -1,0 +1,381 @@
+.article-detail {
+	max-width: 880px;
+	margin: 0 auto;
+	padding: 8px 4px 60px;
+
+	&__progress {
+		position: fixed;
+		top: 56px;
+		left: 0;
+		height: 3px;
+		background: var(--accent);
+		z-index: 40;
+		transition: width 0.05s linear;
+		pointer-events: none;
+	}
+
+	&__hero {
+		position: relative;
+		border-radius: var(--r-lg);
+		overflow: hidden;
+		margin-bottom: 24px;
+		background: var(--surface);
+		border: 1px solid var(--border-soft);
+	}
+}
+
+.article-hero {
+	&__art {
+		position: relative;
+		overflow: hidden;
+		height: 280px;
+	}
+
+	&__bg {
+		position: absolute;
+		inset: 0;
+	}
+
+	&__grid {
+		position: absolute;
+		inset: 0;
+		background-image:
+			linear-gradient(rgb(255 255 255 / 6%) 1px, transparent 1px),
+			linear-gradient(90deg, rgb(255 255 255 / 6%) 1px, transparent 1px);
+		background-size: 32px 32px;
+	}
+
+	&__sym-wrap {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		font-family: var(--f-mono);
+	}
+
+	&__sym-inner {
+		text-align: center;
+	}
+
+	&__sym {
+		font-size: 96px;
+		font-weight: 700;
+		line-height: 1;
+	}
+
+	&__tag {
+		color: var(--text);
+		font-size: 11px;
+		letter-spacing: 0.12em;
+		margin-top: 8px;
+		opacity: 0.6;
+	}
+}
+
+.article-detail {
+	&__hero-inner {
+		padding: 28px 32px;
+	}
+
+	&__tag {
+		display: inline-block;
+		font-family: var(--f-mono);
+		font-size: 10.5px;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		padding: 3px 10px;
+		border: 1px solid;
+		border-radius: 3px;
+		margin-bottom: 14px;
+	}
+
+	&__title {
+		font-size: 36px;
+		font-weight: 700;
+		letter-spacing: -0.025em;
+		line-height: 1.15;
+		margin: 0 0 18px;
+		max-width: 720px;
+	}
+
+	&__byline {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+
+		.video-meta__author-av {
+			width: 36px;
+			height: 36px;
+			font-size: 13px;
+		}
+	}
+
+	&__byline-name {
+		font-weight: 600;
+		font-size: 14px;
+
+		span {
+			color: var(--text-faint);
+		}
+	}
+
+	&__byline-meta {
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		color: var(--text-faint);
+	}
+
+	&__body {
+		max-width: 680px;
+		margin: 24px auto 0;
+		padding: 0 4px;
+
+		h2 {
+			font-family: var(--f-mono);
+			font-size: 14px;
+			font-weight: 600;
+			letter-spacing: 0.02em;
+			margin: 36px 0 14px;
+			color: var(--accent);
+			padding-bottom: 8px;
+			border-bottom: 1px dashed var(--border);
+
+			&::before {
+				content: '## ';
+				color: var(--text-mute);
+			}
+		}
+
+		p {
+			font-size: 16px;
+			line-height: 1.72;
+			color: var(--text);
+			margin: 0 0 18px;
+			text-wrap: pretty;
+
+			&:first-of-type::first-letter {
+				font-size: 44px;
+				font-weight: 700;
+				float: left;
+				line-height: 1;
+				margin: 6px 12px 0 0;
+				color: var(--accent);
+				font-family: var(--f-mono);
+			}
+		}
+	}
+
+	&__list {
+		list-style: none;
+		padding: 0;
+		margin: 0 0 22px;
+		display: grid;
+		gap: 6px;
+
+		li {
+			font-size: 15px;
+			line-height: 1.6;
+			color: var(--text);
+			padding-left: 4px;
+		}
+	}
+
+	&__body blockquote {
+		margin: 22px 0;
+		padding: 14px 20px;
+		background: var(--surface);
+		border-left: 3px solid var(--accent);
+		border-radius: 4px;
+		font-style: italic;
+		color: var(--text-dim);
+		font-size: 15px;
+		line-height: 1.55;
+	}
+
+	&__signature {
+		margin-top: 40px;
+		padding-top: 20px;
+		border-top: 1px dashed var(--border);
+		font-family: var(--f-mono);
+		font-size: 12px;
+		color: var(--text-faint);
+		letter-spacing: 0.04em;
+
+		span {
+			color: var(--accent);
+		}
+	}
+}
+
+/* Code block (article body) */
+
+/* Series ribbon (inside article detail) */
+.series-ribbon {
+	margin: 16px 0 24px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	padding: 14px 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+
+	&__head {
+		display: grid;
+		grid-template-columns: 40px 1fr;
+		gap: 14px;
+		align-items: start;
+	}
+
+	&__sym {
+		width: 40px;
+		height: 40px;
+		display: grid;
+		place-items: center;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		font-family: var(--f-mono);
+		font-size: 22px;
+		font-weight: 700;
+	}
+
+	&__label {
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		color: var(--text-faint);
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		display: flex;
+		gap: 8px;
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	&__title {
+		background: transparent;
+		border: 0;
+		padding: 0;
+		font: inherit;
+		font-family: var(--f-mono);
+		color: var(--accent);
+		cursor: pointer;
+		text-transform: none;
+		letter-spacing: 0;
+		font-size: 13px;
+		font-weight: 600;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
+	&__sub {
+		font-size: 12.5px;
+		color: var(--text-dim);
+		margin-top: 4px;
+		line-height: 1.5;
+	}
+
+	&__nav {
+		display: flex;
+		justify-content: space-between;
+		border-top: 1px dashed var(--border);
+		padding-top: 12px;
+	}
+
+	&__btn {
+		background: transparent;
+		border: 1px solid var(--border);
+		color: var(--text);
+		font-family: var(--f-mono);
+		font-size: 12px;
+		padding: 6px 12px;
+		border-radius: 999px;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		transition: all 0.15s;
+
+		&:hover {
+			border-color: var(--accent);
+			color: var(--accent);
+		}
+
+		&--next {
+			margin-left: auto;
+		}
+	}
+}
+
+/* Related articles */
+.article-detail {
+	&__related {
+		margin-top: 56px;
+		padding-top: 32px;
+		border-top: 1px solid var(--border-soft);
+	}
+
+	&__related-head {
+		font-family: var(--f-mono);
+		font-size: 12px;
+		letter-spacing: 0.06em;
+		color: var(--text-faint);
+		text-transform: uppercase;
+		margin-bottom: 16px;
+
+		span {
+			color: var(--accent);
+		}
+	}
+
+	&__related-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+		gap: 12px;
+	}
+}
+
+.rel-card {
+	display: grid;
+	grid-template-columns: 64px 1fr;
+	gap: 12px;
+	text-align: left;
+	background: var(--surface);
+	border: 1px solid var(--border-soft);
+	border-radius: var(--r-md);
+	padding: 10px 12px;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	transition:
+		border-color 0.15s,
+		transform 0.15s;
+
+	&__title {
+		font-size: 13px;
+		font-weight: 600;
+		line-height: 1.3;
+		margin-bottom: 4px;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	&__meta {
+		font-family: var(--f-mono);
+		font-size: 11px;
+		color: var(--text-faint);
+	}
+}
+
+// Related-card hover (border lift + raise) only with a real pointer, so it never sticks
+// after a tap on touch devices.
+@media (hover: hover) {
+	.rel-card:hover {
+		border-color: var(--border);
+		transform: translateY(-1px);
+	}
+}

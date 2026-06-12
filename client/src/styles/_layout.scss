@@ -1,0 +1,75 @@
+@use 'breakpoints' as bp;
+
+.main {
+	max-width: var(--page-w);
+	margin: 0 auto;
+	padding: 24px var(--pad) calc(72px + env(safe-area-inset-bottom));
+	display: grid;
+	/* minmax(0, 1fr), NOT bare 1fr: `1fr` can't shrink below its content's min-content,
+	   so one long unbreakable code line would widen the whole column past the phone
+	   viewport (and the code-block's internal overflow-x would never engage). */
+	grid-template-columns: minmax(0, 1fr);
+	gap: 28px;
+}
+
+@include bp.from(md) {
+	.main {
+		padding-bottom: 80px;
+	}
+}
+
+@include bp.from(lg) {
+	.main {
+		grid-template-columns: minmax(0, 1fr) 380px;
+	}
+}
+/* The routed component renders as a sibling of <router-outlet>; the outlet
+   element itself must not occupy a grid cell. */
+.main > router-outlet {
+	display: none;
+}
+
+.cursor {
+	display: inline-block;
+	width: 8px;
+	background: currentcolor;
+	height: 1em;
+	vertical-align: -3px;
+	animation: blink 1s steps(1) infinite;
+	margin-left: 2px;
+	opacity: 0.85;
+}
+
+.tab-pane {
+	grid-column: 1 / -1;
+}
+
+.main:has(.tab-pane) {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+/* On phones the home route reads like the YouTube-app watch page: the video
+   leads, so the shell channel-header is hidden there (route-aware via `:has` —
+   <sd-home> is in the DOM only on the home route). `md`+ restores the `block`
+   declared for sd-channel-header in _base.scss. */
+:root:has(sd-home) sd-channel-header {
+	display: none;
+}
+
+@include bp.from(md) {
+	:root:has(sd-home) sd-channel-header {
+		display: block;
+	}
+}
+
+/* While fullscreen is open the page behind must not scroll — matters for the iOS
+   CSS-fallback (the native top layer covers the page anyway; harmless there). */
+body:has(.player.is-fullscreen) {
+	overflow: hidden;
+}
+
+/* The fixed bottom bar sits below the fullscreen overlay (z 40 < 200) — hide it outright
+   so it leaves the tab order / a11y tree while fullscreen is open. */
+body:has(.player.is-fullscreen) .tabs {
+	display: none;
+}

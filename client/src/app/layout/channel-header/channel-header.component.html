@@ -1,0 +1,56 @@
+<section class="channel" data-screen-label="01 Channel header">
+  <div class="banner">
+    <div class="banner__grid"></div>
+    <pre class="banner__ascii">{{ ascii }}</pre>
+    <div class="banner__terminal">
+      @for (line of terminal(); track $index) {
+        <div>
+          <span>{{ line[0] }}</span
+          ><b>{{ line[1] }}</b>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="profile">
+    <div class="profile__avatar" [title]="content().aria.dropPhoto">S</div>
+    <div class="profile__meta">
+      <h1>{{ content().author }} — <span>full-stack</span></h1>
+      <div class="profile__handle">
+        &#64;super-dev.app · {{ content().featuredCategory.replace('#', '') }} · ★
+        {{ content().openToWork }}
+      </div>
+      <div class="profile__stats">
+        <span
+          ><b>{{ content().subscribersCount }}</b> {{ content().subscribers }}</span
+        >
+        <span>·</span>
+        <span
+          ><b>{{ content().videosCount }}</b> {{ content().videos }}</span
+        >
+        <span>·</span>
+        <span
+          >{{ content().joined }} <b>{{ content().joinedYear }}</b></span
+        >
+      </div>
+      <p class="profile__bio">{{ content().bio }}</p>
+    </div>
+    <div class="profile__actions">
+      <button class="btn btn--ghost btn--sm">
+        <sd-icon name="share" [size]="14" /> {{ content().share }}
+      </button>
+      <button class="btn btn--ghost btn--sm">
+        <sd-icon name="download" [size]="14" /> {{ content().cv }}
+      </button>
+      <button
+        [class]="subscribed() ? 'btn btn--grow' : 'btn btn--primary btn--grow'"
+        (click)="subscribed.update((isSubscribed) => !isSubscribed)"
+      >
+        @if (subscribed()) {
+          <sd-icon name="bell" [size]="14" />
+        }
+        {{ subscribed() ? content().subscribed : content().subscribe }}
+      </button>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,17 @@
+@let content = i18n.content();
+@if (i18n.loading()) {
+  <div class="loadbar" aria-hidden="true"></div>
+}
+<sd-nav />
+<sd-channel-header />
+<sd-tabs-bar />
+
+<div class="main">
+  <router-outlet />
+</div>
+
+@if (isHome()) {
+  <div class="konami">
+    <b>{{ content.konamiTip }}</b> {{ content.konamiKeys }}
+  </div>
+}

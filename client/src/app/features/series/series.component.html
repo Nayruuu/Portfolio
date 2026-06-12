@@ -1,0 +1,58 @@
+@let content = i18n.content();
+<section class="tabview" data-screen-label="07 Tab — series">
+  <div class="tabview__head">
+    <div>
+      <h2 class="tabview__title"><span>// </span>{{ content.seriesUi.title }}</h2>
+      <p class="tabview__sub">
+        {{ content.seriesUi.subtitle }}
+      </p>
+    </div>
+    <div class="tabview__count">
+      <span class="tabview__count-v">{{ seriesList().length }}</span>
+      <span class="tabview__count-lbl">{{ content.seriesUi.countLabel }}</span>
+    </div>
+  </div>
+
+  <div class="pgrid">
+    @for (series of seriesList(); track series.title; let index = $index) {
+      <a class="pcard" [routerLink]="['/', i18n.lang(), 'series', series.slug]">
+        <div class="pcard__thumb">
+          <div class="pcard__stack" aria-hidden="true">
+            <div class="pcard__stack-l3" [style.background]="series.colors[2]"></div>
+            <div class="pcard__stack-l2" [style.background]="series.colors[1]"></div>
+            <div
+              class="pcard__stack-l1"
+              [style.background]="
+                'radial-gradient(circle at 30% 30%, ' + series.colors[0] + '80, #0a0a0c)'
+              "
+            >
+              <div class="pcard__stack-sym" [style.color]="series.colors[0]">
+                {{ series.symbol }}
+              </div>
+            </div>
+          </div>
+          <div class="pcard__badge">
+            <sd-icon name="next" [size]="12" />
+            <span>{{ series.count }} {{ content.seriesUi.articles }}</span>
+          </div>
+        </div>
+        <div class="pcard__body">
+          <h3 class="pcard__title">{{ series.title }}</h3>
+          <div class="pcard__meta">
+            <span>{{ series.totalRead }}</span>
+            <span>·</span>
+            <span
+              >{{ content.seriesUi.updatedPrefix }} {{ index + 1
+              }}{{ content.seriesUi.updatedSuffix }}</span
+            >
+          </div>
+          <p class="pcard__desc">{{ series.description }}</p>
+          <span class="pcard__cta">
+            <sd-icon name="play" [size]="12" />
+            {{ content.seriesUi.openSeries }}
+          </span>
+        </div>
+      </a>
+    }
+  </div>
+</section>

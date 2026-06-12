@@ -1,0 +1,31 @@
+.article-detail__topbar {
+	display: flex;
+	align-items: center;
+	// The FR back label + the two actions exceed a 360px phone's track — let the
+	// actions wrap under the back link instead of widening the page.
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 8px 0 16px;
+
+	&-arrow {
+		margin-right: 4px;
+	}
+
+	&-actions {
+		margin-left: auto;
+		display: flex;
+		gap: 8px;
+	}
+}
+
+.video-meta__author-av {
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	background: radial-gradient(circle at 30% 25%, oklch(72% 0.18 22deg), oklch(32% 0.12 22deg) 70%);
+	display: grid;
+	place-items: center;
+	font-family: var(--f-mono);
+	font-weight: 700;
+	color: #0a0a0b;
+}

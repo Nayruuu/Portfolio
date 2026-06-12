@@ -1,0 +1,21 @@
+@let content = i18n.content();
+<section class="comments" data-screen-label="04 Comments">
+  <button class="comments__head" type="button" [attr.aria-expanded]="expanded()" (click)="toggle()">
+    <span class="comments__count">{{ content.commentsCount }}</span>
+    <span class="comments__sort">{{ content.commentsSort }}</span>
+    <sd-icon
+      class="comments__chevron"
+      [name]="expanded() ? 'chevron-up' : 'chevron-down'"
+      [size]="16"
+    />
+  </button>
+  @if (expanded()) {
+    <div class="comments__input">
+      <div class="comments__input-av">S</div>
+      <input class="comments__input-field" [placeholder]="content.commentInputPh" />
+    </div>
+    @for (comment of content.comments; track comment.who) {
+      <sd-comment [data]="comment" />
+    }
+  }
+</section>

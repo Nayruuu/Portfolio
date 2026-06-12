@@ -1,0 +1,79 @@
+@use 'breakpoints' as bp;
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--f-sans);
+	font-size: 13px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizelegibility;
+}
+
+body::before {
+	/* faint scanline / texture */
+	content: '';
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	background-image: repeating-linear-gradient(
+		0deg,
+		rgb(255 255 255 / 1.2%) 0,
+		rgb(255 255 255 / 1.2%) 1px,
+		transparent 1px,
+		transparent 3px
+	);
+	z-index: 999;
+	opacity: 0.6;
+}
+
+::selection {
+	background: var(--accent-glow);
+	color: var(--text);
+}
+
+/* Angular custom elements — explicit display so layout works as expected */
+sd-app,
+sd-nav,
+sd-channel-header,
+sd-tabs-bar,
+sd-articles,
+sd-series,
+sd-about,
+sd-stack,
+sd-contact,
+sd-player,
+sd-video-meta,
+sd-comments,
+sd-like-bar,
+sd-comment,
+sd-article-detail,
+sd-series-detail,
+sd-code-block {
+	display: block;
+}
+
+sd-home,
+sd-up-next,
+sd-scene-intro,
+sd-scene-stack,
+sd-scene-projects,
+sd-scene-timeline,
+sd-scene-outro {
+	display: contents;
+}
+
+// The base font is nudged down to 13px on phones for denser, calmer mobile
+// typography; the 14px desktop baseline is restored from tablet up.
+@include bp.from(md) {
+	html,
+	body {
+		font-size: 14px;
+	}
+}

@@ -1,0 +1,5 @@
+# Build & deps
+dist/
+.angular/
+node_modules/
+coverage/
