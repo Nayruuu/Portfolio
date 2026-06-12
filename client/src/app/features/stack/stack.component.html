@@ -1,0 +1,39 @@
+@let stack = i18n.content().stackTab;
+<section class="tabview" data-screen-label="09 Tab — stack">
+  <div class="tabview__head">
+    <div>
+      <h2 class="tabview__title">
+        <span>{{ stack.heading }}</span>
+      </h2>
+      <p class="tabview__sub">{{ stack.subtitle }}</p>
+    </div>
+  </div>
+
+  <div class="stack-tab">
+    @for (level of stack.levels; track level.tierName) {
+      <div class="stack-tier">
+        <div class="stack-tier__head">
+          <div class="stack-tier__bar" [style.background]="level.color"></div>
+          <div>
+            <div class="stack-tier__name" [style.color]="level.color">
+              {{ level.tierName }}
+            </div>
+            <div class="stack-tier__sub">{{ level.tierSubtitle }}</div>
+          </div>
+          <div class="stack-tier__count">{{ level.techs.length }} {{ stack.techs }}</div>
+        </div>
+        <div class="stack-tier__grid">
+          @for (tech of level.techs; track tech.name) {
+            <div class="stack-tech">
+              <div class="stack-tech__head">
+                <span class="stack-tech__name">{{ tech.name }}</span>
+                <span class="stack-tech__years" [style.color]="level.color">{{ tech.years }}</span>
+              </div>
+              <div class="stack-tech__note">{{ tech.note }}</div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</section>

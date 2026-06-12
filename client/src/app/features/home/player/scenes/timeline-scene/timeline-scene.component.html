@@ -1,0 +1,74 @@
+<div class="scene scene--fit" [class.scene--on]="active()">
+  <div class="scene-timeline-rich">
+    <div class="scene-timeline-rich__head">
+      <div class="scene-timeline-rich__cmd">{{ titleTyped() }}<span class="cursor">_</span></div>
+      <div class="scene-timeline-rich__sub" [style]="reveal(elapsed(), schedule().subtitleAt, 0.3)">
+        <span>→</span>&ngsp;<sd-typed
+          [elapsed]="elapsed()"
+          [at]="schedule().subtitleAt"
+          [text]="data().subtitle"
+          [cps]="cps"
+        />
+      </div>
+    </div>
+    <div class="tl-rich">
+      <div class="tl-rich__rail"></div>
+      @for (row of data().rows; track row.year; let index = $index) {
+        <div
+          class="tl-rich__row"
+          [class.is-focus]="focusIndex() === index"
+          [style]="reveal(elapsed(), schedule().rows[index].yearAt, 0.3)"
+        >
+          <div class="tl-rich__dot"></div>
+          <div class="tl-rich__year">
+            <sd-typed
+              [elapsed]="elapsed()"
+              [at]="schedule().rows[index].yearAt"
+              [text]="row.year"
+              [cps]="cps"
+            />
+          </div>
+          <div class="tl-rich__body">
+            <div
+              class="tl-rich__role"
+              [class.is-pending]="elapsed() < schedule().rows[index].roleAt"
+            >
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().rows[index].roleAt"
+                [text]="row.role"
+                [cps]="cps"
+              />
+            </div>
+            <div
+              class="tl-rich__co"
+              [class.is-pending]="elapsed() < schedule().rows[index].companyAt"
+            >
+              <sd-typed
+                [elapsed]="elapsed()"
+                [at]="schedule().rows[index].companyAt"
+                [text]="row.company"
+                [cps]="cps"
+              />
+            </div>
+            <ul class="tl-rich__bullets">
+              @for (bullet of row.bullets; track bullet; let innerIndex = $index) {
+                <li
+                  [class.is-pending]="elapsed() < schedule().rows[index].bulletAts[innerIndex]"
+                  [style]="reveal(elapsed(), schedule().rows[index].bulletAts[innerIndex], 0.3)"
+                >
+                  <span>›</span>&ngsp;<sd-typed
+                    [elapsed]="elapsed()"
+                    [at]="schedule().rows[index].bulletAts[innerIndex]"
+                    [text]="bullet"
+                    [cps]="cps"
+                  />
+                </li>
+              }
+            </ul>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

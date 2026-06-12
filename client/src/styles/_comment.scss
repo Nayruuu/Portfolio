@@ -1,0 +1,95 @@
+.comment {
+	display: grid;
+	grid-template-columns: 40px 1fr;
+	gap: 14px;
+	margin-bottom: 22px;
+}
+
+.comment__av {
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	font-family: var(--f-mono);
+	font-weight: 600;
+	font-size: 14px;
+	color: #fff;
+}
+
+.comment__head {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	margin-bottom: 4px;
+}
+
+.comment__name {
+	font-weight: 600;
+	font-size: 13px;
+}
+
+.comment__name-tag {
+	margin-left: 4px;
+	display: inline-block;
+	font-family: var(--f-mono);
+	font-size: 9.5px;
+	color: var(--text);
+	background: var(--surface-3);
+	border: 1px solid var(--border);
+	padding: 1px 5px;
+	border-radius: 3px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	vertical-align: 1px;
+}
+
+.comment__pinned {
+	color: var(--text-faint);
+	margin-right: 6px;
+	font-family: var(--f-mono);
+	font-size: 10px;
+	text-transform: uppercase;
+}
+
+.comment__when {
+	font-family: var(--f-mono);
+	font-size: 11px;
+	color: var(--text-faint);
+}
+
+.comment__body {
+	color: var(--text);
+	font-size: 13.5px;
+	line-height: 1.55;
+	margin: 0;
+}
+
+.comment__actions {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	margin-top: 8px;
+	font-family: var(--f-mono);
+	font-size: 11px;
+	color: var(--text-faint);
+}
+
+.comment__actions button {
+	background: transparent;
+	border: 0;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.comment__actions button:hover {
+	color: var(--text);
+}
+
+.comment__actions button.is-on {
+	color: var(--accent);
+}

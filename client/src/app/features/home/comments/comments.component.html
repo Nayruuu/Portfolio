@@ -1,0 +1,35 @@
+@let content = i18n.content();
+<section class="comments" data-screen-label="04 Comments">
+  <button class="comments__head" type="button" [attr.aria-expanded]="expanded()" (click)="toggle()">
+    <span class="comments__count">{{ content.commentsCount }}</span>
+    <span class="comments__sort">{{ content.commentsSort }}</span>
+    <sd-icon
+      class="comments__chevron"
+      [name]="expanded() ? 'chevron-up' : 'chevron-down'"
+      [size]="16"
+    />
+  </button>
+  @if (expanded()) {
+    <form
+      class="comments__input"
+      [class.comments__input--posting]="draft().trim()"
+      (submit)="submit($event)"
+    >
+      <div class="comments__input-av" aria-hidden="true">S</div>
+      <input
+        #field
+        class="comments__input-field"
+        [attr.aria-label]="content.commentInputPh"
+        [placeholder]="content.commentInputPh"
+        [value]="draft()"
+        (input)="draft.set(field.value)"
+      />
+      @if (draft().trim()) {
+        <button class="comments__input-send" type="submit">{{ content.commentSend }}</button>
+      }
+    </form>
+    @for (comment of comments(); track $index) {
+      <sd-comment [data]="comment" />
+    }
+  }
+</section>

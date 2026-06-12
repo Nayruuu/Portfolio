@@ -1,0 +1,36 @@
+@let content = i18n.content();
+<aside data-screen-label="05 Recent articles sidebar">
+  <div class="up-next__head">
+    <div class="up-next__head-title">
+      {{ content.upNext.title }} ·
+      <b>{{ content.upNext.readNext }}</b>
+    </div>
+  </div>
+
+  @for (article of recent(); track article.title) {
+    <a class="vid-card" [routerLink]="['/', i18n.lang(), 'articles', article.slug]">
+      <div class="vid-card__thumb">
+        <div class="vid-card__thumb-bg" [style.background]="thumbBg(article)"></div>
+        <div class="vid-card__thumb-grid"></div>
+        <div class="vid-card__thumb-art" [style.color]="article.accentColor">
+          <div>
+            <div class="vid-card__thumb-sym">{{ article.symbol }}</div>
+            <div class="vid-card__thumb-tag">{{ article.tag }}</div>
+          </div>
+        </div>
+        <span class="vid-card__thumb-dur">{{ article.readTime }}</span>
+      </div>
+      <div>
+        <span
+          class="vid-card__tag"
+          [style.color]="article.accentColor"
+          [style.borderColor]="article.accentColor + '60'"
+          >{{ article.tag }}</span
+        >
+        <h3 class="vid-card__title">{{ article.title }}</h3>
+        <div class="vid-card__channel">{{ content.author }} <span>✓</span></div>
+        <div class="vid-card__stats">{{ article.reads }} • {{ article.ago }}</div>
+      </div>
+    </a>
+  }
+</aside>

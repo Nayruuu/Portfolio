@@ -1,0 +1,55 @@
+@let content = i18n.content();
+<section class="tabview" data-screen-label="08 Tab — about">
+  <div class="tabview__head">
+    <div>
+      <h2 class="tabview__title">
+        <span>{{ content.about.heading }}</span>
+      </h2>
+      <p class="tabview__sub">
+        {{ content.about.subtitle }}
+      </p>
+    </div>
+  </div>
+
+  <div class="about-grid">
+    <div class="about-bio">
+      @for (paragraph of content.about.paragraphs; track $index) {
+        <p class="about-bio__p">{{ paragraph }}</p>
+      }
+      <div class="about-bio__signature">
+        <span>•</span> {{ content.author }} — portfolio{{ content.brandTld }}
+      </div>
+    </div>
+
+    <aside class="about-side">
+      <div class="about-side__card">
+        <div class="about-side__head">
+          {{ content.about.infoLabel }}
+        </div>
+        <dl class="about-side__list">
+          @for (detail of content.about.details; track detail.label) {
+            <div class="about-side__row">
+              <dt>{{ detail.label }}</dt>
+              <dd>{{ detail.value }}</dd>
+            </div>
+          }
+        </dl>
+      </div>
+
+      <div class="about-side__card">
+        <div class="about-side__head">
+          {{ content.about.linksLabel }}
+        </div>
+        <ul class="about-side__links">
+          @for (link of content.about.links; track link.label) {
+            <li>
+              <a href="#" (click)="$event.preventDefault()">
+                <span class="about-side__arrow">›</span>{{ link.label }}
+              </a>
+            </li>
+          }
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>

@@ -1,0 +1,224 @@
+@use 'breakpoints' as bp;
+
+.series-detail {
+	max-width: 920px;
+	margin: 0 auto;
+	padding: 8px 4px 60px;
+
+	&__hero {
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 32px;
+		align-items: center;
+		margin-bottom: 32px;
+		padding: 24px;
+		background: var(--surface);
+		border: 1px solid var(--border-soft);
+		border-radius: var(--r-lg);
+	}
+
+	&__art {
+		position: relative;
+		aspect-ratio: 16 / 11;
+	}
+
+	&__stack {
+		position: relative;
+		width: 100%;
+		height: 100%;
+	}
+
+	&__l1,
+	&__l2,
+	&__l3 {
+		position: absolute;
+		border-radius: 6px;
+		border: 1px solid rgb(0 0 0 / 40%);
+	}
+
+	&__l3 {
+		inset: -8px -16px 16px 8px;
+		opacity: 0.35;
+	}
+
+	&__l2 {
+		inset: -4px -8px 8px 4px;
+		opacity: 0.55;
+	}
+
+	&__l1 {
+		inset: 0;
+		border: 1px solid rgb(255 255 255 / 8%);
+		display: grid;
+		place-items: center;
+	}
+
+	&__sym {
+		font-family: var(--f-mono);
+		font-size: 64px;
+		font-weight: 700;
+		text-shadow: 0 0 32px currentcolor;
+	}
+
+	&__overline {
+		font-family: var(--f-mono);
+		font-size: 11px;
+		letter-spacing: 0.16em;
+		color: var(--accent);
+		margin-bottom: 8px;
+	}
+
+	&__title {
+		font-size: 32px;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		line-height: 1.15;
+		margin: 0 0 12px;
+	}
+
+	&__desc {
+		font-size: 14.5px;
+		color: var(--text-dim);
+		line-height: 1.6;
+		margin: 0 0 16px;
+		max-width: 56ch;
+	}
+
+	&__stats {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		font-family: var(--f-mono);
+		font-size: 13px;
+		color: var(--text-faint);
+		margin-bottom: 18px;
+
+		b {
+			color: var(--text);
+			font-weight: 600;
+		}
+	}
+
+	&__list {
+		display: grid;
+		gap: 8px;
+	}
+
+	&__list-head {
+		font-family: var(--f-mono);
+		font-size: 12px;
+		letter-spacing: 0.06em;
+		color: var(--text-faint);
+		text-transform: uppercase;
+		margin-bottom: 8px;
+
+		span {
+			color: var(--accent);
+		}
+	}
+
+	&__empty {
+		padding: 32px;
+		text-align: center;
+		font-family: var(--f-mono);
+		font-size: 13px;
+		color: var(--text-faint);
+		background: var(--surface);
+		border: 1px dashed var(--border);
+		border-radius: var(--r-md);
+	}
+}
+
+.series-row {
+	display: grid;
+	grid-template-columns: 36px 1fr 24px;
+	gap: 16px;
+	align-items: center;
+	text-align: left;
+	background: var(--surface);
+	border: 1px solid var(--border-soft);
+	border-radius: var(--r-md);
+	padding: 14px 18px;
+	cursor: pointer;
+	font: inherit;
+	color: inherit;
+	transition: all 0.15s;
+
+	// The 64px symbol tile is dropped on mobile to give the title/meta room in the 3-col row
+	// (restored alongside its column in `bp.from(md)` below).
+	&__sym {
+		display: none;
+	}
+
+	&__n {
+		font-family: var(--f-mono);
+		font-size: 20px;
+		font-weight: 700;
+		color: var(--accent);
+		letter-spacing: -0.02em;
+	}
+
+	&__title {
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.005em;
+		margin-bottom: 4px;
+		line-height: 1.3;
+	}
+
+	&__meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		color: var(--text-faint);
+	}
+
+	&__tag {
+		font-size: 9.5px;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		border: 1px solid;
+		padding: 2px 6px;
+		border-radius: 3px;
+	}
+
+	&__arrow {
+		font-family: var(--f-mono);
+		font-size: 20px;
+		color: var(--text-faint);
+		transition:
+			color 0.15s,
+			transform 0.15s;
+	}
+}
+
+@include bp.from(md) {
+	.series-detail__hero {
+		grid-template-columns: 240px 1fr;
+	}
+
+	.series-row {
+		grid-template-columns: 48px 64px 1fr 24px;
+	}
+
+	.series-row__sym {
+		display: grid;
+	}
+}
+
+// Row hover (border accent, slide, arrow nudge) only with a real pointer, so it never
+// sticks after a tap on touch devices.
+@media (hover: hover) {
+	.series-row:hover {
+		border-color: var(--accent);
+		transform: translateX(2px);
+	}
+
+	.series-row:hover .series-row__arrow {
+		color: var(--accent);
+		transform: translateX(4px);
+	}
+}

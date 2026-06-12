@@ -1,0 +1,924 @@
+{
+  "brandTld": ".app",
+  "search": "Im Kanal suchen",
+  "subscribe": "Abonnieren",
+  "subscribed": "Abonniert",
+  "notification": "Benachrichtigungen",
+  "join": "Kontakt",
+  "cv": "Lebenslauf herunterladen",
+  "subscribers": "Abonnenten",
+  "videos": "Videos",
+  "joined": "Aktiv seit",
+  "openToWork": "offen für Aufträge",
+  "headerUptime": "  9 Jahre, 47k Commits",
+  "share": "Teilen",
+  "author": "super-dev",
+  "themeToDark": "Dunkelmodus",
+  "themeToLight": "Hellmodus",
+  "themeToggleAria": "Design wechseln",
+  "subscribersCount": "12,8k",
+  "videosCount": "47",
+  "joinedYear": "2017",
+  "konamiTip": "Tipp:",
+  "konamiKeys": "[k] Wiedergabe/Pause · [j/l] ±10s · [/] suchen",
+  "tagsLabel": "Tags",
+  "copy": "kopieren",
+  "copyDone": "✓ kopiert",
+  "gameOver": "GAME OVER",
+  "gameControls": "[WASD] Bewegen · [Maus] Zielen · [Klick] Feuern · [R / Rechtsklick] Nachladen · [1–8 / Mausrad] Waffe · [E] Benutzen",
+  "aria": {
+    "play": "Wiedergabe",
+    "pause": "Pause",
+    "nextChapter": "Nächstes Kapitel",
+    "settings": "Einstellungen",
+    "fullscreen": "Vollbild",
+    "exitFullscreen": "Vollbild beenden",
+    "dislike": "Gefällt mir nicht",
+    "dropPhoto": "Foto hier ablegen",
+    "gameStart": "Spiel starten",
+    "gameExit": "Spiel verlassen",
+    "gameMute": "Musik stummschalten",
+    "gameUnmute": "Musik einschalten",
+    "gameFire": "Schießen",
+    "gameUse": "Benutzen",
+    "gameSwitch": "Waffe wechseln",
+    "gameReload": "Nachladen",
+    "pip": "Mini-Player"
+  },
+  "bio": "Full-Stack-Entwickler .NET / Angular mit DevOps-Erfahrung auf Azure Cloud. Auch zu Hause mit Flutter + Firebase. Ich entwickle Produkte, deploye sie und überwache sie.",
+  "tabs": ["Startseite", "Artikel", "Serien", "Über mich", "Stack", "Kontakt"],
+  "featuredTitle": "$ ./whoami — super-dev.app — Full-Stack-Entwickler .NET / Angular / Azure",
+  "featuredViews": "12.487 Aufrufe",
+  "featuredWhen": "vor 2 Tagen",
+  "featuredCategory": "#Full-stack",
+  "featuredTags": ["dotnet", "angular", "azure", "flutter", "firebase", "devops"],
+  "descriptionMeta": ["Kompiliert", "Last build", "Status"],
+  "descriptionMetaValues": ["v2026.1", "vor 2 Tagen", "✔ production"],
+  "descriptionBody": "Willkommen auf meinem Kanal. Hier dokumentiere ich, was ich baue: APIs in .NET, Oberflächen in Angular, CI/CD-Pipelines auf Azure DevOps und mobile Apps in Flutter, wenn sich die Gelegenheit ergibt. Dieses Video ist ein schneller Überblick über mein Können. Die Kapitel befinden sich unter der Timeline. — verfügbar für Full-Stack- oder Platform-Einsätze.",
+  "chapters": [
+    {
+      "id": "intro",
+      "timestamp": "00:00",
+      "title": "Intro — wer ich bin",
+      "seconds": 0
+    },
+    {
+      "id": "stack",
+      "timestamp": "00:15",
+      "title": "Tech-Stack",
+      "seconds": 15
+    },
+    {
+      "id": "projects",
+      "timestamp": "00:48",
+      "title": "Aktuelle Projekte",
+      "seconds": 48
+    },
+    {
+      "id": "timeline",
+      "timestamp": "01:33",
+      "title": "Berufserfahrung",
+      "seconds": 93
+    },
+    {
+      "id": "outro",
+      "timestamp": "02:08",
+      "title": "Kontakt / Outro",
+      "seconds": 128
+    }
+  ],
+  "totalSec": 158,
+  "chaptersLabel": "Kapitel",
+  "commentsCount": "143 Kommentare",
+  "commentsSort": "SORTIERT NACH: Relevanz",
+  "commentInputPh": "Kommentar hinzufügen…",
+  "commentPinned": "angeheftet",
+  "commentYou": "Du",
+  "commentYouTag": "Besucher",
+  "commentJustNow": "gerade eben",
+  "commentSend": "Veröffentlichen",
+  "comments": [
+    {
+      "who": "M. Lambert",
+      "tag": "CTO",
+      "color": "#2d5af5",
+      "when": "vor 3 T.",
+      "body": "Wir haben zusammen an der Azure-Migration gearbeitet. Richtig solider Typ beim DevOps, der sauberes Angular abliefert — das ist selten. Klare Empfehlung.",
+      "likes": 47,
+      "pinned": true
+    },
+    {
+      "who": "S. Nguyen",
+      "tag": "Lead Dev",
+      "color": "#b4451c",
+      "when": "vor 1 Wo.",
+      "body": "Code Review mit ihm = Masterclass. Solide Architektur, Tests mit echter Abdeckung – und er sagt Nein, wenn's nötig ist.",
+      "likes": 31
+    },
+    {
+      "who": "C. Marchand",
+      "tag": "PO",
+      "color": "#1c7e4a",
+      "when": "vor 2 Wo.",
+      "body": "Kann ein unklares Briefing nehmen und daraus einen sauberen Sprint machen. Noch seltener: Er kommt ins Daily mit Lösungen, nicht nur mit Blockern.",
+      "likes": 18
+    },
+    {
+      "who": "A. Ben Salem",
+      "tag": "DevOps",
+      "color": "#5b2da6",
+      "when": "vor 1 Monat",
+      "body": "Saubere Azure DevOps Pipelines, IaC das hält. Wir haben die Deployment-Zeit dank seinem Refactoring um 40 % reduziert.",
+      "likes": 12
+    }
+  ],
+  "upNext": {
+    "title": "Aktuelle Artikel",
+    "readNext": "später lesen"
+  },
+  "projects": [
+    {
+      "tag": "FULL-STACK",
+      "duration": "08:42",
+      "title": "$ deploy.azure() — B2B SaaS-Plattform (.NET 8 + Angular 17)",
+      "stats": "2,4k Aufrufe • vor 1 Monat",
+      "accentColor": "#b4451c"
+    },
+    {
+      "tag": "MOBILE",
+      "duration": "06:18",
+      "title": "$ flutter run — Cross-Platform-Mobile-App mit Firebase",
+      "stats": "1,8k Aufrufe • vor 2 Monaten",
+      "accentColor": "#1c5fb4"
+    },
+    {
+      "tag": "DEVOPS",
+      "duration": "11:05",
+      "title": "$ az pipelines — CI/CD-Einrichtung für mehrere Umgebungen",
+      "stats": "3,1k Aufrufe • vor 3 Monaten",
+      "accentColor": "#1c7e4a"
+    },
+    {
+      "tag": "ARCHI",
+      "duration": "14:22",
+      "title": "$ refactor.sh — Legacy-Monolith zu .NET-Microservices",
+      "stats": "5,2k Aufrufe • vor 4 Monaten",
+      "accentColor": "#7e1c1c"
+    },
+    {
+      "tag": "LIVE",
+      "duration": "22:30",
+      "title": "// dev stream — ich code live eine GraphQL-API in .NET",
+      "stats": "892 Aufrufe • vor 5 Monaten",
+      "accentColor": "#5b2da6"
+    }
+  ],
+  "articleFilters": [
+    "Alle",
+    "Neueste",
+    "Beliebt",
+    ".NET",
+    "Angular",
+    "Azure",
+    "Flutter",
+    "DevOps",
+    "Tutorial"
+  ],
+  "articles": [
+    {
+      "slug": "etrangler-le-monolithe-dotnet",
+      "tag": ".NET",
+      "title": "Einen .NET 8-Monolithen stranglieren, ohne alles zu zerstören",
+      "reads": "3,2k Aufrufe",
+      "ago": "vor 1 Monat",
+      "readTime": "9 min",
+      "accentColor": "#b4451c",
+      "symbol": "{ }",
+      "date": "2026-05-02",
+      "description": "Das Strangler-Fig-Pattern zum Aufteilen eines .NET-Monolithen in reversible Releases, mit Anti-Corruption-Layer und schrittweiser Umstellung.",
+      "series": "dotnet-moderne",
+      "seriesOrder": 1
+    },
+    {
+      "slug": "angular-zoneless-signals",
+      "tag": "ANGULAR",
+      "title": "Eine Angular-App auf zoneless + Signals umstellen",
+      "reads": "4,1k Aufrufe",
+      "ago": "vor 3 Wochen",
+      "readTime": "8 min",
+      "accentColor": "#a2261c",
+      "symbol": "◆",
+      "date": "2026-04-18",
+      "description": "zone.js entfernen, Signals und feingranulare Reaktivität einführen und die Change Detection einer echten Angular-21-App stabilisieren.",
+      "series": "angular-21-en-pratique",
+      "seriesOrder": 1
+    },
+    {
+      "slug": "angular-ssg-azure-static-web-apps",
+      "tag": "AZURE",
+      "title": "Ein vorgerendertes Angular-SPA (SSG) auf Azure Static Web Apps deployen",
+      "reads": "2,7k Aufrufe",
+      "ago": "vor 1 Monat",
+      "readTime": "7 min",
+      "accentColor": "#1c5fb4",
+      "symbol": "↻",
+      "date": "2026-04-05",
+      "description": "Natives Angular-Prerendering (outputMode static), sitemap/robots/llms.txt und serverloses Deployment auf Azure Static Web Apps.",
+      "series": "azure-devops-de-zero",
+      "seriesOrder": 1
+    },
+    {
+      "slug": "angular-resource-httpresource",
+      "tag": "ANGULAR",
+      "title": "Daten laden mit resource() und httpResource()",
+      "reads": "3,6k Aufrufe",
+      "ago": "vor 2 Monaten",
+      "readTime": "7 min",
+      "accentColor": "#a2261c",
+      "symbol": "⟐",
+      "date": "2026-03-28",
+      "description": "Die reaktiven Primitives von Angular 21 für Async — ohne manuelles subscribe.",
+      "series": "angular-21-en-pratique",
+      "seriesOrder": 2
+    },
+    {
+      "slug": "pipeline-cicd-github-actions-azure",
+      "tag": "DEVOPS",
+      "title": "Eine CI/CD-Pipeline GitHub Actions → Azure, von Grund auf",
+      "reads": "1,9k Aufrufe",
+      "ago": "vor 2 Monaten",
+      "readTime": "8 min",
+      "accentColor": "#1c7e4a",
+      "symbol": ">_",
+      "date": "2026-03-12",
+      "description": "Build, Tests und kontinuierliches Deployment nach Azure über GitHub Actions — Secrets, Umgebungen und Leitplanken inklusive.",
+      "series": "azure-devops-de-zero",
+      "seriesOrder": 2
+    },
+    {
+      "slug": "azure-container-apps-dotnet",
+      "tag": "AZURE",
+      "title": "Eine .NET-API auf Azure Container Apps deployen",
+      "reads": "2,4k Aufrufe",
+      "ago": "vor 3 Monaten",
+      "readTime": "8 min",
+      "accentColor": "#1c5fb4",
+      "symbol": "⬢",
+      "date": "2026-03-02",
+      "description": "Ingress, Scale-to-zero mit KEDA und Revisionen: containerisiertes Serverless.",
+      "series": "azure-devops-de-zero",
+      "seriesOrder": 3
+    },
+    {
+      "slug": "flutter-firebase-offline-first",
+      "tag": "FLUTTER",
+      "title": "Offline-First-Sync mit Flutter + Firebase",
+      "reads": "2,2k Aufrufe",
+      "ago": "vor 2 Monaten",
+      "readTime": "9 min",
+      "accentColor": "#1c8fb4",
+      "symbol": "■",
+      "date": "2026-02-20",
+      "description": "Eine Flutter-App, die offline funktioniert: Firestore-Cache, Schreib-Warteschlange und Konfliktauflösung.",
+      "series": "flutter-en-production",
+      "seriesOrder": 1
+    },
+    {
+      "slug": "docker-multistage-dotnet-angular",
+      "tag": "DEVOPS",
+      "title": "Multi-Stage Docker-Images für .NET + Angular",
+      "reads": "2,6k Aufrufe",
+      "ago": "vor 4 Monaten",
+      "readTime": "9 min",
+      "accentColor": "#1c7e4a",
+      "symbol": "⬚",
+      "date": "2026-02-14",
+      "description": "Build-/Runtime-Stages, Layer-Cache und winzige Images.",
+      "series": "azure-devops-de-zero",
+      "seriesOrder": 5
+    },
+    {
+      "slug": "angular-defer-control-flow",
+      "tag": "ANGULAR",
+      "title": "@defer und der neue Control Flow: weniger JS beim Start",
+      "reads": "2,9k Aufrufe",
+      "ago": "vor 4 Monaten",
+      "readTime": "6 min",
+      "accentColor": "#a2261c",
+      "symbol": "⧉",
+      "date": "2026-02-05",
+      "description": "@if/@for/@defer, um die UI bei Bedarf zu laden und das initiale Bundle zu verkleinern.",
+      "series": "angular-21-en-pratique",
+      "seriesOrder": 3
+    },
+    {
+      "slug": "tester-angular-zoneless-vitest",
+      "tag": "TUTO",
+      "title": "Tutorial — Zoneless Angular-Komponenten mit Vitest testen",
+      "reads": "1,4k Aufrufe",
+      "ago": "vor 3 Monaten",
+      "readTime": "6 min",
+      "accentColor": "#a26b1c",
+      "symbol": "▲",
+      "date": "2026-01-28",
+      "description": "Vitest für Angular Zoneless konfigurieren und Signals, Inputs sowie Templates ohne schweres TestBed testen."
+    },
+    {
+      "slug": "flutter-riverpod-architecture",
+      "tag": "FLUTTER",
+      "title": "Eine testbare Flutter-Architektur mit Riverpod",
+      "reads": "2,0k Aufrufe",
+      "ago": "vor 5 Monaten",
+      "readTime": "8 min",
+      "accentColor": "#1c8fb4",
+      "symbol": "≋",
+      "date": "2026-01-22",
+      "description": "Providers, Notifiers und Test-Overrides: UI und Logik trennen.",
+      "series": "flutter-en-production",
+      "seriesOrder": 2
+    },
+    {
+      "slug": "minimal-api-ef-core-dotnet8",
+      "tag": ".NET",
+      "title": "Minimal APIs + EF Core: eine saubere .NET 8 API",
+      "reads": "3,1k Aufrufe",
+      "ago": "vor 5 Monaten",
+      "readTime": "8 min",
+      "accentColor": "#b4451c",
+      "symbol": "ƒ()",
+      "date": "2026-01-10",
+      "description": "Endpoints, Route Groups, EF Core und Validierung: eine minimale, aber testbare .NET 8 API.",
+      "series": "dotnet-moderne",
+      "seriesOrder": 2
+    },
+    {
+      "slug": "angular-signalstore-ngrx",
+      "tag": "ANGULAR",
+      "title": "Anwendungszustand mit NgRx SignalStore",
+      "reads": "2,1k Aufrufe",
+      "ago": "vor 6 Monaten",
+      "readTime": "8 min",
+      "accentColor": "#a2261c",
+      "symbol": "◈",
+      "date": "2025-12-20",
+      "description": "withState/withComputed/withMethods: ein reaktiver Store mit 100 % Signals.",
+      "series": "angular-21-en-pratique",
+      "seriesOrder": 4
+    },
+    {
+      "slug": "cqrs-vertical-slices-dotnet",
+      "tag": ".NET",
+      "title": "CQRS und Vertical Slices ohne Overengineering",
+      "reads": "2,3k Aufrufe",
+      "ago": "vor 6 Monaten",
+      "readTime": "7 min",
+      "accentColor": "#b4451c",
+      "symbol": "⊕",
+      "date": "2025-12-08",
+      "description": "Befehle und Abfragen pro Feature trennen, ohne zu über-architekturieren.",
+      "series": "dotnet-moderne",
+      "seriesOrder": 3
+    },
+    {
+      "slug": "opentelemetry-observabilite-dotnet",
+      "tag": "DEVOPS",
+      "title": "Observability in .NET mit OpenTelemetry",
+      "reads": "1,6k Aufrufe",
+      "ago": "vor 6 Monaten",
+      "readTime": "8 min",
+      "accentColor": "#1c7e4a",
+      "symbol": "◎",
+      "date": "2025-12-01",
+      "description": "Traces, Metriken und Logs über OTLP und den Collector.",
+      "series": "azure-devops-de-zero",
+      "seriesOrder": 6
+    },
+    {
+      "slug": "azure-key-vault-managed-identity",
+      "tag": "AZURE",
+      "title": "Secrets ohne Konfiguration: Key Vault + Managed Identity",
+      "reads": "1,7k Aufrufe",
+      "ago": "vor 7 Monaten",
+      "readTime": "7 min",
+      "accentColor": "#1c5fb4",
+      "symbol": "⚿",
+      "date": "2025-11-28",
+      "description": "Keine Secrets mehr in der Konfiguration: DefaultAzureCredential und RBAC.",
+      "series": "azure-devops-de-zero",
+      "seriesOrder": 4
+    },
+    {
+      "slug": "dotnet-grpc-microservices",
+      "tag": ".NET",
+      "title": "gRPC zwischen .NET-Microservices",
+      "reads": "1,8k Aufrufe",
+      "ago": "vor 7 Monaten",
+      "readTime": "9 min",
+      "accentColor": "#b4451c",
+      "symbol": "⇄",
+      "date": "2025-11-12",
+      "description": "Vertrag in .proto, typisierter Client, Streaming: wenn gRPC REST schlägt.",
+      "series": "dotnet-moderne",
+      "seriesOrder": 4
+    },
+    {
+      "slug": "tuto-git-rebase-interactif",
+      "tag": "TUTO",
+      "title": "Tuto — Interaktives Rebase meistern",
+      "reads": "4,3k Aufrufe",
+      "ago": "vor 7 Monaten",
+      "readTime": "5 min",
+      "accentColor": "#a26b1c",
+      "symbol": "⌥",
+      "date": "2025-11-05",
+      "description": "Squash, Reword, Reorder und die goldene Regel – ohne die gemeinsame Historie zu zerstören."
+    },
+    {
+      "slug": "flutter-melos-monorepo",
+      "tag": "FLUTTER",
+      "title": "Flutter-Monorepo mit Melos",
+      "reads": "1,2k Aufrufe",
+      "ago": "vor 8 Monaten",
+      "readTime": "6 min",
+      "accentColor": "#1c8fb4",
+      "symbol": "⬡",
+      "date": "2025-10-30",
+      "description": "In Packages aufteilen, melos.yaml-Skripte und CI-Versionierung.",
+      "series": "flutter-en-production",
+      "seriesOrder": 3
+    },
+    {
+      "slug": "dotnet-source-generators",
+      "tag": ".NET",
+      "title": "Code zur Kompilierzeit generieren: Source Generators",
+      "reads": "1,5k Aufrufe",
+      "ago": "vor 8 Monaten",
+      "readTime": "10 min",
+      "accentColor": "#b4451c",
+      "symbol": "λ",
+      "date": "2025-10-15",
+      "description": "Inkrementelle Generators als Ersatz für Reflection zur Laufzeit.",
+      "series": "dotnet-moderne",
+      "seriesOrder": 5
+    }
+  ],
+  "articlesUi": {
+    "title": "Alle Artikel",
+    "subCount": " Artikel • veröffentlicht zwischen 2025 und 2026",
+    "itemsLabel": "Elemente",
+    "back": "Zurück zu den Artikeln",
+    "read": "Lesezeit",
+    "article": "Artikel",
+    "ofLabel": "von",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "moreIn": "Weiter in ",
+    "noResults": "Kein Artikel entspricht deiner Suche."
+  },
+  "series": [
+    {
+      "slug": "dotnet-moderne",
+      "title": "Modernes .NET",
+      "description": "Minimal APIs, CQRS, gRPC, Source Generators: sauberes und testbares .NET 8, ohne unnötigen Overhead.",
+      "colors": ["#7e1c1c", "#b4451c", "#5b2d1c"],
+      "symbol": "▣"
+    },
+    {
+      "slug": "angular-21-en-pratique",
+      "title": "Angular 21 in der Praxis",
+      "description": "Zoneless, Signals, resource(), @defer, SignalStore — modernes Frontend, für echte Projekte.",
+      "colors": ["#a2261c", "#7e1c1c", "#5a1f1c"],
+      "symbol": "◆"
+    },
+    {
+      "slug": "azure-devops-de-zero",
+      "title": "Azure DevOps von Grund auf",
+      "description": "Prerender, Container Apps, Secrets, CI/CD, Docker, Observability: auf Azure deployen, ohne Server und ohne Schmerzen.",
+      "colors": ["#1c7e4a", "#1c5fb4", "#1c4a6f"],
+      "symbol": "↻"
+    },
+    {
+      "slug": "flutter-en-production",
+      "title": "Flutter in der Produktion",
+      "description": "Offline-first, Riverpod, Melos-Monorepo: ernsthaftes Mobile, kein Prototyp.",
+      "colors": ["#1c5fb4", "#2d4a8c", "#1c8fb4"],
+      "symbol": "■"
+    }
+  ],
+  "seriesUi": {
+    "title": "Serien",
+    "subtitle": "Artikel nach Thema gruppiert — vom Einsteiger bis zum Fortgeschrittenen",
+    "countLabel": "Serien",
+    "articles": "Artikel",
+    "updatedPrefix": "Aktualisiert vor",
+    "updatedSuffix": " Wo.",
+    "openSeries": "Serie öffnen",
+    "back": "Zurück zu den Serien",
+    "overline": "SERIE",
+    "totalReadLabel": "kumulierte Lesezeit",
+    "start": "Serie starten",
+    "articlesInSeries": "Artikel der Serie",
+    "empty": "Noch keine Artikel in dieser Serie veröffentlicht."
+  },
+  "sceneIntro": {
+    "hi": "// hi, world",
+    "name": "super-dev",
+    "role": "full-stack",
+    "tagline": "Ich entwerfe, ich code, ich deploye, ich monitore.",
+    "tags": [".NET", "Angular", "Azure", "Flutter"],
+    "metrics": [
+      {
+        "value": "9",
+        "label": "Jahre XP"
+      },
+      {
+        "value": "40+",
+        "label": "ausgelieferte Projekte"
+      },
+      {
+        "value": "12",
+        "label": "Kunden"
+      },
+      {
+        "value": "8",
+        "label": "Azure-Zertifikate"
+      }
+    ]
+  },
+  "sceneStack": {
+    "title": "$ cat stack.json",
+    "subtitle": "was ich täglich einsetze, nach Layer",
+    "cards": [
+      {
+        "title": "Backend",
+        "mainLabel": ".NET 8 / C# 12",
+        "items": [
+          "EF Core 8 / Dapper",
+          "Minimal APIs + Carter",
+          "MediatR + CQRS",
+          "OpenAPI / Swagger",
+          "MassTransit / RabbitMQ",
+          "xUnit + Testcontainers"
+        ],
+        "accentColor": "#b4451c"
+      },
+      {
+        "title": "Frontend",
+        "mainLabel": "Angular 21+",
+        "items": [
+          "Signals + RxJS",
+          "NgRx / SignalStore",
+          "Standalone components",
+          "SSR & hydration",
+          "Tailwind + SCSS",
+          "Storybook + Jest"
+        ],
+        "accentColor": "#1c5fb4"
+      },
+      {
+        "title": "Cloud / DevOps",
+        "mainLabel": "Azure",
+        "items": [
+          "App Service / Functions",
+          "AKS + Helm + KEDA",
+          "Service Bus / Event Grid",
+          "Application Insights",
+          "Azure DevOps Pipelines",
+          "Terraform + Bicep"
+        ],
+        "accentColor": "#1c7e4a"
+      },
+      {
+        "title": "Mobile",
+        "mainLabel": "Flutter + Firebase",
+        "items": [
+          "Flutter 3.x / Dart",
+          "Riverpod + GoRouter",
+          "Firestore + Auth",
+          "Cloud Functions",
+          "FCM push + Crashlytics",
+          "App Distribution"
+        ],
+        "accentColor": "#7e2d8c"
+      }
+    ]
+  },
+  "sceneProjects": {
+    "heading": "$ ls -la /projects",
+    "subtitle": "aktuelle Projekte — Kontext, Stack, Impact"
+  },
+  "projectScenes": [
+    {
+      "number": "01",
+      "name": "SaaS-B2B-Multi-Tenant-Plattform",
+      "role": "Tech Lead — Team von 4",
+      "description": "Modernisierung einer Legacy-ASP.NET-WebForms-Anwendung zu einem modernen SaaS. Auth Azure AD B2C, Billing Stripe, BI-Exports.",
+      "stack": [".NET 8", "Angular 17", "Azure App Service", "PostgreSQL"],
+      "metric": "↓ 60 % Ladezeit",
+      "tag": "FULL-STACK"
+    },
+    {
+      "number": "02",
+      "name": "Cross-Platform Mobile App",
+      "role": "Lead Developer",
+      "description": "Field-Service-App für Techniker. Offline-first-Modus, inkrementale Sync, Push, geogetaggte Fotos.",
+      "stack": ["Flutter", "Firebase", "Cloud Functions", "Firestore"],
+      "metric": "4,8 ★ Store — 1,2k DAU",
+      "tag": "MOBILE"
+    },
+    {
+      "number": "03",
+      "name": "Migration Monolith → Microservices",
+      "role": "Solution Architect",
+      "description": "Strangler-Pattern über 18 Monate. Domain-Zerlegung, Event-Driven via Service Bus, AKS in Produktion.",
+      "stack": [".NET 8", "AKS", "Service Bus", "Terraform"],
+      "metric": "↓ 70 % MTTR — 0 Downtime",
+      "tag": "ARCHI"
+    },
+    {
+      "number": "04",
+      "name": "CI/CD-Pipelines Multi-Env",
+      "role": "DevOps-Lead",
+      "description": "Azure DevOps Pipelines + IaC Terraform/Bicep. Dev → Staging → Prod mit Freigaben und automatischem Rollback.",
+      "stack": ["Azure DevOps", "Terraform", "Bicep", "Helm"],
+      "metric": "↓ 40% Deploymentzeit",
+      "tag": "DEVOPS"
+    }
+  ],
+  "sceneTimeline": {
+    "title": "$ git log --pretty=oneline",
+    "subtitle": "Beruflicher Werdegang — vom letzten zum ersten Commit",
+    "rows": [
+      {
+        "year": "2023—heute",
+        "role": "Tech Lead Full-stack",
+        "company": "ScaleCo — SaaS B2B (.NET / Angular / Azure)",
+        "bullets": [
+          "Legacy-Umbau → Microservices",
+          "Einführung CI/CD + Monitoring",
+          "Mentoring von 3 Junior-Devs"
+        ]
+      },
+      {
+        "year": "2021—2023",
+        "role": "Full-Stack-Entwickler",
+        "company": "ESN — Großkundenprojekte (Bank, Retail)",
+        "bullets": [
+          "3 Kundenprojekte abgeliefert",
+          "Migration On-Prem → Azure",
+          "Technisches Lead auf 2 Projekten"
+        ]
+      },
+      {
+        "year": "2019—2021",
+        "role": "Full-Stack-Entwickler",
+        "company": "Early-Stage-Startup — Angular + .NET Core",
+        "bullets": [
+          "Stack from scratch",
+          "MVP → 50k Nutzer",
+          "Erstes Produktivsystem auf Kubernetes"
+        ]
+      },
+      {
+        "year": "2017—2019",
+        "role": "Auszubildender Entwickler",
+        "company": "Duales Studium — Pariser ESN",
+        "bullets": [
+          "Erste Zeilen in der Produktion",
+          "Ausbildung .NET / Angular",
+          "Ingenieurabschluss + Microsoft-Zertifizierung"
+        ]
+      }
+    ]
+  },
+  "sceneOutro": {
+    "hash": "// Ende der Tour. Danke fürs Zuschauen.",
+    "subtitle": "Verfügbar für neue Projekte.",
+    "cta": "Wenn du einen Dev suchst, der coden kann, deployen kann und weiß, warum die Pipeline rot ist — sollten wir reden.",
+    "links": [
+      {
+        "label": "contact@super-dev.app",
+        "icon": "mail"
+      },
+      {
+        "label": "github.com/Nayruuu",
+        "icon": "code"
+      },
+      {
+        "label": "linkedin.com/in/stéphane-d",
+        "icon": "link"
+      }
+    ],
+    "sign": "super-dev — super-dev.app"
+  },
+  "about": {
+    "heading": "$ cat about.md",
+    "subtitle": "wer ich bin, was ich suche, wie man mich erreicht",
+    "infoLabel": "INFOS",
+    "linksLabel": "LINKS",
+    "paragraphs": [
+      "Ich bin super-dev. Ich bin seit 9 Jahren Full-Stack-Entwickler, mit einer DevOps-Seite, die sich nach und nach entwickelt hat — zunächst weil man das Gebaute auch deployen musste, dann weil das Industrialisieren echte Freude bereitet.",
+      "Täglich: C# / .NET für APIs und Services, TypeScript / Angular für die Oberflächen, Bicep + Terraform auf Azure. Und regelmäßig Dart / Flutter, wenn ein mobiles Projekt auftaucht.",
+      "Ich glaube an häufige Releases, an Tests, die wirklich Abdeckung bieten, an Pipelines, die nicht lügen, und daran, dass \"läuft bei mir\" kein Beweis ist. Meine Kollegen beschreiben mich als jemanden, der liefert und Wissen weitergibt."
+    ],
+    "details": [
+      {
+        "label": "Standort",
+        "value": "France — remote-friendly"
+      },
+      {
+        "label": "Verfügbarkeit",
+        "value": "Ouvert aux missions — freelance ou CDI"
+      },
+      {
+        "label": "Tagessatz (ca.)",
+        "value": "600—800€ selon contexte"
+      },
+      {
+        "label": "Sprachen",
+        "value": "Français (natif) • Anglais (C1)"
+      },
+      {
+        "label": "Mitglied seit",
+        "value": "2017 — 9 ans d'XP"
+      },
+      {
+        "label": "Aufrufe gesamt",
+        "value": "287 432 vues"
+      }
+    ],
+    "links": [
+      {
+        "label": "contact@super-dev.app",
+        "icon": "mail"
+      },
+      {
+        "label": "github.com/Nayruuu",
+        "icon": "code"
+      },
+      {
+        "label": "linkedin.com/in/stéphane-d",
+        "icon": "link"
+      },
+      {
+        "label": "calendly.com/super-dev/intro",
+        "icon": "cal"
+      }
+    ]
+  },
+  "stackTab": {
+    "heading": "$ cat stack.full",
+    "subtitle": "was ich nutze, mit meinem Kenntnisstand und meiner ehrlichen Einschätzung",
+    "techs": "techs",
+    "levels": [
+      {
+        "tierName": "EXPERT",
+        "tierSubtitle": "5+ Jahre, regelmäßig in Produktion, ich kann blind debuggen",
+        "color": "#b4451c",
+        "techs": [
+          {
+            "name": ".NET / C#",
+            "years": "9 Jahre",
+            "note": "Vom Framework 4.x bis .NET 8. Bevorzuge Minimal APIs bei Neuprojekten."
+          },
+          {
+            "name": "Angular",
+            "years": "7 Jahre",
+            "note": "Von AngularJS bis v21 + Signals. RxJS täglich im Einsatz."
+          },
+          {
+            "name": "Azure App Service",
+            "years": "6 Jahre",
+            "note": "Das Einfachste für 80 % der Fälle. AKS wenn nötig."
+          },
+          {
+            "name": "Azure DevOps",
+            "years": "6 Jahre",
+            "note": "YAML Pipelines, Service Connections, Multi-Env Release Flows."
+          },
+          {
+            "name": "SQL Server / EF Core",
+            "years": "8 Jahre",
+            "note": "EF Core 8 + Migrations. Dapper wenn Performance zählt."
+          }
+        ]
+      },
+      {
+        "tierName": "ERFAHREN",
+        "tierSubtitle": "2–5 Jahre, Projekte in Prod geliefert, ich weiß, was bricht",
+        "color": "#1c7e4a",
+        "techs": [
+          {
+            "name": "AKS / Kubernetes",
+            "years": "4 Jahre",
+            "note": "Helm, KEDA für event-driven Scaling. Kein SRE-Experte."
+          },
+          {
+            "name": "Terraform / Bicep",
+            "years": "4 Jahre",
+            "note": "Wiederverwendbare Module, State in Azure Storage. Bevorzuge Bicep für reines Azure."
+          },
+          {
+            "name": "Flutter / Dart",
+            "years": "3 Jahre",
+            "note": "Riverpod, GoRouter, Custom Rendering. 2 Apps in den Stores."
+          },
+          {
+            "name": "Firebase",
+            "years": "3 Jahre",
+            "note": "Auth, Firestore, Cloud Functions, FCM. Bekannte Grenzen."
+          },
+          {
+            "name": "Service Bus / RabbitMQ",
+            "years": "4 Jahre",
+            "note": "Event-driven via MassTransit. Sagas, Retry Policies, DLQ."
+          }
+        ]
+      },
+      {
+        "tierName": "VERTRAUT",
+        "tierSubtitle": "Unter 1 Jahr kumuliert, ich finde mich schnell ein",
+        "color": "#5b2da6",
+        "techs": [
+          {
+            "name": "Python / FastAPI",
+            "years": "1 Jahr",
+            "note": "ETL-Skripte, interne Micro-APIs. Nicht mein Haupt-Stack."
+          },
+          {
+            "name": "GraphQL",
+            "years": "2 Jahre",
+            "note": "HotChocolate serverseitig (.NET), Apollo clientseitig. Klar definierter Anwendungsfall."
+          },
+          {
+            "name": "Docker / Container",
+            "years": "5 Jahre",
+            "note": "Täglich im Dev-Einsatz, Multi-Stage Builds, Healthchecks."
+          },
+          {
+            "name": "Postgres",
+            "years": "3 Jahre",
+            "note": "Wenn SQL Server nicht passt. JSON Columns, Full-Text."
+          }
+        ]
+      }
+    ]
+  },
+  "contact": {
+    "heading": "$ ./contact.sh",
+    "subtitle": "der schnellste Weg, mich zu erreichen",
+    "avail": {
+      "status": "VERFÜGBAR",
+      "title": "Verfügbar ab 01.07.2026",
+      "subtitle": "Tagessatz 600—800€ • Full-Stack- oder Plattform-Projekte • Remote oder Hybrid"
+    },
+    "responseTime": "In der Regel < 24h an Werktagen",
+    "responseTimeLabel": "ANTWORTZEIT",
+    "composeNew": "neu",
+    "orVia": "oder direkt über",
+    "otherChannels": "WEITERE KANÄLE",
+    "pgp": "PGP-Key auf Anfrage verfügbar.",
+    "messagePlaceholder": "Hallo, ich wollte dich kontaktieren, weil…",
+    "formLabels": {
+      "name": "Dein Name",
+      "email": "Deine E-Mail",
+      "subject": "Betreff",
+      "message": "Deine Nachricht",
+      "send": "Senden",
+      "sending": "Wird gesendet…",
+      "sent": "Nachricht gesendet — ich melde mich schnell zurück.",
+      "required": "Dieses Feld ist erforderlich.",
+      "invalidEmail": "Ungültige E-Mail-Adresse."
+    },
+    "subjects": [
+      "Ein Freelance-Projekt",
+      "Eine Festanstellung",
+      "Ein persönliches Projekt",
+      "Eine technische Frage",
+      "Sonstiges"
+    ],
+    "altMethods": [
+      {
+        "kind": "mail",
+        "label": "contact@super-dev.app",
+        "subtitle": "schnelle Antwort"
+      },
+      {
+        "kind": "linkedin",
+        "label": "linkedin.com/in/stéphane-d",
+        "subtitle": "Nachrichten willkommen"
+      },
+      {
+        "kind": "github",
+        "label": "github.com/Nayruuu",
+        "subtitle": "code, issues, PRs"
+      },
+      {
+        "kind": "cal",
+        "label": "calendly.com/super-dev/intro",
+        "subtitle": "30 Min., unverbindlich"
+      }
+    ]
+  },
+  "playerRestore": "Zum Player zurück"
+}

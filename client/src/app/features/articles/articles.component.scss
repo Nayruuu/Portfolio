@@ -1,0 +1,214 @@
+.vfilters {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+	margin-bottom: 24px;
+}
+
+.vfilter {
+	font-family: var(--f-mono);
+	font-size: 11.5px;
+	padding: 6px 12px;
+	border-radius: 999px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	color: var(--text-dim);
+	cursor: pointer;
+	transition: all 0.15s;
+
+	&:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+
+	&.is-on {
+		background: var(--text);
+		color: var(--bg);
+		border-color: var(--text);
+	}
+}
+
+.vgrid {
+	display: grid;
+	// `min(280px, 100%)` keeps the intrinsically-responsive auto-fill grid from forcing a
+	// 280px track (and horizontal scroll) when the container is narrower than one card.
+	grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+	gap: 18px 14px;
+}
+
+.vgrid-empty {
+	margin: 8px 0 0;
+	font-family: var(--f-mono);
+	font-size: 13px;
+	color: var(--text-dim);
+}
+
+.vgrid-card {
+	cursor: pointer;
+	color: inherit;
+
+	&__thumb {
+		position: relative;
+		border-radius: var(--r-md);
+		overflow: hidden;
+		aspect-ratio: 16 / 9;
+		border: 1px solid var(--border-soft);
+		margin-bottom: 10px;
+		transition: transform 0.2s;
+	}
+
+	&__thumb-bg {
+		position: absolute;
+		inset: 0;
+		// `--accent` is set per-card from the article's accent colour (the only dynamic seam).
+		background:
+			radial-gradient(
+				circle at 30% 30%,
+				color-mix(in srgb, var(--accent) 25%, transparent),
+				transparent 60%
+			),
+			#0a0a0c;
+	}
+
+	&__thumb-art {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		padding: 12px;
+		text-align: center;
+		font-family: var(--f-mono);
+	}
+
+	&__thumb-sym {
+		font-size: 56px;
+		font-weight: 700;
+		line-height: 1;
+	}
+
+	&__thumb-tag {
+		color: var(--text-faint);
+		font-size: 11px;
+		letter-spacing: 0.08em;
+		margin-top: 6px;
+	}
+
+	&__dur {
+		position: absolute;
+		bottom: 8px;
+		right: 8px;
+		font-family: var(--f-mono);
+		font-size: 11px;
+		background: rgb(0 0 0 / 80%);
+		padding: 2px 6px;
+		border-radius: 3px;
+		color: #fff;
+		z-index: 2;
+	}
+
+	&__play {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%) scale(0);
+		width: 54px;
+		height: 54px;
+		border-radius: 999px;
+		background: var(--accent);
+		border: 0;
+		color: #0a0a0b;
+		display: grid;
+		place-items: center;
+		cursor: pointer;
+		transition: transform 0.2s;
+		z-index: 2;
+		box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
+	}
+
+	&__meta {
+		padding: 0 2px;
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 6px;
+	}
+
+	&__tag {
+		font-family: var(--f-mono);
+		font-size: 9.5px;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		border: 1px solid var(--border);
+		padding: 2px 6px;
+		border-radius: 3px;
+		color: var(--text);
+	}
+
+	&__more {
+		background: transparent;
+		border: 0;
+		color: var(--text-faint);
+		cursor: pointer;
+		width: 24px;
+		height: 24px;
+		display: grid;
+		place-items: center;
+		border-radius: 4px;
+
+		&:hover {
+			background: var(--surface-2);
+			color: var(--text);
+		}
+	}
+
+	&__title {
+		font-size: 14px;
+		font-weight: 600;
+		line-height: 1.35;
+		letter-spacing: -0.005em;
+		margin: 0 0 4px;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	&__sub {
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		color: var(--text-dim);
+
+		span {
+			color: var(--text-mute);
+		}
+	}
+
+	&__stats {
+		font-family: var(--f-mono);
+		font-size: 11px;
+		color: var(--text-faint);
+		margin-top: 2px;
+	}
+}
+// Card hover (thumbnail zoom + play reveal) only where a real pointer exists, so the
+// effect never sticks after a tap on touch devices.
+@media (hover: hover) {
+	.vgrid-card:hover .vgrid-card__thumb {
+		transform: scale(1.01);
+		border-color: var(--border);
+	}
+
+	.vgrid-card:hover .vgrid-card__play {
+		transform: translate(-50%, -50%) scale(1);
+	}
+}
+
+/* Light theme overrides (co-located). */
+:host-context([data-theme='light']) .vfilter.is-on {
+	background: var(--text);
+	color: var(--bg);
+	border-color: var(--text);
+}

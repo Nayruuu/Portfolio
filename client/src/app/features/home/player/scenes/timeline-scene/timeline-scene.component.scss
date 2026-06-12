@@ -1,0 +1,185 @@
+@use 'breakpoints' as bp;
+
+// MOBILE (base) = "montage": only the focused row is shown, blown up ~2× so it lands legible once
+// the 760px scene box is downscaled into the phone player (one job after another). The full rail
+// with every row (real size) returns at `md`.
+
+.scene-timeline-rich {
+	width: 100%;
+	max-width: 720px;
+}
+
+.scene-timeline-rich__head {
+	margin-bottom: 18px;
+}
+
+.scene-timeline-rich__sub {
+	font-family: var(--f-mono);
+	font-size: 17px;
+	color: var(--text-dim);
+}
+
+.tl-rich {
+	position: relative;
+}
+
+// The connecting rail + per-row dot only make sense with several rows on screen — hidden in the
+// one-at-a-time mobile montage, restored at `md`.
+.tl-rich__rail,
+.tl-rich__dot {
+	display: none;
+}
+
+.tl-rich__row {
+	display: grid;
+	grid-template-columns: 130px 1fr;
+	gap: 22px;
+	position: relative;
+	// Mobile montage: frame the single row like the projects/stack cards (consistent one-at-a-time look).
+	padding: 22px 26px;
+	background: rgb(20 20 22 / 55%);
+	border: 1px solid var(--border);
+	border-radius: var(--r-lg);
+}
+
+// Montage: hide every row but the one currently being typed.
+.tl-rich__row:not(.is-focus) {
+	display: none;
+}
+
+// Montage growth: role / company / each bullet appear only once they start typing, so the row
+// grows line-by-line (border little by little). Mobile only — the full row shows at once at `md`.
+.tl-rich__role.is-pending,
+.tl-rich__co.is-pending,
+.tl-rich__bullets li.is-pending {
+	display: none;
+}
+
+.tl-rich__year {
+	font-family: var(--f-mono);
+	font-size: 19px;
+	color: var(--accent);
+	font-weight: 600;
+	padding-top: 4px;
+}
+
+.tl-rich__role {
+	font-weight: 600;
+	font-size: 26px;
+	color: var(--text);
+	line-height: 1.2;
+}
+
+.tl-rich__co {
+	font-family: var(--f-mono);
+	font-size: 16px;
+	color: var(--text-faint);
+	margin-top: 6px;
+}
+
+.tl-rich__bullets {
+	list-style: none;
+	padding: 14px 0 0;
+	margin: 0;
+	display: grid;
+	gap: 6px;
+}
+
+.tl-rich__bullets li {
+	font-family: var(--f-mono);
+	font-size: 18px;
+	color: var(--text-dim);
+	line-height: 1.45;
+}
+
+.tl-rich__bullets li span {
+	color: var(--accent);
+}
+
+// DESKTOP (`md`+) = the original full rail with all rows at real size.
+@include bp.from(md) {
+	.scene-timeline-rich__head {
+		margin-bottom: 12px;
+	}
+
+	.scene-timeline-rich__sub {
+		font-size: 11px;
+	}
+
+	.tl-rich {
+		padding-left: 12px;
+	}
+
+	.tl-rich__rail {
+		display: block;
+		position: absolute;
+		left: 6px;
+		top: 4px;
+		bottom: 4px;
+		width: 1px;
+		background: linear-gradient(180deg, var(--accent), transparent 90%);
+		opacity: 0.6;
+	}
+
+	.tl-rich__dot {
+		display: block;
+		position: absolute;
+		left: -6px;
+		top: 6px;
+		width: 8px;
+		height: 8px;
+		border-radius: 999px;
+		background: var(--accent);
+		box-shadow:
+			0 0 0 3px var(--bg),
+			0 0 10px var(--accent);
+	}
+
+	.tl-rich__row {
+		grid-template-columns: 90px 1fr;
+		gap: 14px;
+		padding: 2px 0 4px 14px;
+		background: none;
+		border: 0;
+		border-radius: 0;
+	}
+
+	.tl-rich__row:not(.is-focus) {
+		display: grid;
+	}
+
+	.tl-rich__year {
+		font-size: 11px;
+		padding-top: 2px;
+	}
+
+	.tl-rich__role {
+		font-size: 12.5px;
+		line-height: normal;
+	}
+
+	.tl-rich__co {
+		font-size: 10px;
+		margin-top: 1px;
+	}
+
+	.tl-rich__bullets {
+		padding: 3px 0 0;
+		gap: 0;
+	}
+
+	.tl-rich__bullets li {
+		font-size: 10px;
+		line-height: 1.35;
+	}
+
+	// Desktop shows the full row at once — the montage "grow" collapse is mobile-only.
+	.tl-rich__role.is-pending,
+	.tl-rich__co.is-pending {
+		display: block;
+	}
+
+	.tl-rich__bullets li.is-pending {
+		display: list-item;
+	}
+}

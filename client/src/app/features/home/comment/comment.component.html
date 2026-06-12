@@ -1,0 +1,22 @@
+@let comment = data();
+<div class="comment">
+  <div class="comment__av" [style.background]="comment.color">{{ comment.who[0] }}</div>
+  <div>
+    <div class="comment__head">
+      <span class="comment__name">
+        @if (comment.pinned) {
+          <span class="comment__pinned"> 📌 {{ i18n.content().commentPinned }} </span>
+        }
+        &#64;{{ handle() }}<span class="comment__name-tag">{{ comment.tag }}</span>
+      </span>
+      <span class="comment__when">{{ comment.when }}</span>
+    </div>
+    <p class="comment__body">{{ comment.body }}</p>
+    <div class="comment__actions">
+      <button [class.is-on]="liked()" (click)="liked.update((value) => !value)">
+        <sd-icon name="thumbs-up" [size]="13" />
+        {{ comment.likes + (liked() ? 1 : 0) }}
+      </button>
+    </div>
+  </div>
+</div>
