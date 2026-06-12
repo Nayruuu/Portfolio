@@ -1,0 +1,103 @@
+@let content = i18n.content();
+@let currentSeries = series();
+<article class="series-detail" data-screen-label="12 Series detail">
+  <div class="article-detail__topbar">
+    <a class="btn btn--ghost btn--sm" [routerLink]="['/', i18n.lang(), 'series']">
+      <span class="article-detail__topbar-arrow">←</span>
+      {{ content.seriesUi.back }}
+    </a>
+    <div class="article-detail__topbar-actions">
+      <button class="btn btn--ghost btn--sm">
+        <sd-icon name="share" [size]="14" /> {{ content.share }}
+      </button>
+    </div>
+  </div>
+
+  <header class="series-detail__hero">
+    <div class="series-detail__art">
+      <div class="series-detail__stack" aria-hidden="true">
+        <div class="series-detail__l3" [style.background]="currentSeries.colors[2]"></div>
+        <div class="series-detail__l2" [style.background]="currentSeries.colors[1]"></div>
+        <div
+          class="series-detail__l1"
+          [style.background]="
+            'radial-gradient(circle at 30% 30%, ' + currentSeries.colors[0] + '90, #0a0a0c)'
+          "
+        >
+          <div class="series-detail__sym" [style.color]="currentSeries.colors[0]">
+            {{ currentSeries.symbol }}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="series-detail__hero-meta">
+      <div class="series-detail__overline">
+        {{ content.seriesUi.overline }}
+      </div>
+      <h1 class="series-detail__title">{{ currentSeries.title }}</h1>
+      <p class="series-detail__desc">{{ currentSeries.description }}</p>
+      <div class="series-detail__stats">
+        <div>
+          <b>{{ articles().length }}</b>
+          {{ content.seriesUi.articles }}
+        </div>
+        <span>•</span>
+        <div>
+          <b>{{ totalRead() }}</b>
+          {{ content.seriesUi.totalReadLabel }}
+        </div>
+      </div>
+      @if (articles().length > 0) {
+        <a
+          class="btn btn--accent"
+          [routerLink]="['/', i18n.lang(), 'articles', articles()[0].article.slug]"
+        >
+          <sd-icon name="play" [size]="14" />
+          {{ content.seriesUi.start }}
+        </a>
+      }
+    </div>
+  </header>
+
+  <section class="series-detail__list">
+    <div class="series-detail__list-head">
+      <span>// </span>{{ content.seriesUi.articlesInSeries }}
+    </div>
+    @if (articles().length === 0) {
+      <div class="series-detail__empty">
+        {{ content.seriesUi.empty }}
+      </div>
+    }
+    @for (row of articles(); track row.index; let index = $index) {
+      <a class="series-row" [routerLink]="['/', i18n.lang(), 'articles', row.article.slug]">
+        <div class="series-row__n">{{ pad(index + 1) }}</div>
+        <div
+          class="series-row__sym"
+          [style.color]="row.article.accentColor"
+          [style.background]="
+            'radial-gradient(circle at 30% 30%, ' + row.article.accentColor + '30, #0a0a0c)'
+          "
+        >
+          {{ row.article.symbol }}
+        </div>
+        <div class="series-row__body">
+          <div class="series-row__title">{{ row.article.title }}</div>
+          <div class="series-row__meta">
+            <span
+              class="series-row__tag"
+              [style.color]="row.article.accentColor"
+              [style.borderColor]="row.article.accentColor + '60'"
+              >{{ row.article.tag }}</span
+            >
+            <span>{{ row.article.readTime }}</span>
+            <span>•</span>
+            <span>{{ row.article.reads }}</span>
+            <span>•</span>
+            <span>{{ row.article.ago }}</span>
+          </div>
+        </div>
+        <div class="series-row__arrow">→</div>
+      </a>
+    }
+  </section>
+</article>

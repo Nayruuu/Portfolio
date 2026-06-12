@@ -1,0 +1,15 @@
+.vgrid-card,
+.pcard {
+	cursor: pointer;
+}
+
+// Grid-line thumbnail backdrop — identical on the up-next (vid-card) and articles (vgrid-card) cards.
+.vid-card__thumb-grid,
+.vgrid-card__thumb-grid {
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(rgb(255 255 255 / 6%) 1px, transparent 1px),
+		linear-gradient(90deg, rgb(255 255 255 / 6%) 1px, transparent 1px);
+	background-size: 16px 16px;
+}

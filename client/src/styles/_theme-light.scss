@@ -1,0 +1,95 @@
+@use 'breakpoints' as bp;
+
+[data-theme='light'] {
+	--bg: #faf9f6;
+	--surface: #fff;
+	--surface-2: #f3f1ec;
+	--surface-3: #e7e4dc;
+	--border: #d4d0c7;
+	--border-soft: #e6e3d9;
+
+	--text: #1a1a1a;
+	--text-dim: #555;
+	--text-faint: #6b6b6b;
+	--text-mute: #b0aea7;
+
+	--accent: oklch(56% 0.21 22deg);
+	--accent-hot: oklch(62% 0.23 28deg);
+	--accent-deep: oklch(38% 0.18 22deg);
+	--accent-glow: oklch(56% 0.21 22deg / 12%);
+
+	--sh-1: 0 1px 2px rgb(20 18 12 / 6%);
+	--sh-2: 0 8px 28px rgb(20 18 12 / 8%);
+}
+
+/* faint texture flip */
+[data-theme='light'] body::before {
+	background-image: repeating-linear-gradient(
+		0deg,
+		rgb(0 0 0 / 1.2%) 0,
+		rgb(0 0 0 / 1.2%) 1px,
+		transparent 1px,
+		transparent 3px
+	);
+	opacity: 0.5;
+}
+
+/* primary button (subscribe) is solid dark on light bg */
+[data-theme='light'] .btn--primary {
+	--bg: #1a1a1a;
+	--bd: #1a1a1a;
+	--fg: #fff;
+}
+
+[data-theme='light'] .btn--primary:hover {
+	--bg: #000;
+	--bd: #000;
+}
+
+[data-theme='light'] .btn--accent {
+	color: #fff;
+	--fg: #fff;
+}
+
+[data-theme='light'] .likebar button:hover {
+	background: rgb(0 0 0 / 5%);
+}
+
+[data-theme='light'] ::selection {
+	background: var(--accent-glow);
+	color: var(--text);
+}
+
+[data-theme='light'] .boot {
+	color: var(--accent);
+}
+
+[data-theme='light'] .konami {
+	color: var(--text-mute);
+}
+
+[data-theme='light'] .konami b {
+	color: var(--accent);
+}
+
+[data-theme='light'] .comment__name-tag {
+	background: var(--surface);
+	border-color: var(--border);
+}
+
+[data-theme='light'] .tab[aria-selected='true'] {
+	border-bottom-color: var(--accent);
+}
+
+/* Mobile bottom bar — light surface mirroring the nav (dark base in `_tabs.scss`). The
+   override outranks the `bp.from(md)` reset in `_tabs.scss`, so undo it here at `md` too
+   (the desktop top row is transparent). */
+[data-theme='light'] .tabs {
+	background: rgb(250 249 246 / 92%);
+}
+
+@include bp.from(md) {
+	[data-theme='light'] .tabs {
+		background: none;
+	}
+}

@@ -1,0 +1,38 @@
+@let content = i18n.content();
+<button
+  class="prefs__icon-btn"
+  [attr.aria-label]="content.themeToggleAria"
+  [title]="theme.theme() === 'light' ? content.themeToDark : content.themeToLight"
+  (click)="theme.toggle()"
+>
+  <sd-icon [name]="theme.theme() === 'light' ? 'moon' : 'sun'" />
+</button>
+
+<div class="prefs__lang">
+  <button
+    class="prefs__lang-toggle"
+    type="button"
+    aria-haspopup="menu"
+    [attr.aria-expanded]="langOpen()"
+    (click)="toggleLang()"
+  >
+    {{ i18n.lang().toUpperCase() }}
+    <sd-icon name="chevron-down" [size]="13" />
+  </button>
+  @if (langOpen()) {
+    <div class="prefs__lang-menu" role="menu">
+      @for (lang of langs; track lang) {
+        <button
+          class="prefs__lang-item"
+          type="button"
+          role="menuitemradio"
+          [attr.aria-checked]="i18n.lang() === lang"
+          [class.is-active]="i18n.lang() === lang"
+          (click)="switchLang(lang)"
+        >
+          {{ lang.toUpperCase() }}
+        </button>
+      }
+    </div>
+  }
+</div>

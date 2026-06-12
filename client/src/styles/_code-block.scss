@@ -1,0 +1,92 @@
+.code-block {
+	background: #131316;
+	border: 1px solid #2a2a30;
+	border-radius: var(--r-md);
+	margin: 22px 0;
+	overflow: hidden;
+	color: #f1f1ef;
+	font-family: var(--f-mono);
+}
+
+.code-block__head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 12px;
+	background: #1a1a1e;
+	border-bottom: 1px solid #2a2a30;
+	font-size: 11px;
+	color: #a4a4a8;
+}
+
+.code-block__lang {
+	margin-left: 8px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	font-size: 10px;
+}
+
+.code-block__copy {
+	margin-left: auto;
+	background: transparent;
+	border: 1px solid #2a2a30;
+	color: #a4a4a8;
+	font-family: var(--f-mono);
+	font-size: 10.5px;
+	padding: 3px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 0.15s;
+}
+
+.code-block__copy:hover {
+	color: #f1f1ef;
+	border-color: #45454a;
+}
+
+.code-block__body {
+	padding: 14px 18px;
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: #a4a4a8;
+	// Long lines scroll inside the block instead of widening the page (protects
+	// article-detail bodies at the 360px floor); the cap holds even inside flex/grid.
+	max-width: 100%;
+	overflow-x: auto;
+	background: #131316;
+}
+
+.code-block__line {
+	display: block;
+}
+
+.code-block__no {
+	display: inline-block;
+	min-width: 28px;
+	padding-right: 14px;
+	color: #45454a;
+	text-align: right;
+	user-select: none;
+}
+
+.code-block .k {
+	color: oklch(78% 0.16 22deg);
+}
+
+.code-block .s {
+	color: oklch(82% 0.13 145deg);
+}
+
+.code-block .c {
+	color: #6a6a70;
+	font-style: italic;
+}
+
+.code-block .n {
+	color: oklch(78% 0.14 250deg);
+}
+
+.code-block .a {
+	color: oklch(78% 0.14 280deg);
+}

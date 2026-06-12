@@ -1,0 +1,479 @@
+@use 'breakpoints' as bp;
+
+.player {
+	overflow: hidden;
+	background: #000;
+	position: relative;
+	// Phones get a small full-bleed "real video", like the YouTube-app watch page:
+	// the cinematic 16 / 9 box spans edge to edge (the negative margin cancels the
+	// `.main` side padding) and every scene — laid out at its fixed desktop width —
+	// is downscaled to fit it via `.scene--fit`. The rounded, padded card returns
+	// at `md` (see the breakpoint block below).
+	aspect-ratio: 16 / 9;
+	margin-inline: calc(-1 * var(--pad));
+	border-radius: 0;
+	// Query container so `.scene--fit` can read the *actual* player width
+	// (`100cqw`) and shrink the fixed-width desktop scene to fit it.
+	container-type: size;
+	border: 1px solid var(--border-soft);
+	box-shadow: var(--sh-2);
+	cursor: pointer;
+
+	// The scene layer (`sd-player-stage`) fills the player and clips overflow; its background + scenes
+	// are owned by that component so the floating mini-player can reuse it.
+
+	// Inline placeholder shown while the player is "popped out" to the floating mini-player.
+	&__popped {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		width: 100%;
+		appearance: none;
+		background: transparent;
+		border: 0;
+		color: var(--text-dim);
+		font-family: var(--f-mono);
+		font-size: 13px;
+		cursor: pointer;
+
+		&:hover {
+			color: var(--text);
+		}
+	}
+
+	&__chrome {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		pointer-events: none;
+		opacity: 1;
+		transition: opacity 0.25s;
+	}
+
+	&.is-idle &__chrome {
+		opacity: 0;
+	}
+
+	// Fullscreen — both paths set `is-fullscreen` (native syncs it, the iOS fallback
+	// toggles it): the player becomes a fixed black room over the viewport and the
+	// stage letterboxes to a centered 16/9 "picture" (a size container the scenes
+	// upscale into via `.scene--fit`, re-asserted in `_scenes.scss`).
+	&.is-fullscreen {
+		position: fixed;
+		inset: 0;
+		z-index: 200;
+		margin-inline: 0;
+		aspect-ratio: auto;
+		border: 0;
+		border-radius: 0;
+		box-shadow: none;
+		container-type: size;
+	}
+
+	&.is-fullscreen sd-player-stage {
+		width: min(100cqw, calc(100cqh * (16 / 9)));
+		aspect-ratio: 16 / 9;
+		margin: auto;
+		container-type: size;
+	}
+
+	&__chrome * {
+		pointer-events: auto;
+	}
+
+	&__chrome-bg {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 120px;
+		background: linear-gradient(to top, rgb(0 0 0 / 85%), transparent);
+		pointer-events: none;
+	}
+
+	// Decorative "fake video" badges. On the small full-bleed phone player they overlap the
+	// scaled-down scene header (the scene fills the 16/9 box edge-to-edge while this chrome floats
+	// at a fixed size); hidden on phones, restored at `md` where the player is the roomy card.
+	&__live {
+		position: absolute;
+		top: 14px;
+		left: 14px;
+		display: none;
+		align-items: center;
+		gap: 8px;
+		font-family: var(--f-mono);
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text);
+		background: rgb(0 0 0 / 50%);
+		padding: 5px 10px;
+		border-radius: 4px;
+		backdrop-filter: blur(8px);
+	}
+
+	&__live-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 999px;
+		background: var(--accent);
+		animation: pulse 1.6s ease-in-out infinite;
+		box-shadow: 0 0 12px var(--accent);
+	}
+
+	&__quality {
+		position: absolute;
+		top: 14px;
+		right: 14px;
+		display: none;
+		font-family: var(--f-mono);
+		font-size: 10.5px;
+		letter-spacing: 0.06em;
+		color: var(--text-dim);
+		background: rgb(0 0 0 / 50%);
+		padding: 5px 10px;
+		border-radius: 4px;
+		backdrop-filter: blur(8px);
+		white-space: nowrap;
+	}
+
+	&__center-play {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 72px;
+		height: 72px;
+		border-radius: 999px;
+		background: rgb(10 10 11 / 55%);
+		border: 1px solid var(--border);
+		display: grid;
+		place-items: center;
+		cursor: pointer;
+		backdrop-filter: blur(8px);
+		opacity: 0;
+		pointer-events: none;
+		transition:
+			opacity 0.2s,
+			transform 0.2s;
+	}
+
+	// Shown while paused, but fades once the viewer stops interacting (`is-resting` = idle
+	// regardless of play state) so the big button never permanently occludes the scene
+	// content underneath (e.g. the outro contact CTAs). A mouse move brings it back.
+	&.is-paused:not(.is-resting) &__center-play {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	&__center-play:hover {
+		transform: translate(-50%, -50%) scale(1.05);
+	}
+
+	&__controls {
+		position: relative;
+		padding: 0 14px 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	&__progress {
+		position: relative;
+		height: 14px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+	}
+
+	&__progress-track {
+		position: relative;
+		width: 100%;
+		height: 4px;
+		background: rgb(255 255 255 / 18%);
+		border-radius: 2px;
+		overflow: visible;
+	}
+
+	&__progress:hover &__progress-track {
+		height: 6px;
+	}
+
+	&__progress-fill {
+		position: absolute;
+		top: 0;
+		left: 0;
+		bottom: 0;
+		background: var(--accent);
+		border-radius: 2px;
+	}
+
+	&__progress-hover {
+		position: absolute;
+		top: 0;
+		left: 0;
+		bottom: 0;
+		background: rgb(255 255 255 / 20%);
+		border-radius: 2px;
+	}
+
+	&__progress-thumb {
+		position: absolute;
+		top: 50%;
+		width: 12px;
+		height: 12px;
+		border-radius: 999px;
+		background: var(--accent);
+		transform: translate(-50%, -50%) scale(0);
+		transition: transform 0.15s;
+		box-shadow: 0 0 0 4px rgb(0 0 0 / 30%);
+	}
+
+	&__progress:hover &__progress-thumb {
+		transform: translate(-50%, -50%) scale(1);
+	}
+
+	&__chapter-tick {
+		position: absolute;
+		top: 50%;
+		width: 2px;
+		height: 8px;
+		background: rgb(255 255 255 / 40%);
+		transform: translate(-50%, -50%);
+	}
+
+	&__chapter-tooltip {
+		position: absolute;
+		bottom: 22px;
+		transform: translateX(-50%);
+		background: #0a0a0b;
+		border: 1px solid var(--border);
+		padding: 4px 8px;
+		border-radius: 4px;
+		font-family: var(--f-mono);
+		font-size: 11px;
+		color: var(--text);
+		white-space: nowrap;
+		pointer-events: none;
+
+		small {
+			color: var(--text-faint);
+			display: block;
+		}
+	}
+
+	&__row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: #fff;
+		position: relative;
+	}
+
+	&__btn {
+		background: transparent;
+		border: 0;
+		color: #fff;
+		cursor: pointer;
+		display: grid;
+		place-items: center;
+		padding: 6px;
+		border-radius: 4px;
+
+		&:hover {
+			background: rgb(255 255 255 / 10%);
+		}
+
+		&.is-active {
+			background: rgb(255 255 255 / 14%);
+		}
+	}
+
+	// Auxiliary actions (settings / pip) — hidden on phones to keep the control row
+	// from crowding; restored to `grid` (matching `__btn`) at `sm`.
+	&__btn--aux {
+		display: none;
+	}
+
+	&__time {
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		color: rgb(255 255 255 / 85%);
+	}
+
+	// The "now playing" chapter label is dropped on small screens so the control row
+	// (play/volume/time + actions) fits without clipping; restored in `bp.from(sm)`.
+	&__chapter-now {
+		display: none;
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		color: rgb(255 255 255 / 70%);
+		margin-left: 8px;
+
+		b {
+			color: var(--accent-hot);
+			font-weight: 500;
+		}
+	}
+
+	&__spacer {
+		flex: 1;
+	}
+
+	// Speed menu (the ⚙️ gear popover) — floats above the control row, anchored to it.
+	&__settings {
+		position: absolute;
+		bottom: calc(100% + 10px);
+		right: 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 6px;
+		min-width: 92px;
+		background: rgb(20 20 22 / 96%);
+		border: 1px solid rgb(255 255 255 / 12%);
+		border-radius: 8px;
+		box-shadow: var(--sh-2);
+	}
+
+	&__settings-item {
+		appearance: none;
+		background: transparent;
+		border: 0;
+		color: rgb(255 255 255 / 85%);
+		font-family: var(--f-mono);
+		font-size: 12px;
+		text-align: left;
+		padding: 6px 10px;
+		border-radius: 4px;
+		cursor: pointer;
+
+		&:hover {
+			background: rgb(255 255 255 / 10%);
+		}
+	}
+
+	&__settings-item.is-active {
+		color: var(--accent-hot);
+		font-weight: 600;
+	}
+}
+
+@keyframes pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+
+	50% {
+		opacity: 0.5;
+		transform: scale(0.85);
+	}
+}
+
+@include bp.from(sm) {
+	.player__row {
+		gap: 12px;
+	}
+
+	.player__chapter-now {
+		display: inline;
+	}
+
+	// Restore the aux actions (settings / pip) dropped on phones.
+	.player__btn--aux {
+		display: grid;
+	}
+}
+
+// From tablet up the player is wide enough to show the scenes at full size: the
+// mobile full-bleed is undone (rounded card, normal margins) and the query
+// container is dropped (ending the `.scene--fit` scaling), so desktop is
+// byte-identical to the committed baseline.
+@include bp.from(md) {
+	.player {
+		margin-inline: 0;
+		border-radius: var(--r-lg);
+		container-type: normal;
+	}
+
+	// Decorative badges return on the roomy card player (hidden on the full-bleed phone player).
+	.player__live {
+		display: flex;
+	}
+
+	.player__quality {
+		display: block;
+	}
+}
+
+// iOS forced landscape. The CSS-fallback fullscreen (`is-fullscreen` WITHOUT native
+// `:fullscreen` — iPhone Safari has no `requestFullscreen` on a `<div>`, nor
+// `orientation.lock`) rotates the player 90° in portrait so the 16/9 "video" fills the
+// screen sideways, like the YouTube app. The box is laid out landscape-shaped
+// (`100dvh × 100dvw`) and measured pre-transform by the size container — so the stage
+// letterbox + `.scene--fit` scaling still hold — then rotated to fit the upright phone.
+// Turn the device and the query stops matching: the overlay fills the now-landscape
+// viewport unrotated. Native fullscreen (Android/desktop) is `:fullscreen`, excluded —
+// its real `orientation.lock` owns rotation there.
+@media (orientation: portrait) {
+	.player.is-fullscreen:not(:fullscreen) {
+		inset: auto;
+		top: 50%;
+		left: 50%;
+		width: 100dvh;
+		height: 100dvw;
+		transform: translate(-50%, -50%) rotate(90deg);
+	}
+}
+
+// Mobile game mode: the game fills the screen as a fixed overlay. In **landscape** it's un-rotated;
+// in **portrait** it's CSS-rotated 90° to fill landscape (an FPS needs width). Unlike the original
+// naïve reuse of the video rotation, `sd-game` compensates the touch coordinates (`localPoint`), so the
+// joystick + look stay correct under the rotation; the canvas resizes to the (possibly swapped) viewport.
+@media (pointer: coarse) {
+	.player:has(sd-game) {
+		position: fixed;
+		inset: 0;
+		z-index: 300;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		border: 0;
+		border-radius: 0;
+		aspect-ratio: auto;
+		container-type: normal;
+	}
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+	.player:has(sd-game) {
+		inset: auto;
+		top: 50%;
+		left: 50%;
+		width: 100dvh;
+		height: 100dvw;
+		transform: translate(-50%, -50%) rotate(90deg);
+	}
+}
+
+/* Light theme overrides (co-located). */
+:host-context([data-theme='light']) .player {
+	--bg: #0a0a0b;
+	--surface: #131316;
+	--surface-2: #1a1a1e;
+	--surface-3: #232328;
+	--border: #2a2a30;
+	--border-soft: #1f1f24;
+	--text: #f1f1ef;
+	--text-dim: #a4a4a8;
+	--text-faint: #6a6a70;
+	--text-mute: #45454a;
+}

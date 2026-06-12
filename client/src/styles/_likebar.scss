@@ -1,0 +1,35 @@
+.likebar {
+	display: flex;
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	overflow: hidden;
+	height: 36px;
+}
+
+.likebar button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 14px;
+	background: transparent;
+	border: 0;
+	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.likebar button:hover {
+	background: rgb(255 255 255 / 5%);
+}
+
+.likebar button.is-on {
+	color: var(--accent);
+}
+
+.likebar__divider {
+	width: 1px;
+	background: var(--border);
+}

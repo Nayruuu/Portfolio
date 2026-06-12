@@ -1,0 +1,57 @@
+name: Deploy - Infra
+
+on:
+  workflow_dispatch:
+  # Push auto-trigger is OFF during the mono-commit/force-push phase (force-push bypasses
+  # path filters → every workflow would run on each push). Re-enable with normal git history:
+  # push:
+  #   branches: [main]
+  #   paths: [infra/**]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    environment: infra
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Generate terraform.tfvars.json
+        working-directory: infra
+        run: |
+          cat <<EOF > terraform.tfvars.json
+          {
+            "subscription_id": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+            "location": "${{ vars.TF_VAR_LOCATION }}",
+            "cosmos_account_name": "${{ vars.TF_VAR_COSMOS_ACCOUNT_NAME }}",
+            "allowed_cors_origin": "${{ vars.TF_VAR_ALLOWED_CORS_ORIGIN }}"
+          }
+          EOF
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: infra
+        run: terraform init -reconfigure
+
+      - name: Terraform Plan
+        working-directory: infra
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        working-directory: infra
+        run: terraform apply -auto-approve -input=false

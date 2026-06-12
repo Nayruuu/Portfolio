@@ -1,0 +1,16 @@
+// Rich scene chrome — the command line + subtitle marker shared verbatim by the stack, timeline
+// and projects "rich" scenes (each scene's own .scss keeps the parts that genuinely differ).
+.scene-stack-rich__cmd,
+.scene-timeline-rich__cmd,
+.scene-projects-rich__cmd {
+	font-family: var(--f-mono);
+	font-size: 13px;
+	color: var(--accent);
+	margin-bottom: 2px;
+}
+
+.scene-stack-rich__sub span,
+.scene-timeline-rich__sub span,
+.scene-projects-rich__sub span {
+	color: var(--text-mute);
+}

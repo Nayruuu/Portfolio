@@ -1,0 +1,150 @@
+@let content = i18n.content();
+<div
+  #playerBox
+  class="player"
+  [class.is-idle]="idle() && player.playing()"
+  [class.is-resting]="idle()"
+  [class.is-paused]="!player.playing()"
+  [class.is-fullscreen]="fullscreen()"
+  (mousemove)="wake()"
+  (mouseleave)="idle.set(true)"
+  (click)="onClick($event)"
+>
+  @if (player.mini()) {
+    <button
+      class="player__popped"
+      (click)="$event.stopPropagation(); player.closeMini()"
+      [attr.aria-label]="content.playerRestore"
+    >
+      <sd-icon name="pip" [size]="30" />
+      <span>{{ content.playerRestore }}</span>
+    </button>
+  } @else if (game.running()) {
+    <sd-game
+      (exited)="exitGame()"
+      [fullscreen]="fullscreen()"
+      [fullscreenAvailable]="nativeFullscreen"
+      (fullscreenToggle)="toggleFullscreen()"
+    />
+  } @else {
+    <sd-player-stage />
+
+    <div class="player__live">
+      <span class="player__live-dot"></span>
+      <span>{{ player.playing() ? 'LIVE' : 'PAUSED' }}</span>
+    </div>
+    <div class="player__quality">4K · HDR</div>
+
+    <button
+      class="player__center-play"
+      (click)="$event.stopPropagation(); player.play()"
+      [attr.aria-label]="content.aria.play"
+    >
+      <sd-icon name="play" [size]="32" />
+    </button>
+
+    <div class="player__chrome">
+      <div class="player__chrome-bg"></div>
+      <div class="player__controls" (click)="$event.stopPropagation()">
+        <div
+          class="player__progress"
+          #progress
+          (mousemove)="onProgressHover($event)"
+          (mouseleave)="hoverPct.set(null)"
+          (click)="onProgressClick($event)"
+        >
+          <div class="player__progress-track">
+            @if (hoverPct() !== null) {
+              <div class="player__progress-hover" [style.width]="hoverPct()! * 100 + '%'"></div>
+            }
+            <div class="player__progress-fill" [style.width]="progressPercent() + '%'"></div>
+            <div class="player__progress-thumb" [style.left]="progressPercent() + '%'"></div>
+
+            @for (chapter of tickChapters(); track chapter.id) {
+              <div
+                class="player__chapter-tick"
+                [style.left]="(chapter.seconds / player.totalSec()) * 100 + '%'"
+              ></div>
+            }
+          </div>
+          @if (hoverPct() !== null && hoverChapter()) {
+            <div class="player__chapter-tooltip" [style.left]="hoverPct()! * 100 + '%'">
+              {{ hoverChapter()!.title }}
+              <small>{{ hoverChapter()!.timestamp }}</small>
+            </div>
+          }
+        </div>
+
+        <div class="player__row">
+          <button
+            class="player__btn"
+            (click)="player.togglePlay()"
+            [attr.aria-label]="player.playing() ? content.aria.pause : content.aria.play"
+          >
+            <sd-icon [name]="player.playing() ? 'pause' : 'play'" [size]="22" />
+          </button>
+          <button
+            class="player__btn"
+            (click)="player.nextChapter()"
+            [attr.aria-label]="content.aria.nextChapter"
+          >
+            <sd-icon name="next" [size]="20" />
+          </button>
+          <span class="player__time"
+            >{{ format(player.time()) }} / {{ format(player.totalSec()) }}</span
+          >
+          <span class="player__chapter-now"
+            >· <b>{{ player.currentChapter().title }}</b></span
+          >
+          <span class="player__spacer"></span>
+          <button
+            class="player__btn player__btn--aux"
+            [class.is-active]="settingsOpen()"
+            [attr.aria-label]="content.aria.settings"
+            [attr.aria-expanded]="settingsOpen()"
+            (click)="toggleSettings()"
+          >
+            <sd-icon name="gear" [size]="20" />
+          </button>
+          <button
+            class="player__btn player__btn--aux"
+            [attr.aria-label]="content.aria.pip"
+            (click)="player.toggleMini()"
+          >
+            <sd-icon name="pip" [size]="20" />
+          </button>
+          <button
+            class="player__btn"
+            [attr.aria-label]="content.aria.gameStart"
+            (click)="enterGame()"
+          >
+            <sd-icon name="gamepad" [size]="20" />
+          </button>
+          <button
+            class="player__btn"
+            (click)="toggleFullscreen()"
+            [attr.aria-label]="fullscreen() ? content.aria.exitFullscreen : content.aria.fullscreen"
+          >
+            <sd-icon [name]="fullscreen() ? 'full-exit' : 'full'" [size]="20" />
+          </button>
+
+          @if (settingsOpen()) {
+            <div class="player__settings" role="menu">
+              @for (speed of speeds; track speed) {
+                <button
+                  class="player__settings-item"
+                  role="menuitemradio"
+                  [attr.aria-checked]="player.rate() === speed"
+                  [class.is-active]="player.rate() === speed"
+                  (click)="setRate(speed)"
+                >
+                  {{ speed }}×
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

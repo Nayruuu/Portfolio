@@ -1,0 +1,171 @@
+{
+  "hud_bar": {
+    "file": "hud/hud_bar.webp",
+    "size": [2117, 404],
+    "zones": {
+      "health": {
+        "x": 32,
+        "y": 115,
+        "w": 376,
+        "h": 222
+      },
+      "mental": {
+        "x": 474,
+        "y": 115,
+        "w": 384,
+        "h": 222
+      },
+      "face": {
+        "x": 926,
+        "y": 29,
+        "w": 236,
+        "h": 329
+      },
+      "arms": {
+        "x": 1227,
+        "y": 201,
+        "w": 255,
+        "h": 116
+      },
+      "weapon": {
+        "x": 1539,
+        "y": 76,
+        "w": 341,
+        "h": 261
+      },
+      "card_blue": {
+        "x": 1960,
+        "y": 63,
+        "w": 110,
+        "h": 69
+      },
+      "card_yellow": {
+        "x": 1960,
+        "y": 168,
+        "w": 110,
+        "h": 68
+      },
+      "card_red": {
+        "x": 1960,
+        "y": 264,
+        "w": 110,
+        "h": 68
+      }
+    },
+    "zones_normalized": {
+      "health": {
+        "x": 0.01512,
+        "y": 0.28465,
+        "w": 0.17761,
+        "h": 0.5495
+      },
+      "mental": {
+        "x": 0.2239,
+        "y": 0.28465,
+        "w": 0.18139,
+        "h": 0.5495
+      },
+      "face": {
+        "x": 0.43741,
+        "y": 0.07178,
+        "w": 0.11148,
+        "h": 0.81436
+      },
+      "arms": {
+        "x": 0.57959,
+        "y": 0.49752,
+        "w": 0.12045,
+        "h": 0.28713
+      },
+      "weapon": {
+        "x": 0.72697,
+        "y": 0.18812,
+        "w": 0.16108,
+        "h": 0.64604
+      },
+      "card_blue": {
+        "x": 0.92584,
+        "y": 0.15594,
+        "w": 0.05196,
+        "h": 0.17079
+      },
+      "card_yellow": {
+        "x": 0.92584,
+        "y": 0.41584,
+        "w": 0.05196,
+        "h": 0.16832
+      },
+      "card_red": {
+        "x": 0.92584,
+        "y": 0.65347,
+        "w": 0.05196,
+        "h": 0.16832
+      }
+    },
+    "responsive_note": "zones_normalized are fractions of bar width/height. At runtime: zone_px = norm * displayed_bar_size. Works at any scale."
+  },
+  "faces": {
+    "file": "faces/faces_blood_7x6_96x128.webp",
+    "cell": [96, 128],
+    "cols": 6,
+    "rows": 7,
+    "row_order": ["etat1", "etat2", "etat4", "etat5", "etat6", "etat7", "etat8"],
+    "row_meaning": "health high->low (row0 = full, row6 = near death, blood increases downward)",
+    "col_order": [
+      "look_far_left",
+      "look_left",
+      "look_center",
+      "look_right",
+      "look_far_right",
+      "hit"
+    ],
+    "full_res": "faces/faces_blood_7x6.webp",
+    "clean_variant": "faces/faces_clean_7x6.webp"
+  },
+  "digits_red": {
+    "file": "digits/digits_red_strip.webp",
+    "cell": [97, 135],
+    "order": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "pct", "slash"],
+    "use": "HEALTH / MENTAL values, right-aligned, suffix pct"
+  },
+  "arms_grey": {
+    "file": "digits/arms_grey_strip.webp",
+    "cell": [88, 109],
+    "order": ["1", "2", "3", "4", "5", "6", "7", "8"],
+    "use": "weapon NOT owned"
+  },
+  "arms_yellow": {
+    "file": "digits/arms_yellow_strip.webp",
+    "cell": [81, 97],
+    "order": ["1", "2", "3", "4", "5", "6", "7", "8"],
+    "use": "weapon owned"
+  },
+  "cards": {
+    "blue": "cards/card_blue.webp",
+    "yellow": "cards/card_yellow.webp",
+    "red": "cards/card_red.webp"
+  },
+  "sizes": {
+    "x1.0": {
+      "scale": 1.0,
+      "bar": "sizes/x1.0/hud_bar.webp",
+      "zones": "sizes/x1.0/zones.json",
+      "digits": "sizes/x1.0/digits/",
+      "cards": "sizes/x1.0/cards/"
+    },
+    "x0.6": {
+      "scale": 0.6,
+      "bar": "sizes/x0.6/hud_bar.webp",
+      "zones": "sizes/x0.6/zones.json",
+      "digits": "sizes/x0.6/digits/",
+      "cards": "sizes/x0.6/cards/"
+    },
+    "x0.35": {
+      "scale": 0.35,
+      "bar": "sizes/x0.35/hud_bar.webp",
+      "zones": "sizes/x0.35/zones.json",
+      "digits": "sizes/x0.35/digits/",
+      "cards": "sizes/x0.35/cards/"
+    }
+  }
+}

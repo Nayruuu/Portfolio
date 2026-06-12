@@ -1,0 +1,312 @@
+{
+  "_responsive": {
+    "fps_sprite_height_frac": 0.6,
+    "note": "Dessiner le sprite FPS de l'arme à (fps_sprite_height_frac * hauteur_ecran), centré-bas. L'icône HUD se place dans la zone 'weapon' de la barre (voir atlas.json -> zones_normalized). Tout scale au runtime, pas d'asset multi-taille nécessaire pour les armes."
+  },
+  "_animation": {
+    "frames_per_weapon": ["idle", "fire_start", "fire_peak", "recoil"],
+    "frame_ms": 60,
+    "layout": "1 ligne par arme, 4 colonnes (strip), même taille de cellule pour toutes les armes",
+    "note": "Boucle: idle -> fire_start -> fire_peak -> recoil -> idle. L'arme reste fixe en position/échelle, seul l'effet change."
+  },
+  "_reload_animation": {
+    "frames": 3,
+    "frame_ms": 180,
+    "refill_on_frame": 1,
+    "note": "reload strip layout (down/insert/up); the view stretches it over the weapon's reloadTime_s"
+  },
+  "ammo_types": {
+    "bullets": {
+      "label": "balles",
+      "max": 400,
+      "pickup": "box_staples"
+    },
+    "shells": {
+      "label": "cartouches",
+      "max": 50,
+      "pickup": "gas_canister"
+    },
+    "rockets": {
+      "label": "roquettes",
+      "max": 30,
+      "pickup": "battery_pack"
+    },
+    "cells": {
+      "label": "cellules",
+      "max": 250,
+      "pickup": "energy_cell"
+    }
+  },
+  "weapons": [
+    {
+      "slot": 1,
+      "id": "fist",
+      "name": "Clavier mécanique",
+      "type": "melee",
+      "damage": 35,
+      "fireRate_s": 0.6,
+      "range": "melee",
+      "ammoType": null,
+      "knockback": 0.6,
+      "sprite_fps": "/game/weapons/fist/fps.webp",
+      "sprite_run": "/game/weapons/fist/run.webp",
+      "run_frames": 4,
+      "icon": "/game/weapons/fist/icon.webp",
+      "view_scale": 0.62,
+      "view_anchor_x": 0.5,
+      "anim": {
+        "frames": 6,
+        "frame_ms": 80,
+        "fire_sequence": [0, 1, 2, 3, 4, 5],
+        "damage_frame": 3
+      },
+      "alt": "chainsaw",
+      "frames": {
+        "idle": "",
+        "fire_start": "",
+        "fire_peak": "",
+        "recoil": ""
+      }
+    },
+    {
+      "slot": 1,
+      "id": "chainsaw",
+      "name": "Tronçonneuse",
+      "type": "melee_alt",
+      "fireMode": "auto",
+      "damage": 16,
+      "fireRate_s": 0.11,
+      "fireFrameDuration_s": 0.045,
+      "range": "melee",
+      "ammoType": null,
+      "sprite_fps": "/game/weapons/chainsaw/fps.webp",
+      "sprite_idle": "/game/weapons/chainsaw/idle.webp",
+      "idle_frames": 4,
+      "icon": "/game/weapons/chainsaw/icon.webp",
+      "view_scale": 0.7,
+      "view_anchor_x": 0.5,
+      "anim": {
+        "frames": 6,
+        "frame_ms": 60,
+        "fire_sequence": [0, 1, 2, 3, 4, 5],
+        "damage_frame": 3
+      },
+      "knockback": 0.2
+    },
+    {
+      "slot": 2,
+      "id": "pistol",
+      "name": "Nerf bidouillé",
+      "type": "hitscan",
+      "damage": 18,
+      "fireRate_s": 0.32,
+      "range": "medium",
+      "ammoType": "bullets",
+      "ammoPerShot": 1,
+      "spread": 0.02,
+      "magSize": 24,
+      "reloadTime_s": 1.1,
+      "projectileSpeed": 18,
+      "sprite_fps": "/game/weapons/pistol/fps.webp",
+      "sprite_reload": "/game/weapons/pistol/reload.webp",
+      "reload_frames": 4,
+      "reload_scale": 1.5,
+      "icon": "/game/weapons/pistol/icon.webp",
+      "view_scale": 0.52,
+      "frames": {
+        "idle": "",
+        "fire_start": "",
+        "fire_peak": "",
+        "recoil": ""
+      }
+    },
+    {
+      "slot": 3,
+      "id": "shotgun",
+      "name": "Hilti DX 460",
+      "type": "hitscan_spread",
+      "damage": 9,
+      "pellets": 9,
+      "fireRate_s": 0.85,
+      "range": "short",
+      "ammoType": "shells",
+      "ammoPerShot": 1,
+      "spread_deg": 16,
+      "knockback": 2.2,
+      "selfKnockback": 0.4,
+      "burn": true,
+      "magSize": 6,
+      "reloadTime_s": 1.4,
+      "sprite_fps": "/game/weapons/shotgun/fps.webp",
+      "sprite_reload": "/game/weapons/shotgun/reload.webp",
+      "reload_frames": 4,
+      "icon": "/game/weapons/shotgun/icon.webp",
+      "view_scale": 0.8,
+      "view_offset": 0.05,
+      "view_anchor_x": 0.5,
+      "frames": {
+        "idle": "",
+        "fire_start": "",
+        "fire_peak": "",
+        "recoil": ""
+      }
+    },
+    {
+      "slot": 4,
+      "id": "chaingun",
+      "name": "Cloueuse pneumatique",
+      "type": "hitscan",
+      "fireMode": "auto",
+      "damage": 11,
+      "fireRate_s": 0.07,
+      "fireFrameDuration_s": 0.035,
+      "range": "medium",
+      "ammoType": "bullets",
+      "ammoPerShot": 1,
+      "spread_deg": 4,
+      "magSize": 80,
+      "reloadTime_s": 1.6,
+      "projectileSpeed": 22,
+      "sprite_fps": "/game/weapons/chaingun/fps.webp",
+      "sprite_reload": "/game/weapons/chaingun/reload.webp",
+      "sprite_idle": "/game/weapons/chaingun/idle.webp",
+      "icon": "/game/weapons/chaingun/icon.webp",
+      "view_scale": 0.74,
+      "frames": {
+        "idle": "",
+        "fire_start": "",
+        "fire_peak": "",
+        "recoil": ""
+      }
+    },
+    {
+      "slot": 5,
+      "id": "rocket",
+      "name": "Batterie lithium gonflée",
+      "type": "projectile_aoe",
+      "damage": 55,
+      "splashDamage": 90,
+      "splashRadius": 2.6,
+      "fireRate_s": 1.1,
+      "range": "long",
+      "ammoType": "rockets",
+      "ammoPerShot": 1,
+      "knockback": 3.0,
+      "selfKnockback": 1.6,
+      "selfDamage": true,
+      "projectileSpeed": 11,
+      "magSize": 1,
+      "reloadTime_s": 1.5,
+      "sprite_fps": "/game/weapons/rocket/fps.webp",
+      "sprite_reload": "/game/weapons/rocket/reload.webp",
+      "icon": "/game/weapons/rocket/icon.webp",
+      "view_scale": 0.9,
+      "view_offset": -0.06,
+      "view_anchor_x": 0.53,
+      "anim": {
+        "frames": 6,
+        "frame_ms": 150,
+        "fire_sequence": [1, 2, 3, 4, 5, 0],
+        "damage_frame": 3
+      },
+      "frames": {
+        "idle": "",
+        "fire_start": "",
+        "fire_peak": "",
+        "recoil": ""
+      }
+    },
+    {
+      "slot": 6,
+      "id": "plasma",
+      "name": "Câble haute tension",
+      "type": "beam_chain",
+      "fireMode": "auto",
+      "damage": 16,
+      "fireRate_s": 0.1,
+      "fireFrameDuration_s": 0.08,
+      "range": "medium",
+      "ammoType": "cells",
+      "ammoPerShot": 1,
+      "magSize": 40,
+      "reloadTime_s": 1.5,
+      "projectileSpeed": 14,
+      "chainTargets": 4,
+      "chainRange": 4,
+      "chainFalloff": 0.75,
+      "splashDamage": 0,
+      "splashRadius": 0,
+      "sprite_fps": "/game/weapons/plasma/fps.webp",
+      "sprite_reload": "/game/weapons/plasma/reload.webp",
+      "reload_frames": 6,
+      "icon": "/game/weapons/plasma/icon.webp",
+      "view_scale": 0.82,
+      "view_anchor_x": 0.55,
+      "anim": {
+        "frames": 6,
+        "frame_ms": 80,
+        "fire_sequence": [1, 2, 3, 4, 5, 0],
+        "damage_frame": 3
+      },
+      "frames": {
+        "idle": "",
+        "fire_start": "",
+        "fire_peak": "",
+        "recoil": ""
+      }
+    },
+    {
+      "slot": 7,
+      "id": "bfg",
+      "name": "Surcharge du datacenter",
+      "type": "projectile_aoe",
+      "fireMode": "charge",
+      "damage": 450,
+      "splashDamage": 900,
+      "splashRadius": 7.5,
+      "fireRate_s": 1.6,
+      "chargeTime_s": 0.7,
+      "range": "screen",
+      "ammoType": "cells",
+      "ammoPerShot": 40,
+      "knockback": 6.0,
+      "selfKnockback": 1.2,
+      "selfDamage": true,
+      "projectileSpeed": 8,
+      "magSize": 40,
+      "reloadTime_s": 2.0,
+      "sprite_fps": "/game/weapons/bfg/fps.webp",
+      "sprite_reload": "/game/weapons/bfg/reload.webp",
+      "icon": "/game/weapons/bfg/icon.webp",
+      "view_scale": 0.8,
+      "view_offset": -0.06,
+      "view_anchor_x": 0.56,
+      "frames": {
+        "idle": "",
+        "fire_start": "",
+        "fire_peak": "",
+        "recoil": ""
+      }
+    }
+  ],
+  "_ammo_display": {
+    "zone": "weapon",
+    "icon_area": {
+      "x_frac": 0,
+      "y_frac": 0,
+      "w_frac": 1,
+      "h_frac": 0.68,
+      "note": "icône arme dans le haut de la baie weapon"
+    },
+    "ammo_area": {
+      "x_frac": 0,
+      "y_frac": 0.68,
+      "w_frac": 1,
+      "h_frac": 0.32,
+      "align": "right",
+      "note": "nombre de munitions en chiffres rouges, bas de la baie"
+    },
+    "digits": "digits_red (sans le suffixe pct)",
+    "melee_shows": "rien (ammoType null) ou un tiret"
+  }
+}
