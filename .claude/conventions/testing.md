@@ -99,6 +99,25 @@ in the individual spec's `configureTestingModule`.
 
 These are enforced by the Vitest runner across the whole project. A run under any threshold fails.
 
+**Excluded from coverage** (`angular.json` `coverageExclude`): the BSP game's browser-only render
+code — `features/bsp-demo/bsp-demo.component.{ts,html}`, `render-pool.ts`, `load-textures.ts`. These
+are the `<canvas>` render loop + `SharedArrayBuffer` worker pool + texture-upload paths
+(`afterNextRender`, `requestAnimationFrame`, `Worker`, raw `CanvasRenderingContext2D`) with no
+meaningful unit surface or DOM-free seam to test. Every other file — including the pure/testable
+bsp-demo helpers (`level-*.ts`, `demo-map.ts`, `pickups.ts`, `enemies.ts`) — still rides the global
+thresholds above.
+
+**The game's *tested* surface** (the counterpart to that exclusion): everything under `core/` rides the
+**100 % guard** below — `core/lib/bsp-engine/*` (the `camera` projection, the `node-builder` BSP
+compiler, `physics` slide + step-up, hitscan `raycast`, the `renderer` wall/floor/ceiling + sprite
+passes against the frozen `sample-map`, and the procedural `texture`s), `core/lib/game/*` (the `arsenal`
+magazine/fire-rate/reload `stepArsenal`, the `combat-constants`, and the combat `types`), and
+`GameService` (`core/services/game/` — `enter`/`exit`/`running` + pause-resume). The **shared
+presentational helpers** in `shared/game/*` (`doom-hud`, `weapon-view`, `climb-view` + the `weapons` /
+`effects` JSON bridges) each carry a `.spec.ts` on the global thresholds. So the game's logic is fully
+unit-tested; there is **no** game E2E spec, and the live game `<canvas>` is **never** screenshotted (the
+`home` visual baseline masks the whole `.player`).
+
 ### Coverage — **`core/` 100 % guard** (`client/scripts/check-core-coverage.mjs`)
 
 The `@angular/build:unit-test` builder supports only **global** thresholds, so a separate script
@@ -146,11 +165,11 @@ Config: `client/playwright.config.ts`. Specs in `client/e2e/*.spec.ts`; baseline
   FR by default. EN is reached by clicking the `.nav .prefs__lang-toggle` "EN" picker or via an `/en/...` deep link.
 - `expect.toHaveScreenshot: { animations: 'disabled', maxDiffPixelRatio: 0.01 }` — animations frozen,
   **1 % pixel-diff tolerance**.
-- `projects`: **three** — `chromium` (`devices['Desktop Chrome']`, runs every spec except the iOS ones,
-  via `testIgnore: /(player|game)-ios\.spec\.ts/`), `mobile` (`devices['Pixel 5']`, 393×851) with
+- `projects`: **three** — `chromium` (`devices['Desktop Chrome']`, runs every spec except the iOS one,
+  via `testIgnore: /player-ios\.spec\.ts/`), `mobile` (`devices['Pixel 5']`, 393×851) with
   `testMatch: /visual(-detail)?\.spec\.ts/`, so the mobile project **only re-runs the visual specs** to
   capture phone baselines, and `webkit` (`devices['iPhone 13']`) with
-  `testMatch: /(player|game)-ios\.spec\.ts/` — the real **iOS Safari engine**, which
+  `testMatch: /player-ios\.spec\.ts/` — the real **iOS Safari engine**, which
   the Chromium-based `mobile` project (device *emulation*, not WebKit) can't exercise. The behavioural specs
   drive nav controls (search + the `<sd-prefs>` theme/language picker), and the **nav is hidden below `md`**
   (theme + language relocate to the floating `.prefs-dock` on phones), so they stay desktop-only. **Setup:**
@@ -159,7 +178,7 @@ Config: `client/playwright.config.ts`. Specs in `client/e2e/*.spec.ts`; baseline
   reuseExistingServer: !CI, timeout: 120_000 }` — auto-starts `ng serve` (no prerender) on the same
   `PW_PORT`-driven port, up to 120 s; CI gets a fresh server, local reuses a running one.
 
-### The 19 specs (behavioral + visual)
+### The 16 specs (behavioral + visual)
 
 Behavioral (target by ARIA role / stable class, FR text, case-insensitive regex where noted):
 
@@ -188,13 +207,6 @@ Behavioral (target by ARIA role / stable class, FR text, case-insensitive regex 
   (2) the fallback fullscreen (`addInitScript` forces `fullscreenEnabled` → `false`) rotates the player 90°
   in portrait (computed-transform matrix `a ≈ 0`, `|b| ≈ 1`) for forced landscape. The Chromium-based
   `mobile` emulation can't catch engine bugs, and `home` masks the player in its visual baseline anyway.
-- `game-ios.spec.ts` — **WebKit-only** (the `webkit` project), two tests guarding the game on iPhone: (1)
-  in **landscape**, entering the game is a **non-rotated** fixed viewport overlay (`.player` `transform:none`
-  + `position:fixed`) and a touch on `.game__joystick` spawns the visible `.game__stick` **centred at the
-  touch point** (< 4px) — a regression net for the iOS CSS-rotation that offset the touch coordinates and
-  made the game unplayable; (2) in **portrait**, the game **forces landscape** — the overlay is CSS-rotated
-  90° (`.player` `transform` ≠ `none`) yet the joystick still lands at the touch point (< 4px), proving the
-  `localPoint()` touch-coordinate compensation round-trips the rotation correctly.
 - `article.spec.ts` — list → first `a.vgrid-card` (cards are real anchors) → `article.article-detail` →
   back link (`/retour aux articles|back to articles/i`) → card visible again.
 - `series.spec.ts` — list → first `a.pcard` → `article.series-detail` → back link
@@ -223,59 +235,6 @@ Behavioral (target by ARIA role / stable class, FR text, case-insensitive regex 
   mobile theme/language dock — opening `.prefs-dock .prefs__lang-toggle` shows a 4-item picker that opens
   **upward** (menu bottom ≤ toggle top, full height on-screen — guards the specificity-tie regression that
   collapsed it downward off-screen); selecting "EN" routes to `/en` and the toggle reads `EN`.
-- `game.spec.ts` — the DOOM-like game mode (chromium): the player's gamepad button enters game mode
-  (`sd-game canvas` visible, `sd-player-stage` gone); the game's movement keys (arrows/space) **don't
-  scroll the page** (`preventDefault` — `window.scrollY` unchanged); the **mute** button toggles its
-  `aria-label`; **Esc** returns to the video. A second test guards a fixed bug: exiting via the in-game
-  **exit button** must **resume** the video (`.player` loses `is-paused`) — the click must not bubble to
-  the player's toggle-play; a desktop assertion also checks the composited `.game__hud` canvas renders. A
-  third test drives the **damage loop**: the game's first **manager** throws an **invite** — once it
-  contacts the player the **health drops below 100** (read off the component's `playerHp` via the
-  dev-mode `ng` global — the HUD is a canvas, not DOM text — confirming the invite → `vitals` →
-  `playerHp` pipeline end-to-end). The pure raycaster engine
-  (`core/lib/raycaster/*` — map/DDA/collision + `enemy` (per-kind `ENEMY_CONFIG` — rush/turret/kite
-  AI), `fire` parameterised hitscan (`resolveFire(pose, enemies, map, range, cone)`),
-  `floor-cast` projection, `projectile` (step + hit-player; carries `ProjectileSkin`
-  `'invite'|'paper'|'memo'`), `vitals` (damage model), `pickup` (collect — incl. `'ammo'` kind: +20,
-  capped at 200), `rng` (seeded PRNG — mulberry32 `makeRng`/`randInt`/`pick`, 100 % tested),
-  `generate-level` (seed-sweep invariant test: determinism, enclosed map, reachable exit via
-  flood-fill, front enemy is always a manager, all three kinds covered across a seed sweep, flats in
-  palette range, difficulty scaling), `levels`/theme data (`THEME_CYCLE`; office themes
-  openspace/meeting/executive; the ASCII `LEVELS`/`parseCells` are gone — `levels.spec` now asserts
-  the office theme names), `isFacingExit`,
-  the combat `step` (now **data-driven by a `WeaponCombat`** — per-weapon `range`/`cone`/`damage`/
-  `fireCooldown`/`knockback`/`costsAmmo`; the specs drive **both** `costsAmmo` arms via a melee + a
-  synthetic ranged fixture; the shared `MELEE_RANGE`/`MELEE_CONE`/`AIM_CONE` + `AMMO_START` are exported
-  from `game-step.ts` for the shell to fold in; + HR slow decay (`HR_SLOW_DURATION`/`SLOW_FACTOR`) +
-  memo-vs-paper skin dispatch) + the pure `knockback` (a hit enemy shoved straight back, **axis-separated
-  + wall-clamped** — clear-push + each-axis wall-block arms covered) + `GameService`
-  are unit-tested under the `core/` 100 % guard, and the co-located `sd-game` helpers each have a
-  `.spec.ts` (`game-input` — intent/joystick/fire + `use` one-shot + the portrait touch-coord
-  inverse-transform; `game-renderer` — floor/ceiling cast + paint + per-kind enemy billboards +
-  per-skin projectile billboards + pickup billboards + hurt flash + the weapon blit **delegated to the
-  `WeaponView`** (spied) via a stubbed 2-D context; the spec asserts hybrid smoothing ends `false` after
-  the sprite pass; `game-textures` — the per-theme procedural texture/flat/switch builders +
-  `buildEnemyFrames()` (per-kind: manager/printer/hr) + `buildProjectiles()` (per-skin:
-  invite/paper/memo) + `buildPickups()` (coffee/headphones/RAM); `weapons` — the JSON registry bridge
-  (field parsing + `weaponById` + `weaponCombat` for a melee + a ranged weapon); `weapon-view` — the
-  FPS sprite animation (idle → trigger → strike-frame-fires-once → idle, cooldown blocks re-trigger, SSR
-  no-throw + transparent fallback, bottom-centre NEAREST blit); `game-audio` — the Web Audio scheduler +
-  `playMelee` (the key-clack swing); `doom-hud` — the atlas-driven HUD compositor (per-tier asset
-  selection + normalized zones; the health/mental digits, the burnt-out-dev face mugshot zone, arms,
-  weapon bay, keycards; SSR fallback)), so the e2e only covers the wiring;
-  the live `<canvas>` is **never** screenshotted.
-- `game-mobile.spec.ts` — **Pixel 5 viewport** (`test.use(devices['Pixel 5'])`, runs under chromium): on a
-  coarse-pointer device, entering the game shows the dual-thumb touch overlay (`.game__joystick` /
-  `.game__look` visible), and a touch on the joystick zone **spawns the visible `.game__stick`** under the
-  thumb. A second test drives the touch controls to **close into melee range** of the sentinel printer
-  down the throat (forward to the corner → turn ~90° → a **column-centring back-nudge** then a **brisk**
-  descent held while tapping fire, so a swing's strike frame lands in the full reach despite the slower
-  0.8 s cadence) and asserts the **kill counter increments** — one 25-damage swing one-shots the 6-hp
-  printer (the melee keyboard replaced the long-range gun). A third
-  test taps the fire button and asserts **`playerAmmo` stays at its start** — the keyboard is ammo-less,
-  so a swing spends nothing (the behavioural inverse of the old "firing spends ammo" gun test; state is
-  read off the component, the HUD being a canvas). Its own file because `isMobile` must be set at file scope.
-
 Visual baselines (captured under **both** projects — `chromium` desktop and `mobile` Pixel 5):
 
 - `visual.spec.ts` — one full-page snapshot per screen, parameterized over

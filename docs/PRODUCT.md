@@ -461,99 +461,76 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   both the inline player and the mini — so there is no duplicated scene wiring. While the mini is active the
   inline player shows a **`.player__popped` placeholder** (click → `closeMini`, label `playerRestore`).
   Conditional (`@if player.mini()`, default off) → zero prerender/baseline impact.
-- **Game mode (DOOM: Return To Office)** (the `gamepad` button → `GameService.mode`): the player
-  frame swaps the scene layer for a **playable first-person raycaster** drawn to a `<canvas>` (`sd-game`,
-  mounted `@if (game.running())` in place of `sd-player-stage`). Entering **pauses** playback; **Esc** or the
-  in-canvas HUD **exit button** returns to the video (resuming if it was playing). On a phone the game fills
-  the screen as a fixed overlay (`.player:has(sd-game)`, `position:fixed inset:0`) and **forces landscape**:
-  in portrait it's **CSS-rotated 90°** (an FPS needs width). Crucially — unlike the player's iOS *video*
-  fullscreen, whose same rotation would scramble the touch coordinates — `sd-game` **compensates the touch
-  coordinates** (`localPoint()` inverts the rotation), so the joystick + look stay correct. The canvas
-  resizes to the (possibly swapped) viewport at **full CSS resolution**; rendering is **hybrid**: décor
-  (floor cast, ceiling, walls) is painted smooth (`imageSmoothingEnabled = true`), then sprites (enemies,
-  projectiles, pickups, the first-person weapon) are painted crisp pixel-art (`imageSmoothingEnabled =
-  false`); the composited **image HUD** is a separate `<canvas>` drawn on top. **Dual-thumb touch**
-  controls (a **visible floating left joystick** — base + knob tracking the thumb — plus a right-half
-  look/drag zone, shown only on coarse pointers). Desktop uses **WASD/ZQSD + pointer-lock mouse-look**,
-  with the game's movement keys (arrows/WASD/space) `preventDefault`d so they don't scroll the page.
-  Walls use **per-theme procedural textures** (chosen per column by the map cell) on offscreen canvases,
-  sampled via `drawImage` at the engine's `texX` with the themed distance/side shading. The floor and
-  ceiling are **true floor-cast** (per-pixel lodev casting into one `ImageData`): the flat is chosen
-  **per world cell**, so a level reads as an office — a **carpet** or **lino** floor with a lit
-  **screen** or **projector glow** channel in some rooms, and an occasional **open-sky** ceiling in
-  others. **Three kinds of office antagonist** are drawn as **depth-occluded billboards**: the
-  **manager** (hp 4) rushes the player and hurls **meeting invites** (`skin: 'invite'`); the **printer**
-  (hp 6) is a stationary turret that spits **paper** (`skin: 'paper'`); the **HR** (hp 3) kites
-  (retreats when the player is close) and lobs a **memo** (`skin: 'memo'`) that **slows the player to
-  half speed** for a few seconds — "stuck in a meeting". The front enemy dead-ahead of spawn is always
-  a **manager**; extra enemies are a random kind mix; hp is per-kind from `ENEMY_CONFIG`. You **attack**
-  them with the slot-1 **mechanical keyboard** — a **melee** swing (`resolveFire`: range + cone + line
-  of sight), fired by clicking the pointer-locked canvas (desktop) or a **fire button** (mobile); a hit
-  deals the weapon's **registry-tuned damage** and **knocks the enemy back**. The **weapon** is a real **4-frame FPS sprite**
-  (`WeaponView`: idle → fire-swing `[1,2,3,0]`, damage on the strike frame — the fire-peak — NEAREST-blitted bottom-centre)
-  — **melee: no ammo, no reload**. Kills accumulate across levels (tracked in state).
-  Levels are **endless and procedurally generated**: a seeded room+corridor generator places rooms by
-  grid partition (non-overlapping by construction) and chains them with L-corridors (the exit is always
-  reachable); a **manager** waits dead-ahead of spawn for immediate action; extra enemies and difficulty
-  scale with depth; themes cycle **openspace → meeting → executive** by level index. Each run draws a
-  fresh random seed — different every run but **deterministic per seed** — so no two runs share the same
-  maze. Facing the **LOGOUT** power-button panel and pressing **use** (`E` on desktop / a mobile button)
-  generates the next level (endless — no wrap). Audio is a **🎵 procedural soundtrack** (an *original* riff via the Web
-  Audio API — no copyrighted asset) plus a **weapon SFX**, both through one `GameAudio` engine started
-  on the first input gesture, with a HUD **mute** toggle. The **audio stays zero-asset**, but the **HUD + weapon
-  art are now real PNG sprite-sheets** (under `client/public/game/**` — the tiered bar atlas, the face
-  sheet, the red-digit / arms strips, the keycards, and the weapon's FPS strip + icon — loaded via the
-  shared `LoadedImage`); we still copy DOOM's *tropes and palette feel*, never its files, and the grid
-  stays uniform-height (Wolfenstein-with-floors, not BSP sectors). The status bar is a single composited
-  **image HUD**: `DoomHud` draws the whole DOOM-1993 bar into one `<canvas>` from the tiered atlas — the
-  **HEALTH** + **MENTAL** red-digit screens, the dev-face mugshot, the **ARMS** weapon grid, the
-  **weapon bay** icon, and the **keycard** slots (no ammo readout — the keyboard is melee); "GAME OVER"
-  is kept. The **reactive face** (a zone of the image HUD) is a real **7-row × 6-column sprite-sheet** of
-  the burnt-out developer: the row tracks health (fresh → pale + bloodied near death), the column the
-  **gaze** — it glances left/right as you turn — plus a **hit grimace** when you take damage. The engine — grid map, DDA wall casting, axis-separated collision, the per-kind
-  enemy AI (`ENEMY_CONFIG` — rush/turret/kite), `ProjectileSkin` (`'invite'|'paper'|'memo'`), the HR
-  `playerSlow` mechanic (half-speed for `HR_SLOW_DURATION`), hitscan fire, floor/ceiling-cast
-  projection, the procedural level generator + seeded PRNG (`generate-level` + `rng`; `Theme`/`THEME_CYCLE`
-  cycle the three office themes; the ASCII `LEVELS`/`parseCells` and hand-authored maps are gone —
-  level data is now **generated**; the only `Math.random` lives in `GameService` as the per-run seed),
-  the per-frame `step` — is **pure** (`core/lib/raycaster/*`, 100 % unit-tested under the `core/`
-  guard); `sd-game` is a thin imperative shell (the `requestAnimationFrame` loop + the DOM/touch
-  boundary) delegating to **five** co-located helper classes — `GameInput` (events → intent),
-  `GameRenderer` (canvas paint — hybrid smooth décor / crisp sprites), `GameAudio` (music + sfx),
-  `DoomHud` (the composited image HUD bar — the face is one of its zones), and `WeaponView` (the FPS
-  weapon sprite + swing) — plus the `game-textures` art generators + the shared `loaded-image` loader. **Browser-only**: `mode` stays `'video'` on the server, so the game never
-  prerenders — the static HTML keeps the video poster (no-JS + SEO intact) and the live canvas is masked
-  in visual baselines. **Phases 1–8** are shipped (engine + mode + soundtrack; then typed textures + the
-  weapon + a wandering enemy you can shoot; then **floor/ceiling casting + 3 themed levels + the exit
-  switch**; then the **danger loop**: enemies chase on line-of-sight and throw dodgeable projectiles on
-  a cooldown, enemies have hp, the player has HP 100 and green armor that absorbs a third of incoming
-  damage and depletes — the DOOM rule — health and armor pickups lie on the floor and are collected by
-  walking over them, death triggers a brief GAME OVER overlay then a full run restart at level 1, and a
-  DOOM-style status bar with a reactive procedural face + a red canvas damage flash; then the **ammo
-  economy + fists fallback**: the weapon consumes 1 ammo per shot (start 50, max 200, floor 0); ammo
-  pickups — a third pickup kind, +20 per collect, capped at 200, one seeded per level — are collected by
-  walking over; at 0 ammo pressing fire throws a free melee punch (~1.4-cell range, wider swing cone,
-  2 damage) — the weapon/fists swap is automatic, derived from the ammo count, no weapon-switch key; the
-  fist viewmodel replaces the weapon at 0 ammo, the flash is weapon-only, the SFX is silent for punches;
-  an ammo readout joins the status bar, completing the DOOM status bar — now ammo · health · face ·
-  armor; death/respawn resets ammo to the start value; then **endless procedural levels** — the seeded
-  room+corridor generator (`generate-level` + `rng`) replaces the three hand-authored ASCII maps; levels
-  are depth-scaling, theme-cycling, and endless; a single `Math.random` call in `GameService` seeds each
-  run while each level is derived deterministically from `(runSeed, levelIndex)` — same seed → identical
-  maze, different run → fresh maze; then the **Return To Office overhaul**: office re-skin (themes
-  openspace / meeting / executive replace tech / foundry / hell), 3-kind bestiary with distinct AIs
-  (manager rush + invite / printer turret + paper / hr kite + memo-slow) and per-kind hp, keyboard
-  weapon + rage-typing fists, coffee / headphones / RAM pickups, burnt-out developer face, hybrid
-  smooth-décor / crisp-sprite rendering, classic beveled DOOM status bar, and re-themed HUD labels);
-  then the **weapon arsenal, slice 1** — a data-driven weapon registry (`weapons.json` → a typed
-  `Weapon` bridge): the procedural gun/fists viewmodel and its automatic ammo-driven swap are replaced by
-  **slot 1, the mechanical keyboard — a MELEE weapon** drawn from a real 4-frame FPS sprite-sheet with a
-  swing animation (`WeaponView`; the raw fire only triggers the swing, the core hit fires on the strike
-  frame), and combat becomes data-driven (per-weapon range / cone / damage / cooldown / ammo-cost) and
-  gains **knockback** that shoves a hit enemy straight back, wall-clamped; the keyboard is ammo-less, so
-  the HUD weapon bay shows its icon with no ammo digits (`playerAmmo` stays in state for a future ranged
-  weapon); the remaining roadmap is **more weapons + weapon-switching** (each a JSON drop-in via the
-  registry), each behind the same browser-only/prerender-safe seam.
+- **Game mode — OPEN SPACE.EXE** (the hidden game behind the player's `gamepad` button →
+  `enterGame()` → `GameService.enter()`): a hidden **DOOM-style corporate-satire FPS**, tone **straight
+  horror** — the humour lives only in the office↔hell juxtaposition (a possessed printer, a demonic
+  manager), never in jokey UI. Premise: a burnt-out developer, force-recalled by a **Return-To-Office
+  mandate**, finds MegaCorp's tower — the **Universal Algorithmic Corporation (UAC)**, a DOOM homage —
+  fallen to a rogue corporate AI, **the Overseer** (a.k.a. *The Algorithm*), which has turned the
+  open-space into hell and enslaved colleagues as demons; the player descends floor by floor to the
+  datacenter to destroy it. In the player, the frame **swaps the scene layer** (`sd-player-stage`) for the
+  game component **`sd-bsp-demo`**, mounted `@if (game.running())`; the same component is also served
+  standalone at **`/bsp`** (a dev harness with an FPS/thread readout). Entering **pauses** playback;
+  **Esc** or the in-canvas **exit button** returns to the video, resuming if it was playing —
+  `GameService` is now a thin toggle (`enter` / `exit` / `running`, pausing then resuming `PlayerService`),
+  and the game component owns its own level lifecycle. **Browser-only**: `mode` stays `'video'` on the
+  server, so the game canvas never prerenders — the static HTML keeps the video poster (no-JS + SEO
+  intact) and the live canvas is masked in the visual baselines.
+
+  The engine is a **from-scratch DOOM-style BSP software renderer** — not the old uniform-grid raycaster.
+  A level is authored as **vertices / linedefs / sidedefs / sectors / things** (a `MapSource`) and
+  compiled by a **node builder** into a **BSP tree of convex subsectors**; the renderer walks the tree
+  **front-to-back** and, per screen column, paints the near sector's **textured ceiling**, the **wall** (a
+  one-sided solid, or a two-sided portal's upper/lower bands), and the **textured floor** — each
+  distance-shaded through a per-column occlusion window — then draws **billboard sprites** (enemies,
+  pickups, projectiles) depth-tested per pixel against the wall z-buffer. Because every **sector carries
+  its own floor and ceiling height**, the world has real **steps, raised daises, sunken pits and
+  variable-height rooms**, and walls sit at **any free angle** (no grid); the camera also supports
+  **pitch** (look up/down via a horizon shear). **Physics** slides the player along solid walls and
+  **steps up** through a climbable portal; a too-tall-but-still-climbable ledge **auto-mantles** — the
+  two-handed pull `ClimbView` overlay plays over the vault.
+
+  Rendering is a **multi-threaded software rasteriser**: a **`SharedArrayBuffer` worker pool** splits the
+  frame into N horizontal bands, each worker painting straight into one shared framebuffer + z-buffer,
+  composited once all report done. It needs **cross-origin isolation** (COOP/COEP) + `SharedArrayBuffer`;
+  when those are unavailable (or during SSR) it **falls back to single-threaded** main-thread rendering, so
+  `/bsp` always works. The framebuffer renders **below display resolution** and is upscaled **pixelated**
+  for the authentic software look; on `/bsp` a readout shows **FPS · frame ms · thread count · texture
+  source** (WebP vs procedural). Textures have a **procedural fallback** baked in code (brick / metal /
+  floor / ceiling / …) so the world renders with no assets, and the real **WebP art is decoded and swapped
+  in over that base** at runtime; assets **preload** up front so nothing pops in mid-play.
+
+  Systems already built: a **per-zone texture palette** (walls BRICK / METAL / RACKS / CUBICLE / SCREEN /
+  PILLAR / DAMAGED / GLASS; floors FLOOR / CARPET / TILE / MARBLE / GRATING / SLAB; ceilings CEIL /
+  CONCRETE / TECHNICAL / NEON; doors DOOR_RED / DOOR_BLUE / DOOR_YELLOW), so each floor reads as its own
+  office district; a **3-tier keycard/badge** access system (employee = blue, manager = yellow, director =
+  red) gating colour-matched doors, with a **HUD card bay**; rotating **turntable pickups** — health
+  (medkit / plant) and mental (figurine / card) **vitals** plus **ammo boxes** (each box's cap read from
+  `weapons.json`); a **data-driven arsenal** of eight DOOM-archetype weapons (fist / pistol / shotgun /
+  chaingun / plasma / rocket / bfg / chainsaw) with per-weapon **magazine + reload** (`stepArsenal`), a
+  shared FPS **`WeaponView`** sprite/animation, **weapon switching** (1–8 / mouse wheel) and **reload** (R
+  / right-click); an **office bestiary** of enemies; and **animated doors** (keycard doors open in place;
+  the zone-exit airlock fades to black then advances the level). The status bar is the composited DOOM-1993
+  image HUD (**`DoomHud`**): the **health / mental** red-digit screens, the **burnt-out-developer reactive
+  face** (its gaze tracks your turn, grimacing when you take damage), the **ARMS** weapon grid, the weapon
+  bay, and the **keycard** slots.
+
+  Controls: desktop uses **WASD/ZQSD + arrows** to move/strafe with **pointer-lock mouse-look**, **click**
+  to fire, **1–8 / wheel** to switch weapons, **R / right-click** to reload, and **E** to use/activate; the
+  game's movement + wheel are `preventDefault`ed so they never scroll the page, and inside the player an
+  in-canvas **controls recap** (from the `gameControls` string, split on ` · `) is shown. On a
+  coarse-pointer device the game becomes a **fixed full-viewport overlay** (`.player:has(sd-bsp-demo)`)
+  that **forces landscape** — CSS-rotated 90° in portrait, since an FPS needs width — with the page behind
+  **scroll-locked** and the bottom bars (tabs + prefs-dock) hidden (`body:has(.player sd-bsp-demo)`).
+
+  **Built vs planned.** Built today: the BSP engine + the systems above + a few **worked-example levels**
+  — `level-accueil` (a hand-authored reception→climax techbase), the wired **`level-hangar`** (a large
+  original techbase showcasing a spiral staircase + verticality) and the engine-showcase `demo-map`.
+  Planned: the full **9-level episode** — M1 Lobby → M2 Open-space → M3 RH (with a secret exit to M9) → M4
+  Meeting rooms (**mid-boss: the Middle-Manager**) → M5 Cafétéria → M6 Direction/C-suite → M7 Server room →
+  M8 Datacenter (**final boss: the Overseer's spider**, a Spider-Mastermind homage) → M9 Archives (secret)
+  — plus the **two bosses**, **audio** (music + SFX), and the **menu / intertitle screens**. The full
+  per-level canon lives in the `level-designer` agent.
 
 ### 4.2 Video-meta · like-bar · comments · up-next
 

@@ -15,7 +15,7 @@ const GRIP_FRAC_FROM_TOP = 0.14;
  * served frames as `LoadedImage`s, so it draws nothing until they decode — SSR-safe and pop-in free. The
  * frame is picked from the mantle's 0..1 `progress`, NOT a wall clock, so the pull stays in lock-step with
  * the hoist however long it lasts. Bottom-centre, NEAREST, width by the frame's own aspect. Engine-agnostic
- * plain class (no Angular) — shared by the grid raycaster and the BSP renderer.
+ * plain class (no Angular) — drawn by the BSP renderer.
  */
 export class ClimbView {
   private readonly frames = CLIMB_FRAME_URLS.map((url) => new LoadedImage(url));

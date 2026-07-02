@@ -1,9 +1,10 @@
 import { LoadedImage } from './loaded-image';
 import type { ReloadViewConfig, Weapon, WeaponViewConfig } from './weapons';
 
-/** The bottom HUD status bar (`.game__hud`) occupies this fraction of the game height — keep it in sync
- *  with `height: 20cqh` in `game.component.scss`. The weapon viewmodel anchors its content base on the
- *  bar's top edge, so the whole weapon stays visible above the bar. */
+/** The fraction of game height the weapon viewmodel reserves for the bottom HUD status bar — it anchors its
+ *  content base this far up so the whole weapon stays visible above the bar. Tracks the HUD bar
+ *  (`.bsp-demo__hud`, `height: 22%` in `bsp-demo.component.scss`); kept a touch shorter so the weapon base
+ *  overlaps the bar's top edge rather than floating above it. */
 const HUD_BAR_HEIGHT_FRAC = 0.2;
 /** The fraction of transparent padding every weapon strip carries BELOW the hands (measured across the
  *  arsenal: ~4–7 %, consistent frame-to-frame since the hands never drop). The draw sinks the box by this
@@ -92,6 +93,7 @@ export class WeaponView {
   private readonly idleFrameCount: number; // cells in the cold-idle strip — 1 = a static frame (chaingun), >1 = a loop (chainsaw)
   private readonly runSheet: LoadedImage | null; // hand-drawn walk-cycle strip (the resting/moving base), or null → static idle + procedural sway
   private readonly runFrameCount: number; // equal cells across the run strip (0 = no run strip)
+  private readonly runScale: number; // size multiplier for the RUN strip only, over the height-normalised base (1 = match the fire cell)
 
   private playing = false; // a SEMI fire sequence is running (false = idle)
   private seqIndex = 0; // position within `sequence`
@@ -131,6 +133,7 @@ export class WeaponView {
     this.idleFrameCount = weapon.idle_frames ?? 1;
     this.runSheet = weapon.sprite_run ? new LoadedImage(weapon.sprite_run) : null;
     this.runFrameCount = weapon.run_frames ?? 0;
+    this.runScale = weapon.run_scale ?? 1;
   }
 
   /** Start a swing if idle AND off cooldown; arms the cooldown. A CHARGE weapon enters its spin-up here
@@ -321,10 +324,12 @@ export class WeaponView {
 
     // Run-cycle base: when idle (not mid-swing) a weapon with a decoded run strip plays its walk cycle — the
     // cell chosen from the bob phase (cell 0 at rest). It's drawn at the run strip's OWN pixel scale (its
-    // shorter cell scaled by `runCellH / fireCellH`) so the fists match the attack strip; the attack strip
-    // still owns the swing frames (drawn below while `playing`).
+    // shorter cell scaled by `runCellH / fireCellH`), then nudged by `run_scale` when the two strips frame the
+    // hands at different sizes, so the resting fists match the attack strip; the attack strip still owns the
+    // swing frames (drawn below while `playing`).
     if (runSheet && !this.playing && !this.auto) {
-      const heightFactor = sheet ? runSheet.naturalHeight / sheet.naturalHeight : 1;
+      const heightFactor =
+        (sheet ? runSheet.naturalHeight / sheet.naturalHeight : 1) * this.runScale;
 
       this.blit(
         ctx,

@@ -17,6 +17,35 @@ export function proceduralTextures(): Map<string, Texture> {
     ['STEP', metalTexture()],
     ['CEIL', ceilTexture()],
     ['BARREL', barrelTexture()],
+    // Extended palette (WebP swaps in via `loadEnvTextures`; these are the pre-decode / SSR fallbacks).
+    ['CUBICLE', brickTexture()],
+    ['SCREEN', metalTexture()],
+    ['PILLAR', brickTexture()],
+    ['DAMAGED', brickTexture()],
+    ['RACKS', metalTexture()],
+    ['GLASS', metalTexture()],
+    ['GLASS_INT', metalTexture()],
+    ['CONCRETE', ceilTexture()],
+    ['TECHNICAL', ceilTexture()],
+    ['NEON', ceilTexture()],
+    ['CEIL_DAMAGED', ceilTexture()],
+    // Doors (plain + colour-keyed for badge doors).
+    ['DOOR', metalTexture()],
+    ['DOOR_RED', metalTexture()],
+    ['DOOR_BLUE', metalTexture()],
+    ['DOOR_YELLOW', metalTexture()],
+    // Themed floors (per-zone identity for the episode).
+    ['CARPET', floorTexture()],
+    ['TILE', floorTexture()],
+    ['MARBLE', floorTexture()],
+    ['GRATING', floorTexture()],
+    ['SLAB', floorTexture()],
+    ['LOBBY_FLOOR', floorTexture()],
+    ['CITY', brickTexture()],
+    // Themed walls (per-zone identity for the episode).
+    ['LOBBY', brickTexture()],
+    ['KITCHEN', brickTexture()],
+    ['EXEC', brickTexture()],
   ]);
 }
 
@@ -39,6 +68,36 @@ const ENV_ASSETS: Readonly<Record<string, { url: string; worldSize: number }>> =
   STEP: { url: '/game/textures/floor_techbase_512.webp', worldSize: 2 }, // dais tops — tighter so steps read
   BRICK: { url: '/game/textures/wall_techbase_512x256.webp', worldSize: 4 }, // room walls — one panel, full height
   METAL: { url: '/game/textures/wall_servers_512.webp', worldSize: 2 }, // dais risers/canopy — server racks
+  // Extended wall palette — per-zone variety (a level designer picks one per area for identity).
+  CUBICLE: { url: '/game/textures/wall_cubicle_512.webp', worldSize: 4 }, // open-space partitions
+  SCREEN: { url: '/game/textures/wall_screen_512.webp', worldSize: 3 }, // monitor/display walls
+  PILLAR: { url: '/game/textures/wall_pillar_512.webp', worldSize: 4 }, // structural pillars / plain panels
+  DAMAGED: { url: '/game/textures/wall_damaged_512.webp', worldSize: 4 }, // broken/derelict walls
+  RACKS: { url: '/game/textures/wall_servers_b_512.webp', worldSize: 2 }, // dense server racks (variant)
+  GLASS: { url: '/game/textures/glass_techbase_512.webp', worldSize: 4 }, // glass partition (opaque look for now)
+  GLASS_INT: { url: '/game/textures/glass_interior_512.webp', worldSize: 4 }, // interior glass variant
+  // Extended ceiling palette.
+  CONCRETE: { url: '/game/textures/ceiling_concrete_512.webp', worldSize: 4 },
+  TECHNICAL: { url: '/game/textures/ceiling_technical_512.webp', worldSize: 4 },
+  NEON: { url: '/game/textures/ceiling_neon_broken_512.webp', worldSize: 4 }, // broken-neon ceiling accent
+  CEIL_DAMAGED: { url: '/game/textures/ceiling_damaged_512.webp', worldSize: 4 },
+  // Doors — plain + colour-keyed for badge doors (worldSize 3 ≈ one panel over a ~3-tall doorway).
+  DOOR: { url: '/game/textures/wall_door_512.webp', worldSize: 3 },
+  DOOR_RED: { url: '/game/textures/wall_door_red_512.webp', worldSize: 3 },
+  DOOR_BLUE: { url: '/game/textures/wall_door_blue_512.webp', worldSize: 3 },
+  DOOR_YELLOW: { url: '/game/textures/wall_door_yellow_512.webp', worldSize: 3 },
+  // Themed floors — per-zone identity for the episode.
+  CARPET: { url: '/game/textures/floor_carpet_512.webp', worldSize: 4 }, // offices
+  TILE: { url: '/game/textures/floor_tile_512.webp', worldSize: 4 }, // cafeteria
+  MARBLE: { url: '/game/textures/floor_marble_512.webp', worldSize: 4 }, // lobby + C-suite
+  GRATING: { url: '/game/textures/floor_grating_512.webp', worldSize: 4 }, // servers + datacenter
+  SLAB: { url: '/game/textures/floor_slab_512.webp', worldSize: 4 }, // sub-basement concrete
+  LOBBY_FLOOR: { url: '/game/textures/floor_lobby_512.webp', worldSize: 4 }, // bright lobby terrazzo
+  CITY: { url: '/game/textures/backdrop_city_512.webp', worldSize: 8 }, // exterior cityscape backdrop — worldSize 8 = an 8-tall/8-wide far wall shows exactly ONE copy, aligned to TEX_ANCHOR (64) at z0..z8 (no tiling)
+  // Themed walls — per-zone identity for the episode.
+  LOBBY: { url: '/game/textures/wall_lobby_512.webp', worldSize: 4 }, // reception (M1)
+  KITCHEN: { url: '/game/textures/wall_kitchen_512.webp', worldSize: 4 }, // cafeteria (M5)
+  EXEC: { url: '/game/textures/wall_exec_512.webp', worldSize: 4 }, // C-suite (M6)
 };
 
 /** Decode one image URL into a Texture via a canvas, or `null` (SSR, load error, or non-power-of-two). */

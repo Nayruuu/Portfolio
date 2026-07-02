@@ -1,4 +1,7 @@
-import type { Camera, Sprite, Texture } from '../../core/lib/bsp-engine';
+import type { Camera, MapSource, Sprite, Texture } from '../../core/lib/bsp-engine';
+
+/** Per-frame live sector heights (animated doors mutate `ceilZ`); forwarded to each worker each render. */
+type SectorHeights = readonly { readonly floorZ: number; readonly ceilZ: number }[];
 
 /**
  * A multi-threaded render pool: it splits the frame into N horizontal bands and hands each to a worker that
@@ -21,13 +24,18 @@ interface RenderConfig {
 export interface RenderPool {
   readonly threads: number;
   readonly frame: Uint8ClampedArray; // SAB-backed view of the CURRENT resolution; re-read after each render()
-  render(camera: Camera, sprites: readonly Sprite[]): Promise<void>;
+  render(
+    camera: Camera,
+    sprites: readonly Sprite[],
+    sectors: SectorHeights,
+    slides: readonly number[],
+  ): Promise<void>;
   resize(config: RenderConfig): void; // re-point the workers at a new-resolution framebuffer (no respawn)
   setTextures(textures: ReadonlyMap<string, Texture>): void;
   dispose(): void;
 }
 
-export function createRenderPool(config: RenderConfig): RenderPool | null {
+export function createRenderPool(config: RenderConfig, mapSource: MapSource): RenderPool | null {
   // A shared framebuffer needs SharedArrayBuffer, which needs cross-origin isolation (COOP/COEP headers).
   if (
     typeof Worker === 'undefined' ||
@@ -44,6 +52,12 @@ export function createRenderPool(config: RenderConfig): RenderPool | null {
 
   for (let i = 0; i < workerCount; i++) {
     workers.push(new Worker(new URL('./render.worker', import.meta.url), { type: 'module' }));
+  }
+
+  // Point every worker at the level's geometry ONCE (each builds its own BSP). Messages are ordered, so this
+  // is processed before the first `render`. Without it the workers would render a hard-coded fallback map.
+  for (const worker of workers) {
+    worker.postMessage({ type: 'map', source: mapSource });
   }
 
   let frame = new Uint8ClampedArray(new SharedArrayBuffer(0)); // SAB-backed (matched by `configure`)
@@ -88,12 +102,17 @@ export function createRenderPool(config: RenderConfig): RenderPool | null {
     get frame(): Uint8ClampedArray {
       return frame;
     },
-    render(camera: Camera, sprites: readonly Sprite[]): Promise<void> {
+    render(
+      camera: Camera,
+      sprites: readonly Sprite[],
+      sectors: SectorHeights,
+      slides: readonly number[],
+    ): Promise<void> {
       return new Promise<void>((resolve) => {
         done = 0;
         pending = resolve;
         for (const worker of workers) {
-          worker.postMessage({ type: 'render', camera, sprites });
+          worker.postMessage({ type: 'render', camera, sprites, sectors, slides });
         }
       });
     },

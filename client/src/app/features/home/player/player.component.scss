@@ -435,11 +435,10 @@
 }
 
 // Mobile game mode: the game fills the screen as a fixed overlay. In **landscape** it's un-rotated;
-// in **portrait** it's CSS-rotated 90° to fill landscape (an FPS needs width). Unlike the original
-// naïve reuse of the video rotation, `sd-game` compensates the touch coordinates (`localPoint`), so the
-// joystick + look stay correct under the rotation; the canvas resizes to the (possibly swapped) viewport.
+// in **portrait** it's CSS-rotated 90° to fill landscape (an FPS needs width). The canvas resizes to the
+// (possibly swapped) viewport.
 @media (pointer: coarse) {
-	.player:has(sd-game) {
+	.player:has(sd-bsp-demo) {
 		position: fixed;
 		inset: 0;
 		z-index: 300;
@@ -454,7 +453,7 @@
 }
 
 @media (pointer: coarse) and (orientation: portrait) {
-	.player:has(sd-game) {
+	.player:has(sd-bsp-demo) {
 		inset: auto;
 		top: 50%;
 		left: 50%;

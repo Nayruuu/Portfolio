@@ -16,7 +16,7 @@ import effects from './effects.json';
 
 /** One travelling-projectile sprite: a single billboard frame, face-camera, distance-scaled at runtime. */
 export interface ProjectileEffect {
-  sprite: string; // served WebP URL (`/game/weapons/effects/projectiles/proj_<kind>.webp`)
+  sprite: string; // served WebP URL (`/game/weapons/<weapon>/effects/proj_<kind>.webp` — co-located with the firing weapon)
   width: number; // source pixel width (drives the billboard aspect ratio)
   height: number; // source pixel height
   size: number; // on-screen size multiplier over the shared projectile scale (the small staple/nail draw smaller than the rocket/plasma/BFG despite the canvas-relative sizing); 1 = full
@@ -26,7 +26,7 @@ export interface ProjectileEffect {
 
 /** One impact animation: a horizontal strip played ONCE on a hit (apparition → dissipation), then gone. */
 export interface ImpactEffect {
-  sheet: string; // served strip WebP URL (`/game/weapons/effects/impacts/<kind>_strip.webp`)
+  sheet: string; // served strip WebP URL (`/game/effects/impacts/<kind>_strip.webp` — shared; one impact kind serves many weapons)
   frames: number; // cells across the strip
   frameWidth: number; // source cell width (px)
   frameHeight: number; // source cell height (px)

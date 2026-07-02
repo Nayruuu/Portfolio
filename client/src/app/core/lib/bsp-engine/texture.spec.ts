@@ -8,7 +8,9 @@ function survey(tex: Texture): { colours: number; opaque: boolean } {
 
   for (let i = 0; i < tex.pixels.length; i += 4) {
     seen.add(`${tex.pixels[i]},${tex.pixels[i + 1]},${tex.pixels[i + 2]}`);
-    if (tex.pixels[i + 3] !== 255) {opaque = false;}
+    if (tex.pixels[i + 3] !== 255) {
+      opaque = false;
+    }
   }
 
   return { colours: seen.size, opaque };

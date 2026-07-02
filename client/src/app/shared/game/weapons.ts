@@ -96,6 +96,7 @@ export interface Weapon {
   sprite_fps: string; // served FPS strip URL (empty until arted)
   sprite_run?: string; // served walk-cycle strip URL (a hand-drawn run bob shown as the resting/moving base — the fist's two-fist guard); absent = a static idle frame + the procedural sway
   run_frames?: number; // cells in the `sprite_run` strip (required when `sprite_run` is set); absent = 0
+  run_scale?: number; // on-screen size multiplier for the RUN (resting-guard) strip only, over the weapon's `view_scale` — the run cell is normalised to the FIRE cell by height (`runH/fpsH`), but when the two strips frame the hands at different sizes the resting guard reads wrong next to the jab; trim or grow it here without disturbing the attack; absent = 1
   sprite_reload?: string; // served reload strip URL (a magazine weapon only; absent = no reload animation)
   reload_frames?: number; // cells in the `sprite_reload` strip when it differs from the global down→insert→up 3 (the Hilti's 4-frame reload); absent = the shared count
   reload_scale?: number; // on-screen size multiplier for the RELOAD strip only, over the weapon's `view_scale` — a reload whose composition zooms out (both hands + the magazine insert) reads small next to the fire frame; bump this to grow the gun through the reload (forearms run off-screen, as a viewmodel should); absent = 1
@@ -168,6 +169,7 @@ export const WEAPONS: readonly Weapon[] = RAW_WEAPONS.map((raw) => ({
   sprite_fps: raw.sprite_fps,
   sprite_run: raw.sprite_run,
   run_frames: raw.run_frames,
+  run_scale: raw.run_scale,
   sprite_reload: raw.sprite_reload,
   sprite_idle: raw.sprite_idle,
   idle_frames: raw.idle_frames,

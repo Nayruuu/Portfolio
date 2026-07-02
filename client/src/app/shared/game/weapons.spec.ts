@@ -26,6 +26,7 @@ describe('weapons registry', () => {
     expect(CURRENT_WEAPON.sprite_fps).toBe('/game/weapons/fist/fps.webp');
     expect(CURRENT_WEAPON.sprite_run).toBe('/game/weapons/fist/run.webp'); // the hand-drawn guard walk cycle
     expect(CURRENT_WEAPON.run_frames).toBe(4); // its four bob cells
+    expect(CURRENT_WEAPON.run_scale).toBeCloseTo(0.6, 5); // resting guard trimmed under the taller 9-frame jab cell
     expect(CURRENT_WEAPON.icon).toBe('/game/weapons/fist/icon.webp');
   });
 
@@ -41,19 +42,19 @@ describe('weapons registry', () => {
     expect(WEAPON_VIEW_CONFIG.strikeIndex).toBe(1); // position of `fire_peak` within the sequence
   });
 
-  it('uses a weapon’s own `anim` override when declared (the fist’s 6-frame jab), else the shared default (the pistol)', () => {
+  it('uses a weapon’s own `anim` override when declared (the fist’s 3-cell two-hand jab — keyboard hand + a descending left fist), else the shared default (the pistol)', () => {
     const fist = weaponViewConfig(CURRENT_WEAPON);
 
-    expect(fist.frameCount).toBe(6); // the jab strip (wind-up → contact → retract), richer than the shared 4-frame layout
-    expect(fist.frameDuration_s).toBeCloseTo(0.08, 5); // 80 ms/frame — slow enough that the jab reads, not a flicker;
-    // 6 × 80 ms = 0.48 s, still inside the fist's 0.6 s cooldown
-    expect(fist.fireSequence).toEqual([0, 1, 2, 3, 4, 5]); // the full jab, in strip order
-    expect(fist.idleFrame).toBe(5); // the last entry of the run (the retracted fist — a fallback before the run strip decodes)
-    expect(fist.strikeIndex).toBe(3); // `damage_frame` 3 (the contact, with the spark + popping keycaps) sits at position 3
-    expect(fist.heightRatio).toBeCloseTo(0.6 * 0.62, 5); // global × view_scale — normalised to the shared body size
+    expect(fist.frameCount).toBe(3); // the widened jab strip: keyboard hand (right, full size) + a left fist that drops away
+    expect(fist.frameDuration_s).toBeCloseTo(0.085, 5); // 85 ms/frame — a snappy jab rhythm
+    // the 3-frame sequence runs in 3 × 85 ms = 0.255 s, inside the fist's 0.6 s cooldown
+    expect(fist.fireSequence).toEqual([0, 1, 2]); // keyboard extends → thrust → contact, the left fist recoiling lower each frame
+    expect(fist.idleFrame).toBe(2); // the last sequence entry — only a brief fallback before the `sprite_run` guard decodes (the real resting base)
+    expect(fist.strikeIndex).toBe(2); // `damage_frame` 2 (the spark contact) is the last frame, position 2
+    expect(fist.heightRatio).toBeCloseTo(0.6 * 0.62, 5); // global × view_scale — sizes the jab (the resting guard is trimmed separately via `run_scale`)
     expect(fist.baseOffset).toBe(0); // this art's wrist reaches the box bottom → seats on the bar, no nudge
     expect(fist.swingTravel).toBe(0); // no procedural arc — the jab's travel lives in the art frames
-    expect(fist.anchorX).toBeCloseTo(0.5, 5); // its content is frame-centred (the jab runs up the middle)
+    expect(fist.anchorX).toBeCloseTo(0.5, 5); // the two-hand pair (left fist + keyboard) is centred as a group under the crosshair
 
     const pistol = weaponById('pistol');
 

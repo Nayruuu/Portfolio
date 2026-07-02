@@ -62,6 +62,48 @@ export class MapBuilder {
     });
   }
 
+  /** A two-sided GLASS wall `(x1,y1) → (x2,y2)`: see-through (the `back` sector renders through it) but
+   *  BLOCKING — a window / interior partition. `front` is the right-hand sector, `back` the left; `tex` is
+   *  the translucent glass overlay painted over the opening. */
+  public glass(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    front: number,
+    back: number,
+    tex = 'GLASS',
+  ): void {
+    this.lines.push({
+      v1: this.vertex(x1, y1),
+      v2: this.vertex(x2, y2),
+      front: this.side(front, tex),
+      back: this.side(back, tex),
+      glass: true,
+    });
+  }
+
+  /** A two-sided SLIDING GLASS door `(x1,y1) → (x2,y2)`: see-through + tinted like glass, but its panel
+   *  retracts toward `v1` as it opens and bars the way until mostly open. Auto-driven by player proximity. */
+  public slidingDoor(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    front: number,
+    back: number,
+    tex = 'GLASS_INT',
+  ): void {
+    this.lines.push({
+      v1: this.vertex(x1, y1),
+      v2: this.vertex(x2, y2),
+      front: this.side(front, tex),
+      back: this.side(back, tex),
+      glass: true,
+      sliding: true,
+    });
+  }
+
   /** Stamp a thing (spawn / prop) on the map. */
   public thing(x: number, y: number, angle: number, type: Thing['type']): void {
     this.thingList.push({ x, y, angle, type });

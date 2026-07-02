@@ -1,7 +1,36 @@
+@let content = i18n.content();
 <div class="bsp-demo">
   <div class="bsp-demo__viewport">
     <canvas #canvas class="bsp-demo__canvas" width="1280" height="720"></canvas>
     <canvas #hud class="bsp-demo__hud" aria-hidden="true"></canvas>
+
+    <!-- Compact keyboard-controls recap (top-left), shown when mounted in the player. The i18n string is
+         ` · `-split into one row per control. Decorative → aria-hidden. -->
+    <div class="bsp-demo__controls" aria-hidden="true">
+      @for (control of content.gameControls.split(' · '); track $index) {
+        <span class="bsp-demo__control">{{ control }}</span>
+      }
+    </div>
+
+    <button
+      class="bsp-demo__exit"
+      type="button"
+      [attr.aria-label]="content.aria.gameExit"
+      (click)="exited.emit()"
+    >
+      <sd-icon name="exit" [size]="20" />
+    </button>
+
+    @if (fullscreenAvailable()) {
+      <button
+        class="bsp-demo__fullscreen"
+        type="button"
+        [attr.aria-label]="fullscreen() ? content.aria.exitFullscreen : content.aria.fullscreen"
+        (click)="fullscreenToggle.emit()"
+      >
+        <sd-icon [name]="fullscreen() ? 'full-exit' : 'full'" [size]="20" />
+      </button>
+    }
 
     <output class="bsp-demo__fps">
       {{ fps() }} FPS · {{ frameMs() }} ms (max {{ frameMaxMs() }}) · {{ threads() }} thread(s) ·

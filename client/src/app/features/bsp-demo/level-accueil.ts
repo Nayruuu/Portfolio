@@ -1,11 +1,12 @@
 import type { EnemySpec } from './enemies';
 import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC } from './enemies';
 import { MapBuilder } from './level-builder';
+import type { KeycardColor } from '../../core/lib';
 import type { MapSource } from '../../core/lib/bsp-engine';
 
 /**
  * L1 "Accueil" — the first HAND-AUTHORED campaign level (office-satire reception → climax), replacing the
- * engine-showcase `demo-map.ts` as the played map. Flow modelled on DOOM E1M1: start small → open up → branch
+ * engine-showcase `demo-map.ts` as a worked example. Flow follows the classic techbase beats: start small → open up → branch
  * for the key → locked door → octagonal climax.
  *
  *   réception [spawn] ──corridor── LOBBY (open-space, first fight)
@@ -26,17 +27,20 @@ export interface Level {
   readonly map: MapSource;
   readonly spawn: { readonly x: number; readonly y: number; readonly angle: number };
   readonly enemies: readonly { readonly spec: EnemySpec; readonly x: number; readonly y: number }[];
-  readonly health: readonly (readonly [number, number])[];
-  readonly armor: readonly (readonly [number, number])[];
+  // health / mental(armor) pickups — `[x, y]` (large by default) or `[x, y, 'small']` for the small variant.
+  readonly health: readonly (readonly [number, number, ('large' | 'small')?])[];
+  readonly armor: readonly (readonly [number, number, ('large' | 'small')?])[];
   readonly ammo: readonly (readonly [number, number])[]; // one coordinate per AMMO_BOX_SPECS entry, in order
-  readonly keycard: readonly [number, number]; // z is resolved from the floor it sits on (the dais, +1.6)
+  // access badges — `[x, y, color]`; each z is resolved from the floor it sits on (e.g. the dais, +1.6).
+  readonly keycards: readonly (readonly [number, number, KeycardColor])[];
   readonly exit: readonly [number, number]; // z resolved from the floor (the atrium, −0.8)
-  readonly door: {
+  // animated doors — open on approach (a null `requiresCard` = an automatic/unlocked door; a colour = badge-gated).
+  readonly doors: readonly {
     readonly sector: number;
     readonly triggerX: number;
     readonly triggerY: number;
-    readonly requiresCard: boolean;
-  };
+    readonly requiresCard: KeycardColor | null; // the badge colour the door needs (null = automatic, no badge)
+  }[];
 }
 
 function buildMap(): { map: MapSource; doorSector: number } {
@@ -116,7 +120,7 @@ function buildMap(): { map: MapSource; doorSector: number } {
 
 const built = buildMap();
 
-/** L1 "Accueil" — the played level. */
+/** "Accueil" — a worked example level (HANGAR is the wired one). */
 export const ACCUEIL: Level = {
   map: built.map,
   spawn: { x: 5, y: 7, angle: 0 },
@@ -140,7 +144,7 @@ export const ACCUEIL: Level = {
     [50, 9], // batteries — atrium
     [44, 5], // server cell (BFG) — atrium
   ],
-  keycard: [25, 27], // on the dais top (+1.6)
+  keycards: [[25, 27, 'red']], // on the dais top (+1.6)
   exit: [49, 9], // deep in the atrium (−0.8)
-  door: { sector: built.doorSector, triggerX: 31, triggerY: 9.5, requiresCard: true },
+  doors: [{ sector: built.doorSector, triggerX: 31, triggerY: 9.5, requiresCard: 'red' }],
 };

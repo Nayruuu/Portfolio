@@ -35,8 +35,8 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      // The iOS specs drive the real WebKit engine (below); they are meaningless on Chromium.
-      testIgnore: /(player|game)-ios\.spec\.ts/,
+      // The iOS spec drives the real WebKit engine (below); it is meaningless on Chromium.
+      testIgnore: /player-ios\.spec\.ts/,
     },
     // Mobile only re-runs the visual specs (mobile baselines). Behavioural specs
     // drive nav controls that live in the closed drawer at phone widths, so they
@@ -45,7 +45,7 @@ export default defineConfig({
     // WebKit (the iOS Safari engine) — the mobile visual baselines run on Chromium
     // device emulation, so engine-specific WebKit rendering bugs are invisible there.
     // This narrow project guards the player against them. Needs `npx playwright install webkit`.
-    { name: 'webkit', use: { ...devices['iPhone 13'] }, testMatch: /(player|game)-ios\.spec\.ts/ },
+    { name: 'webkit', use: { ...devices['iPhone 13'] }, testMatch: /player-ios\.spec\.ts/ },
   ],
   webServer: {
     command: `npm start -- --port ${port}`,

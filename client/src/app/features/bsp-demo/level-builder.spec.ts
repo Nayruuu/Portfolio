@@ -37,6 +37,32 @@ describe('MapBuilder', () => {
     expect(locateSubSector(map.root, 6, 2).sector).toBe(c); // inside room C
   });
 
+  it('emits a glass wall as a two-sided line flagged `glass`, with the overlay on the middle band', () => {
+    const b = new MapBuilder();
+    const a = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+    const c = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+
+    b.glass(4, 4, 4, 0, a, c, 'GLASS'); // a window between the two rooms
+    const line = b.build().linedefs[0];
+
+    expect(line.back).not.toBeNull(); // two-sided → see-through
+    expect(line.glass).toBe(true); // but flagged glass → blocks the player
+    expect(line.front.middleTex).toBe('GLASS'); // the translucent overlay
+  });
+
+  it('emits a sliding door as a two-sided line flagged both `glass` and `sliding`', () => {
+    const b = new MapBuilder();
+    const a = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+    const c = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+
+    b.slidingDoor(4, 4, 4, 0, a, c); // an automatic glass entrance
+    const line = b.build().linedefs[0];
+
+    expect(line.back).not.toBeNull(); // two-sided → see-through
+    expect(line.glass).toBe(true); // tinted like glass
+    expect(line.sliding).toBe(true); // and it slides / is proximity-driven
+  });
+
   it('records things verbatim', () => {
     const b = new MapBuilder();
 

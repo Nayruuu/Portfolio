@@ -278,8 +278,14 @@ describe('WeaponView', () => {
       expect(call[0]).toBe(run); // the RUN strip is the resting base, not the fire strip
       expect(call[1]).toBe(0); // cell 0 at bobPhase 0 — a stationary player holds the neutral guard
       expect(call[4]).toBe(RUN_HEIGHT); // derived source frame height
-      // Drawn at the run strip's OWN pixel scale (its shorter cell × runH/fireH) so the fists match the jab strip:
-      expect(call[8]).toBeCloseTo(CONFIG.heightRatio * 600 * (RUN_HEIGHT / FRAME_HEIGHT), 3);
+      // Drawn at the run strip's OWN pixel scale (its shorter cell × runH/fireH), then × `run_scale` so the
+      // resting fists match the jab strip even when the two strips frame the hands at different sizes:
+      const runScale = CURRENT_WEAPON.run_scale ?? 1;
+
+      expect(call[8]).toBeCloseTo(
+        CONFIG.heightRatio * 600 * (RUN_HEIGHT / FRAME_HEIGHT) * runScale,
+        3,
+      );
     });
 
     it('cycles the run cell with the bob phase while suppressing the procedural positional sway', () => {

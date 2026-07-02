@@ -51,14 +51,15 @@
       "sprite_fps": "/game/weapons/fist/fps.webp",
       "sprite_run": "/game/weapons/fist/run.webp",
       "run_frames": 4,
+      "run_scale": 0.6,
       "icon": "/game/weapons/fist/icon.webp",
       "view_scale": 0.62,
       "view_anchor_x": 0.5,
       "anim": {
-        "frames": 6,
-        "frame_ms": 80,
-        "fire_sequence": [0, 1, 2, 3, 4, 5],
-        "damage_frame": 3
+        "frames": 3,
+        "frame_ms": 85,
+        "fire_sequence": [0, 1, 2],
+        "damage_frame": 2
       },
       "alt": "chainsaw",
       "frames": {
@@ -141,8 +142,8 @@
       "sprite_reload": "/game/weapons/shotgun/reload.webp",
       "reload_frames": 4,
       "icon": "/game/weapons/shotgun/icon.webp",
-      "view_scale": 0.8,
-      "view_offset": 0.05,
+      "view_scale": 0.86,
+      "view_offset": -0.05,
       "view_anchor_x": 0.5,
       "frames": {
         "idle": "",

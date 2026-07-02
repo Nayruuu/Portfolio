@@ -55,7 +55,7 @@ describe('L1 Accueil', () => {
 
   it('seats the spawn, the badge dais (mantle) and the atrium (sunken) at their intended heights', () => {
     expect(floorAt(ACCUEIL.spawn.x, ACCUEIL.spawn.y)).toBe(0); // réception floor
-    expect(floorAt(ACCUEIL.keycard[0], ACCUEIL.keycard[1])).toBe(1.6); // badge dais — a mantle ledge
+    expect(floorAt(ACCUEIL.keycards[0][0], ACCUEIL.keycards[0][1])).toBe(1.6); // badge dais — a mantle ledge
     expect(floorAt(ACCUEIL.exit[0], ACCUEIL.exit[1])).toBe(-0.8); // sunken octagonal atrium
   });
 
@@ -108,8 +108,8 @@ describe('L1 Accueil', () => {
   it('puts the badge in the cubicle branch — reachable WITHOUT crossing the locked door (key before lock)', () => {
     // The door gates the ATRIUM (east); the badge dais is north in the cubicles, so the key is always
     // obtainable before the lock matters.
-    expect(ACCUEIL.door.sector).not.toBe(
-      locateSubSector(map.root, ACCUEIL.keycard[0], ACCUEIL.keycard[1]).sector,
+    expect(ACCUEIL.doors[0].sector).not.toBe(
+      locateSubSector(map.root, ACCUEIL.keycards[0][0], ACCUEIL.keycards[0][1]).sector,
     );
   });
 });

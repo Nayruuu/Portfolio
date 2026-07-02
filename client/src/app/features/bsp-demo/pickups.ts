@@ -2,52 +2,106 @@ import type { KeycardColor } from '../../core/lib';
 import { AMMO_MAX } from '../../shared/game/weapons';
 
 /**
- * Pickup + objective registry for the BSP demo — VITALS (health / armour), spinning AMMO boxes, the level
- * KEYCARD, and the EXIT marker — kept LOCAL to the feature, mirroring the grid's `pickup.ts` /
- * `ammo-pickups.ts` amounts (the grid versions are feature-coupled to its raycaster; a shared move comes if
- * this grows, exactly like {@link ./enemies.ts `enemies.ts`}).
+ * Pickup + objective registry for the BSP demo — VITALS (health / armour), spinning AMMO boxes, the 3-tier
+ * access BADGES (keycards), and the EXIT marker — kept LOCAL to the feature (a shared move comes if this
+ * grows, exactly like {@link ./enemies.ts `enemies.ts`}).
  *
- * The single sources of truth still hold: each ammo box's reserve CAP is read from {@link AMMO_MAX}
- * (`weapons.json` `ammo_types`), and the ammo strip art + grant amounts mirror the shared `ammo-pickups.json`.
- * Vitals + the keycard/exit carry their own procedural sprites (`/game/pickups/*.webp`).
+ * The single source of truth still holds: each ammo box's reserve CAP is read from {@link AMMO_MAX}
+ * (`weapons.json` `ammo_types`). Vitals + badges + the exit carry their own served sprites
+ * (`/game/pickups/*.webp`).
  */
 
+/** `armor` is the second vital — shown as MENTAL in the HUD (the burnt-out-dev's sanity buffer). */
 export type VitalKind = 'health' | 'armor';
+export type VitalSize = 'large' | 'small';
 
 /** Walk this close (world units) to collect any pickup — mirrors the grid's `PICKUP_RADIUS`. */
 export const PICKUP_RADIUS = 0.6;
-/** A coffee restores +25 health; a RAM stick grants +50 armour; both cap at 100 (the grid's vitals tuning). */
-export const HEALTH_PICKUP = 25;
-export const ARMOR_PICKUP = 50;
+/** Grants: a SMALL vital tops up +25, a LARGE one +50; both cap at 100 (the grid's vitals tuning). */
+export const VITAL_SMALL = 25;
+export const VITAL_LARGE = 50;
 export const VITAL_MAX = 100;
 
-/** A vitals pickup kind's billboard art + grant. Health = coffee (energy), armour = a RAM stick (buffer). */
+/** A vitals pickup's rotating-turntable billboard + grant. Health = a first-aid medkit (large) / desk plant
+ *  (small); MENTAL = a desk figurine (large) / morale card (small) — the office-satire re-theme. */
 export interface VitalSpec {
   readonly kind: VitalKind;
+  readonly size: VitalSize;
   readonly texName: string;
-  readonly url: string;
+  readonly url: string; // served turntable strip (a `frames`×1 horizontal atlas, center-bottom anchored)
+  readonly frames: number; // turntable cells (the rotation atlas)
+  readonly frameMs: number; // ms each spin frame holds
   readonly worldHeight: number; // billboard height in world units
-  readonly aspect: number; // sprite width : height
-  readonly amount: number; // hp/armour granted on collect
+  readonly aspect: number; // source cell width : height
+  readonly amount: number; // hp/mental granted on collect
+  readonly spin: boolean; // animate the turntable (false = hold frame 0, a static billboard)
 }
 
-export const HEALTH_SPEC: VitalSpec = {
+/** Shared spin cadence for EVERY rotating floor pickup — vitals AND ammo boxes — so they turn coherently
+ *  (400 ms/frame ≈ 2.4–2.8 s per full turn depending on the strip's frame count). Single source of truth. */
+const PICKUP_SPIN_MS = 400;
+
+export const HEALTH_LARGE_SPEC: VitalSpec = {
   kind: 'health',
-  texName: 'PICKUP_HEALTH',
-  url: '/game/pickups/coffee.webp',
-  worldHeight: 0.85,
-  aspect: 200 / 260,
-  amount: HEALTH_PICKUP,
+  size: 'large',
+  texName: 'PICKUP_HEALTH_LARGE',
+  url: '/game/pickups/health_large_medkit_rot.webp',
+  frames: 6,
+  frameMs: PICKUP_SPIN_MS,
+  worldHeight: 0.6,
+  aspect: 359 / 269,
+  amount: VITAL_LARGE,
+  spin: true, // medkit
 };
 
-export const ARMOR_SPEC: VitalSpec = {
-  kind: 'armor',
-  texName: 'PICKUP_ARMOR',
-  url: '/game/pickups/ram.webp',
-  worldHeight: 0.55,
-  aspect: 260 / 180,
-  amount: ARMOR_PICKUP,
+export const HEALTH_SMALL_SPEC: VitalSpec = {
+  kind: 'health',
+  size: 'small',
+  texName: 'PICKUP_HEALTH_SMALL',
+  url: '/game/pickups/health_small_plant_rot.webp',
+  frames: 6,
+  frameMs: PICKUP_SPIN_MS,
+  worldHeight: 0.45, // deliberately SMALLER than the medkit (0.6) — a minor health top-up
+  aspect: 240 / 379,
+  amount: VITAL_SMALL,
+  spin: true, // plant
 };
+
+export const MENTAL_LARGE_SPEC: VitalSpec = {
+  kind: 'armor',
+  size: 'large',
+  texName: 'PICKUP_MENTAL_LARGE',
+  url: '/game/pickups/mental_large_figurine_rot.webp',
+  frames: 7,
+  frameMs: PICKUP_SPIN_MS,
+  worldHeight: 0.8,
+  aspect: 377 / 688,
+  amount: VITAL_LARGE,
+  spin: true, // figurine keeps rotating
+};
+
+export const MENTAL_SMALL_SPEC: VitalSpec = {
+  kind: 'armor',
+  size: 'small',
+  texName: 'PICKUP_MENTAL_SMALL',
+  url: '/game/pickups/mental_small_card_rot.webp',
+  frames: 6,
+  frameMs: PICKUP_SPIN_MS,
+  worldHeight: 0.3,
+  aspect: 369 / 353,
+  amount: VITAL_SMALL,
+  spin: true, // card
+};
+
+const VITAL_SPECS: Readonly<Record<VitalKind, Readonly<Record<VitalSize, VitalSpec>>>> = {
+  health: { large: HEALTH_LARGE_SPEC, small: HEALTH_SMALL_SPEC },
+  armor: { large: MENTAL_LARGE_SPEC, small: MENTAL_SMALL_SPEC },
+};
+
+/** Resolve the vitals spec for a kind + size (a level's placement picks the size; default `large`). */
+export function vitalSpec(kind: VitalKind, size: VitalSize = 'large'): VitalSpec {
+  return VITAL_SPECS[kind][size];
+}
 
 /** A rotating ammo box: its turntable strip (`frames` cells advanced over `frameMs`) + which reserve it refills.
  *  `max` is single-sourced from {@link AMMO_MAX}; `amount`/`frameMs`/art mirror the shared `ammo-pickups.json`. */
@@ -94,8 +148,26 @@ function box(
 
 /** Every ammo-box kind the demo places (one per ammo type), mirroring `ammo-pickups.json` grants + strips. */
 export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
-  box('box_staples', 'bullets', 20, '/game/weapons/ammo/staples/staples_turn_strip.webp', 7, 180, 150, 168),
-  box('box_nails', 'bullets', 20, '/game/weapons/ammo/nails/nails_turn_strip.webp', 7, 180, 157, 148),
+  box(
+    'box_staples',
+    'bullets',
+    20,
+    '/game/weapons/pistol/ammo/staples_turn_strip.webp',
+    7,
+    PICKUP_SPIN_MS,
+    150,
+    168,
+  ),
+  box(
+    'box_nails',
+    'bullets',
+    20,
+    '/game/weapons/chaingun/ammo/nails_turn_strip.webp',
+    7,
+    PICKUP_SPIN_MS,
+    157,
+    148,
+  ),
   // The shotgun is the Hilti DX 460 now, so its ammo box (ammoType 'shells') is the Hilti .22 cal box: a
   // 7-frame turntable (the metal-back duplicates trimmed so the label/cartridges always show), landscape cell,
   // baseline-aligned to seat flush like the other boxes.
@@ -103,26 +175,44 @@ export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
     'gas_canister',
     'shells',
     5,
-    '/game/weapons/ammo/canisters/canister_turn_strip.webp',
+    '/game/weapons/shotgun/ammo/canister_turn_strip.webp',
     7,
-    180,
+    PICKUP_SPIN_MS,
     144,
     140,
   ),
-  box('energy_cell', 'cells', 40, '/game/weapons/ammo/cells/cell_turn_strip.webp', 7, 180, 138, 211),
+  box(
+    'energy_cell',
+    'cells',
+    40,
+    '/game/weapons/plasma/ammo/cell_turn_strip.webp',
+    7,
+    PICKUP_SPIN_MS,
+    138,
+    211,
+  ),
   box(
     'battery_pack',
     'rockets',
     2,
-    '/game/weapons/ammo/batteries/battery_turn_strip.webp',
+    '/game/weapons/rocket/ammo/battery_turn_strip.webp',
     7,
-    180,
+    PICKUP_SPIN_MS,
     149,
     256,
   ),
   // The big "server cell" — a richer cells box (the BFG-datacenter flavour): grants more rounds than the
   // standard energy cell.
-  box('server_cell', 'cells', 80, '/game/weapons/ammo/cells/cell_large_turn_strip.webp', 6, 180, 156, 232),
+  box(
+    'server_cell',
+    'cells',
+    80,
+    '/game/weapons/bfg/ammo/cell_large_turn_strip.webp',
+    6,
+    PICKUP_SPIN_MS,
+    156,
+    232,
+  ),
 ];
 
 /** A placed vitals pickup on the floor. */
@@ -130,6 +220,7 @@ export interface Vital {
   x: number;
   y: number;
   z: number;
+  age: number; // spin clock (advances the turntable frame)
   spec: VitalSpec;
 }
 
@@ -142,7 +233,16 @@ export interface AmmoBox {
   spec: AmmoBoxSpec;
 }
 
-/** A single-sprite floor billboard (the keycard, the exit sign): art + world sizing, no animation. */
+/** A placed, spinning access badge on the floor (`age` is its spin clock, like {@link Vital}). */
+export interface Keycard {
+  x: number;
+  y: number;
+  z: number;
+  age: number;
+  spec: KeycardSpec;
+}
+
+/** A single-sprite floor billboard (the exit sign): art + world sizing, no animation. */
 export interface MarkerSpec {
   readonly texName: string;
   readonly url: string;
@@ -150,15 +250,62 @@ export interface MarkerSpec {
   readonly aspect: number;
 }
 
-/** The level KEYCARD — the red corporate access badge that unlocks the exit; shows in the HUD card bay on
- *  collect. Its HUD card colour is the {@link KeycardColor} `red`. */
-export const KEYCARD_COLOR: KeycardColor = 'red';
-export const KEYCARD_SPEC: MarkerSpec = {
-  texName: 'PICKUP_KEYCARD',
-  url: '/game/pickups/keycard.webp',
-  worldHeight: 0.55,
-  aspect: 180 / 260,
+/** An access BADGE turntable — a corporate keycard that gates its colour-matched door; shows in the HUD card
+ *  bay on collect. Rendered as a spinning turntable billboard (a `frames`×1 horizontal strip, center-bottom
+ *  anchored), exactly like the vitals/ammo pickups. Its HUD card + door colour is {@link KeycardColor}. */
+export interface KeycardSpec {
+  readonly color: KeycardColor;
+  readonly texName: string;
+  readonly url: string; // served turntable strip (a `frames`×1 horizontal atlas, center-bottom anchored)
+  readonly frames: number; // turntable cells (the rotation atlas)
+  readonly frameMs: number; // ms each spin frame holds
+  readonly worldHeight: number; // billboard height in world units
+  readonly aspect: number; // source cell width : height
+}
+
+/** BLUE tier — the base "employee" badge (unlocks blue doors). */
+export const KEYCARD_EMPLOYEE: KeycardSpec = {
+  color: 'blue',
+  texName: 'PICKUP_KEYCARD_EMPLOYEE',
+  url: '/game/pickups/keycard_employee_rot.webp',
+  frames: 6,
+  frameMs: PICKUP_SPIN_MS,
+  worldHeight: 0.65,
+  aspect: 358 / 678,
 };
+
+/** YELLOW tier — the mid "manager" badge (unlocks yellow doors). */
+export const KEYCARD_MANAGER: KeycardSpec = {
+  color: 'yellow',
+  texName: 'PICKUP_KEYCARD_MANAGER',
+  url: '/game/pickups/keycard_manager_rot.webp',
+  frames: 6,
+  frameMs: PICKUP_SPIN_MS,
+  worldHeight: 0.65,
+  aspect: 360 / 678,
+};
+
+/** RED tier — the top "director" badge (unlocks red doors). */
+export const KEYCARD_DIRECTOR: KeycardSpec = {
+  color: 'red',
+  texName: 'PICKUP_KEYCARD_DIRECTOR',
+  url: '/game/pickups/keycard_director_rot.webp',
+  frames: 6,
+  frameMs: PICKUP_SPIN_MS,
+  worldHeight: 0.65,
+  aspect: 397 / 678,
+};
+
+const KEYCARD_SPECS: Readonly<Record<KeycardColor, KeycardSpec>> = {
+  blue: KEYCARD_EMPLOYEE,
+  yellow: KEYCARD_MANAGER,
+  red: KEYCARD_DIRECTOR,
+};
+
+/** Resolve the badge spec for a keycard colour (blue = employee, yellow = manager, red = director). */
+export function keycardSpec(color: KeycardColor): KeycardSpec {
+  return KEYCARD_SPECS[color];
+}
 
 /** The EXIT sign — the level goal; reaching it WITH the keycard completes the level. */
 export const EXIT_SPEC: MarkerSpec = {
@@ -170,12 +317,18 @@ export const EXIT_SPEC: MarkerSpec = {
 /** Walk this close to the exit sign to trigger the finish (it sits flush against the hall's far wall). */
 export const EXIT_RADIUS = 1.5;
 
-/** Every pickup/marker texture to decode (vitals + ammo strips + keycard + exit) — each a single-row sheet. */
+/** Every pickup/marker texture to decode (vitals + ammo strips + the 3 badge turntables + exit) — each a
+ *  single-row sheet. */
 export const PICKUP_TEXTURE_JOBS: readonly { name: string; url: string }[] = [
-  { name: HEALTH_SPEC.texName, url: HEALTH_SPEC.url },
-  { name: ARMOR_SPEC.texName, url: ARMOR_SPEC.url },
+  ...[HEALTH_LARGE_SPEC, HEALTH_SMALL_SPEC, MENTAL_LARGE_SPEC, MENTAL_SMALL_SPEC].map((spec) => ({
+    name: spec.texName,
+    url: spec.url,
+  })),
   ...AMMO_BOX_SPECS.map((spec) => ({ name: spec.texName, url: spec.url })),
-  { name: KEYCARD_SPEC.texName, url: KEYCARD_SPEC.url },
+  ...[KEYCARD_EMPLOYEE, KEYCARD_MANAGER, KEYCARD_DIRECTOR].map((spec) => ({
+    name: spec.texName,
+    url: spec.url,
+  })),
   { name: EXIT_SPEC.texName, url: EXIT_SPEC.url },
 ];
 

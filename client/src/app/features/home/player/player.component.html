@@ -20,7 +20,7 @@
       <span>{{ content.playerRestore }}</span>
     </button>
   } @else if (game.running()) {
-    <sd-game
+    <sd-bsp-demo
       (exited)="exitGame()"
       [fullscreen]="fullscreen()"
       [fullscreenAvailable]="nativeFullscreen"

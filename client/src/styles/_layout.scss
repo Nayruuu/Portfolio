@@ -68,16 +68,16 @@ body:has(.player.is-fullscreen) {
 	overflow: hidden;
 }
 
-/* The mobile game is a fixed full-viewport overlay (`.player:has(sd-game)`) — lock the page behind it
+/* The mobile game is a fixed full-viewport overlay (`.player:has(sd-bsp-demo)`) — lock the page behind it
    so dragging the controls never scrolls or rubber-bands the page underneath, and drop the fixed bottom
    bars (tabs + prefs-dock) from the tab order / a11y tree while the game covers them. */
 @media (pointer: coarse) {
-	body:has(sd-game) {
+	body:has(.player sd-bsp-demo) {
 		overflow: hidden;
 	}
 
-	body:has(sd-game) .tabs,
-	body:has(sd-game) .prefs-dock {
+	body:has(.player sd-bsp-demo) .tabs,
+	body:has(.player sd-bsp-demo) .prefs-dock {
 		display: none;
 	}
 }

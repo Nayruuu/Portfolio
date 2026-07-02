@@ -110,6 +110,14 @@ const MISSING = missingTexture();
 /** A sector whose `ceilTex` is this renders its ceiling as open SKY (a gradient) instead of a textured flat. */
 export const SKY = 'SKY';
 
+// A see-through GLASS line renders the back sector through its opening, then `blendGlass` washes this cool
+// translucent tint over that opening so it reads as a PANE, not a hole. `out = src*KEEP + TINT` per channel.
+const GLASS_ALPHA = 0.22;
+const GLASS_KEEP = 1 - GLASS_ALPHA;
+const GLASS_TINT_R = (150 * GLASS_ALPHA) | 0; // a light cool blue, pre-multiplied by alpha
+const GLASS_TINT_G = (195 * GLASS_ALPHA) | 0;
+const GLASS_TINT_B = (225 * GLASS_ALPHA) | 0;
+
 /** Pack an opaque RGB into a little-endian RGBA uint32 for bulk framebuffer fills (all modern browsers). */
 function packRgb(c: Rgb): number {
   return ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
@@ -295,6 +303,36 @@ function castSky(
 }
 
 /**
+ * Deferred GLASS pass: wash a cool translucent tint over each recorded glass-pane span (a see-through
+ * two-sided glass line's opening), run AFTER the wall pass drew the back sector through it — the single
+ * front-to-back pass can't blend over content it hasn't drawn yet. `top[x]`/`bot[x]` are the pane's span in
+ * column `x`; `bot` defaults to -1 (`bot < top` = no glass there, or the span is off this worker's row band).
+ */
+function blendGlass(buf32: Uint32Array, dims: Dims, top: Int32Array, bot: Int32Array): void {
+  const { width, rowStart, rowEnd } = dims;
+
+  for (let x = 0; x < width; x++) {
+    const y0 = Math.max(rowStart, top[x]);
+    const y1 = Math.min(rowEnd - 1, bot[x]);
+
+    if (y1 < y0) {
+      continue;
+    }
+    let i = y0 * width + x;
+
+    for (let y = y0; y <= y1; y++) {
+      const c = buf32[i];
+      const r = (((c & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_R;
+      const g = ((((c >> 8) & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_G;
+      const b = ((((c >> 16) & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_B;
+
+      buf32[i] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+      i += width;
+    }
+  }
+}
+
+/**
  * Draw billboard sprites (things) after the walls: face-camera quads, sorted far-to-near, depth-tested
  * PER PIXEL against the wall z-buffer (so steps/canopies occlude correctly), with per-texel alpha.
  */
@@ -391,6 +429,7 @@ export function renderFrame(
   rowStart = 0,
   rowEnd = config.height,
   sprites?: readonly Sprite[],
+  slides?: readonly number[], // per-linedef sliding-door openness (0 shut … 1 fully retracted); absent = shut
 ): Uint8ClampedArray {
   const { width, height, fov } = config;
   const focal = focalFor(width, fov);
@@ -427,6 +466,13 @@ export function renderFrame(
 
   const topClip = new Int16Array(width); // 0
   const botClip = new Int16Array(width).fill(height - 1);
+
+  // A see-through GLASS line records its opening span per column here during the wall pass; `blendGlass` then
+  // washes a tint over it (deferred — the back sector must be drawn through the opening first). Only allocated
+  // when the map has glass, so glass-free levels pay nothing. `bot` defaults to -1 = "no glass in this column".
+  const glass = map.source.linedefs.some((l) => l.glass === true)
+    ? { top: new Int32Array(width), bot: new Int32Array(width).fill(-1) }
+    : null;
 
   eachSegFrontToBack(map.root, camera, (seg) => {
     const line = map.source.linedefs[seg.linedef];
@@ -571,6 +617,25 @@ export function renderFrame(
       const yNeighCeil = Math.round(horizon - (neighbour.ceilZ - camera.z) * focal * invF);
       const yNeighFloor = Math.round(horizon - (neighbour.floorZ - camera.z) * focal * invF);
 
+      // GLASS: record this pane's see-through opening (between the neighbour's ceiling and floor, clipped to
+      // the column's open window) so `blendGlass` can wash a tint over it once the back sector is drawn. A
+      // SLIDING door only records the still-COVERED fraction — the panel retracts toward v1 as it opens, so
+      // columns past `(1 − openness) × linedef length` are clear (no pane).
+      if (line.glass && glass) {
+        let covered = true;
+
+        if (line.sliding) {
+          const v2 = map.source.vertices[line.v2];
+          const lineLen = Math.hypot(v2.x - lineStart.x, v2.y - lineStart.y);
+
+          covered = u < (1 - (slides?.[seg.linedef] ?? 0)) * lineLen;
+        }
+        if (covered) {
+          glass.top[x] = Math.max(top, yNeighCeil);
+          glass.bot[x] = Math.min(bot, yNeighFloor);
+        }
+      }
+
       if (yNeighCeil > yCeil) {
         paintWall(
           buf32,
@@ -610,6 +675,12 @@ export function renderFrame(
       botClip[x] = Math.min(bot, yNeighFloor);
     }
   });
+
+  // Deferred glass tint over each recorded pane (after the walls drew the back through it, before sprites so a
+  // sprite in front of the pane still occludes it).
+  if (glass) {
+    blendGlass(buf32, dims, glass.top, glass.bot);
+  }
 
   drawSprites(buf32, zbuf, dims, sprites ?? mapSprites(map), map, camera, focal, horizon, textures);
 

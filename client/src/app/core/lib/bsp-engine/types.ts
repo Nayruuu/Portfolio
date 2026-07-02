@@ -47,6 +47,13 @@ export interface LineDef {
   readonly v2: number;
   readonly front: SideDef;
   readonly back: SideDef | null;
+  // A see-through GLASS wall: a two-sided line (the back sector renders through it) that STILL blocks the
+  // player, with a translucent overlay (its `front.middleTex`) painted over the opening — a window / partition.
+  readonly glass?: boolean;
+  // An automatic SLIDING DOOR: a two-sided line whose panel (its `front.middleTex`) covers the opening when
+  // shut and retracts sideways into the wall as it opens. Its openness is supplied per-frame to the renderer
+  // (a covered fraction) and gates a dedicated collision; the BSP geometry itself never moves.
+  readonly sliding?: boolean;
 }
 
 /** A point of interest placed on the map (position + facing). */

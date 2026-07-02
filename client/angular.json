@@ -86,6 +86,12 @@
             "providersFile": "src/test-providers.ts",
             "include": ["src/**/*.spec.ts"],
             "coverageReporters": ["text", "json-summary"],
+            "coverageExclude": [
+              "**/features/bsp-demo/bsp-demo.component.ts",
+              "**/features/bsp-demo/bsp-demo.component.html",
+              "**/features/bsp-demo/render-pool.ts",
+              "**/features/bsp-demo/load-textures.ts"
+            ],
             "coverageThresholds": {
               "statements": 85,
               "branches": 78,

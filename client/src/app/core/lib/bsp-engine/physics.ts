@@ -40,18 +40,30 @@ function closestOnSeg(
   return { x: ax + t * abx, y: ay + t * aby, clamped: raw !== t };
 }
 
-/** Does `line` block a player standing on floor `fromFloor` at (`fromX`,`fromY`)? */
+/** A sliding door blocks until it is at least this open (0..1) — below it, the panel still bars the way. */
+export const SLIDE_OPEN = 0.7;
+
+/** Does `line` block a player standing on floor `fromFloor` at (`fromX`,`fromY`)? `slides[lineIndex]` is a
+ *  sliding door's openness (0 shut … 1 fully retracted); absent = shut. */
 function isBlocking(
   map: CompiledMap,
   line: LineDef,
+  lineIndex: number,
   fromX: number,
   fromY: number,
   fromFloor: number,
   stepMax: number,
   headroom: number,
+  slides: readonly number[] | undefined,
 ): boolean {
   if (line.back === null) {
     return true; // one-sided wall — the edge of the world
+  }
+  if (line.sliding) {
+    return (slides?.[lineIndex] ?? 0) < SLIDE_OPEN; // a sliding door bars the way until it is mostly open
+  }
+  if (line.glass) {
+    return true; // a see-through glass wall (window / partition) still blocks the player
   }
 
   const a = map.source.vertices[line.v1];
@@ -72,6 +84,7 @@ export function movePlayer(
   radius: number,
   stepMax: number,
   headroom: number,
+  slides?: readonly number[],
 ): MoveResult {
   const fromFloor = map.source.sectors[locateSubSector(map.root, x, y).sector].floorZ;
   let px = x + dx;
@@ -79,9 +92,12 @@ export function movePlayer(
 
   // Pre-resolve each blocking wall to its segment + inward normal (pointing to the player's side).
   const blockers = [];
+  const lines = map.source.linedefs;
 
-  for (const line of map.source.linedefs) {
-    if (!isBlocking(map, line, x, y, fromFloor, stepMax, headroom)) {
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+
+    if (!isBlocking(map, line, li, x, y, fromFloor, stepMax, headroom, slides)) {
       continue;
     }
 

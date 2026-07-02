@@ -17,7 +17,7 @@ convention lives in **`.claude/conventions/`** (the rulebook) and every product/
 | [`.claude/conventions/architecture.md`](.claude/conventions/architecture.md) | The five layers, the inward-only **dependency rule**, barrels & import style, folder layout, one-declaration-per-file, the typed content bridge, routing/SEO **placement**. |
 | [`.claude/conventions/code.md`](.claude/conventions/code.md) | TS/Angular code shape: standalone · OnPush · zoneless · signals · `input()`/`output()`/`model()`/`viewChild()` · `inject()` · member accessibility & order · native control flow · the ESLint rule set (incl. custom `local/prefer-signal-primitives`) · no-`enum`/derived-union/naming rules. |
 | [`.claude/conventions/design.md`](.claude/conventions/design.md) | SCSS/design **rules**: CSS-tokens-only, one-level BEM nesting, blank-line-between-blocks (Stylelint), tabs indentation, the cascade-significant `@use` order, shared-vs-co-located placement, grouped-selector hoisting, `:host-context` theme overrides, when `[style.x]` is allowed, **mobile-first breakpoints** (the `from()` mixin + `$breakpoints` map). (Token **values** live in `docs/PRODUCT.md`.) |
-| [`.claude/conventions/testing.md`](.claude/conventions/testing.md) | The test contract: Vitest patterns + exact coverage thresholds, the `core/` 100 % guard, Playwright config (chromium + **mobile** + **webkit** projects) + the 19 specs + 16 visual baselines (8 desktop + 8 mobile) + re-baseline discipline, the prerender guard. |
+| [`.claude/conventions/testing.md`](.claude/conventions/testing.md) | The test contract: Vitest patterns + exact coverage thresholds, the `core/` 100 % guard, Playwright config (chromium + **mobile** + **webkit** projects) + the 16 specs + 16 visual baselines (8 desktop + 8 mobile) + re-baseline discipline, the prerender guard. |
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | The ***what***: product concept, route/tab inventory, the simulated player-scenes mechanism, the data tables (chapters, slugs, tags, series ↔ article mapping), and **the design source of truth** — exact token palette (dark + light), per-screen pixel spacing, font ladder, keyframes. |
 
 > **Single-source principle**: each rule lives in exactly one of the docs above; this file and the
@@ -86,10 +86,12 @@ Full rules — layers, dependency direction, barrels, folder layout — are in
   - `core/` — UI-less client/infra logic: `api/` (the .NET-API seam), `services/` (signal/SignalStore
     state), `lib/` (pure functions, 100 % tested), `content/` (one `content.<lang>.json` per `Lang` +
     the shared typed bridge + the generated `article-bodies.ts` over `.md` bodies).
-  - `shared/` — cross-feature presentational components (`icon`, `code-block`, `inline-runs`).
+  - `shared/` — cross-feature presentational components (`icon`, `code-block`, `inline-runs`) + `game`
+    (the shared BSP-game helpers: `doom-hud`, `weapon-view`, `climb-view`, `weapons`, `effects`).
   - `layout/` — the shell (`nav`, `prefs`, `channel-header`, `tabs-bar`).
   - `features/` — one **lazy-loaded** folder per feature (`home`, `articles`, `series`, `about`,
-    `stack`, `contact`).
+    `stack`, `contact`) — plus the hidden `bsp-demo` game (`sd-bsp-demo`, served at `/bsp` and mounted in
+    the player).
 - **Root composition**: `app.component.*` (shell + `<router-outlet>`), `app.config.ts`
   (`provideZonelessChangeDetection()` + `provideRouter`), `app.routes.ts`, `app.routes.server.ts`.
 - **Routing & i18n**: language is a URL prefix (`/fr`, `/en`, `/es`, `/de`, …), route-driven; one static

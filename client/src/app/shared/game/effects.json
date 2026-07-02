@@ -1,7 +1,7 @@
 {
   "projectiles": {
     "staple": {
-      "sprite": "/game/weapons/effects/projectiles/proj_staple.webp",
+      "sprite": "/game/weapons/pistol/effects/proj_staple.webp",
       "w": 171,
       "h": 376,
       "size": 0.4,
@@ -11,7 +11,7 @@
       "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
     },
     "nail": {
-      "sprite": "/game/weapons/effects/projectiles/proj_nail.webp",
+      "sprite": "/game/weapons/chaingun/effects/proj_nail.webp",
       "w": 192,
       "h": 316,
       "size": 0.45,
@@ -21,7 +21,7 @@
       "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
     },
     "rocket": {
-      "sprite": "/game/weapons/effects/projectiles/proj_rocket.webp",
+      "sprite": "/game/weapons/rocket/effects/proj_rocket.webp",
       "w": 368,
       "h": 697,
       "size": 1,
@@ -31,7 +31,7 @@
       "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
     },
     "plasma": {
-      "sprite": "/game/weapons/effects/projectiles/proj_plasma.webp",
+      "sprite": "/game/weapons/plasma/effects/proj_plasma.webp",
       "w": 525,
       "h": 264,
       "size": 0.5,
@@ -41,7 +41,7 @@
       "note": "sprite face-camera, vue de derriere/fuyante; scale runtime selon distance, rotate vers direction de tir"
     },
     "bfg": {
-      "sprite": "/game/weapons/effects/projectiles/proj_bfg.webp",
+      "sprite": "/game/weapons/bfg/effects/proj_bfg.webp",
       "w": 796,
       "h": 438,
       "size": 1.3,
@@ -53,7 +53,7 @@
   },
   "impacts": {
     "impact_metal": {
-      "sheet": "/game/weapons/effects/impacts/impact_metal_strip.webp",
+      "sheet": "/game/effects/impacts/impact_metal_strip.webp",
       "frames": 3,
       "frameWidth": 159,
       "frameHeight": 93,
@@ -64,7 +64,7 @@
       "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
     },
     "impact_frost": {
-      "sheet": "/game/weapons/effects/impacts/impact_frost_strip.webp",
+      "sheet": "/game/effects/impacts/impact_frost_strip.webp",
       "frames": 3,
       "frameWidth": 173,
       "frameHeight": 123,
@@ -75,7 +75,7 @@
       "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
     },
     "explosion": {
-      "sheet": "/game/weapons/effects/impacts/explosion_strip.webp",
+      "sheet": "/game/effects/impacts/explosion_strip.webp",
       "frames": 4,
       "frameWidth": 141,
       "frameHeight": 129,
@@ -86,7 +86,7 @@
       "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
     },
     "impact_plasma": {
-      "sheet": "/game/weapons/effects/impacts/impact_plasma_strip.webp",
+      "sheet": "/game/effects/impacts/impact_plasma_strip.webp",
       "frames": 3,
       "frameWidth": 150,
       "frameHeight": 117,
@@ -97,7 +97,7 @@
       "anim": "jouer une fois a l'impact (apparition->dissipation) puis disparaitre"
     },
     "explosion_bfg": {
-      "sheet": "/game/weapons/effects/impacts/explosion_bfg_strip.webp",
+      "sheet": "/game/effects/impacts/explosion_bfg_strip.webp",
       "frames": 4,
       "frameWidth": 211,
       "frameHeight": 215,

@@ -24,7 +24,7 @@ Main targets:
   rulebook, not restate it).
 - `.claude/skills/{angular-developer,skill-creator}/` + `skills-lock.json` — vendored skills
   (managed by the `skills` CLI; the lockfile records source + path).
-- `.claude/agents/{angular-dev,angular-reviewer,claude-auditor}.md` — the project sub-agents.
+- `.claude/agents/{angular-dev,angular-reviewer,claude-auditor,level-designer}.md` — the project sub-agents.
 - `.claude/commands/{deploy-azure,journal}.md` — the project commands.
 - `client/eslint.config.mjs` + `client/eslint-rules/` — enforced lint rules.
 - `client/angular.json` — builders, budgets, test target/thresholds.

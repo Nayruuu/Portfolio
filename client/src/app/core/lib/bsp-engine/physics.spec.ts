@@ -113,6 +113,104 @@ describe('movePlayer', () => {
   });
 });
 
+describe('glass walls block the player (see-through but solid)', () => {
+  const gtex = (sector: number): SideDef => ({
+    sector,
+    xOffset: 0,
+    yOffset: 0,
+    upperTex: 'G',
+    lowerTex: 'G',
+    middleTex: 'G',
+  });
+  // Two rooms x[0..4] | x[4..8] (both floor 0, ceil 5) sharing the x=4 edge — passable unless it's glass.
+  const twoRoom = (glass: boolean): MapSource => ({
+    vertices: [
+      { x: 0, y: 0 },
+      { x: 0, y: 4 },
+      { x: 4, y: 4 },
+      { x: 4, y: 0 },
+      { x: 8, y: 4 },
+      { x: 8, y: 0 },
+    ],
+    sectors: [
+      { floorZ: 0, ceilZ: 5, floorTex: 'F', ceilTex: 'C', light: 200 }, // 0 room A (west)
+      { floorZ: 0, ceilZ: 5, floorTex: 'F', ceilTex: 'C', light: 200 }, // 1 room B (east)
+    ],
+    linedefs: [
+      { v1: 0, v2: 1, front: gtex(0), back: null }, // A west
+      { v1: 1, v2: 2, front: gtex(0), back: null }, // A north
+      { v1: 2, v2: 3, front: gtex(0), back: gtex(1), glass }, // A|B shared edge (glass?)
+      { v1: 3, v2: 0, front: gtex(0), back: null }, // A south
+      { v1: 2, v2: 4, front: gtex(1), back: null }, // B north
+      { v1: 4, v2: 5, front: gtex(1), back: null }, // B east
+      { v1: 5, v2: 3, front: gtex(1), back: null }, // B south
+    ],
+    things: [],
+  });
+
+  it('lets the player cross a plain two-sided opening (same floor)', () => {
+    const r = movePlayer(buildBsp(twoRoom(false)), 3, 2, 2, 0, R, STEP, HEAD); // charge east through the opening
+
+    expect(r.x).toBeGreaterThan(4); // crossed into room B
+  });
+
+  it('BLOCKS the player at a glass wall', () => {
+    const r = movePlayer(buildBsp(twoRoom(true)), 3, 2, 2, 0, R, STEP, HEAD); // charge east into the glass
+
+    expect(r.x).toBeLessThan(4); // stopped short — the glass blocked (though you can see through it)
+  });
+});
+
+describe('sliding doors bar the way until mostly open (openness ≥ SLIDE_OPEN)', () => {
+  const stex = (sector: number): SideDef => ({
+    sector,
+    xOffset: 0,
+    yOffset: 0,
+    upperTex: 'S',
+    lowerTex: 'S',
+    middleTex: 'S',
+  });
+  // Two rooms x[0..4] | x[4..8] sharing the x=4 edge as a SLIDING door (linedef index 2).
+  const twoRoom = () =>
+    buildBsp({
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 0, y: 4 },
+        { x: 4, y: 4 },
+        { x: 4, y: 0 },
+        { x: 8, y: 4 },
+        { x: 8, y: 0 },
+      ],
+      sectors: [
+        { floorZ: 0, ceilZ: 5, floorTex: 'F', ceilTex: 'C', light: 200 },
+        { floorZ: 0, ceilZ: 5, floorTex: 'F', ceilTex: 'C', light: 200 },
+      ],
+      linedefs: [
+        { v1: 0, v2: 1, front: stex(0), back: null },
+        { v1: 1, v2: 2, front: stex(0), back: null },
+        { v1: 2, v2: 3, front: stex(0), back: stex(1), sliding: true }, // index 2 = the sliding door
+        { v1: 3, v2: 0, front: stex(0), back: null },
+        { v1: 2, v2: 4, front: stex(1), back: null },
+        { v1: 4, v2: 5, front: stex(1), back: null },
+        { v1: 5, v2: 3, front: stex(1), back: null },
+      ],
+      things: [],
+    });
+
+  it('blocks when shut — no slides at all, or an openness below the threshold', () => {
+    const map = twoRoom();
+
+    expect(movePlayer(map, 3, 2, 2, 0, R, STEP, HEAD).x).toBeLessThan(4); // no slides → treated as shut
+    expect(movePlayer(map, 3, 2, 2, 0, R, STEP, HEAD, [0, 0, 0.5, 0, 0, 0, 0]).x).toBeLessThan(4); // 0.5 < 0.7
+  });
+
+  it('lets the player through once open past the threshold', () => {
+    const r = movePlayer(twoRoom(), 3, 2, 2, 0, R, STEP, HEAD, [0, 0, 1, 0, 0, 0, 0]); // index 2 fully open
+
+    expect(r.x).toBeGreaterThan(4); // crossed into the far room — the panel has retracted
+  });
+});
+
 describe('climbTarget', () => {
   const sideTex = (sector: number): SideDef => ({
     sector,

@@ -4,20 +4,20 @@ import { impactEffect, projectileEffect, weaponEffects } from './effects';
 describe('effects bridge', () => {
   it('maps a projectile kind to its served sprite + source dimensions', () => {
     expect(projectileEffect('staple')).toEqual({
-      sprite: '/game/weapons/effects/projectiles/proj_staple.webp',
+      sprite: '/game/weapons/pistol/effects/proj_staple.webp',
       width: 171, // the Nerf dart (slot-2 weapon's projectile)
       height: 376,
       size: 0.4, // draws smaller than the canvas-relative default (rocket/plasma/BFG at 1)
       anchorX: 0.5, // already centred in its frame (the plasma/BFG sit at 0.6)
       drop: 0.24, // the slot-2 dart rides lower than the rocket/plasma/BFG (0.12)
     });
-    expect(projectileEffect('bfg')?.sprite).toBe('/game/weapons/effects/projectiles/proj_bfg.webp');
+    expect(projectileEffect('bfg')?.sprite).toBe('/game/weapons/bfg/effects/proj_bfg.webp');
     expect(projectileEffect('nope')).toBeUndefined(); // an unknown kind → no sprite
   });
 
   it('maps an impact kind to its served strip + frame layout', () => {
     expect(impactEffect('explosion')).toEqual({
-      sheet: '/game/weapons/effects/impacts/explosion_strip.webp',
+      sheet: '/game/effects/impacts/explosion_strip.webp',
       frames: 4,
       frameWidth: 141,
       frameHeight: 129,

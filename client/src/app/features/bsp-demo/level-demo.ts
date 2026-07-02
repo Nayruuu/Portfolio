@@ -4,9 +4,8 @@ import { DEMO_MAP } from './demo-map';
 // from './enemies';` when restoring the enemy list.
 
 /**
- * The engine-showcase courtyard (`demo-map.ts`) wrapped as a {@link Level} — the known-good map the demo plays
- * while L1 "Accueil" is being finished. (L1 compiles + is reachable, but its first render leaks; this keeps the
- * demo playable meanwhile. Swap the component's level import back to `ACCUEIL` once L1's render is fixed.)
+ * The engine-showcase courtyard (`demo-map.ts`) wrapped as a {@link Level} — a known-good worked-example map.
+ * (The wired level is `HANGAR`; this and `ACCUEIL` remain as reference examples / fallbacks.)
  */
 export const DEMO_LEVEL: Level = {
   map: DEMO_MAP,
@@ -43,7 +42,7 @@ export const DEMO_LEVEL: Level = {
     [15, 11.5],
   ],
   // ammo (scattered): [3,11] [7,11] [16,8] [2,3] [13,1] [+1 for server_cell]
-  keycard: [17.75, 1.75], // on the pedestal (+1.6)
+  keycards: [[17.75, 1.75, 'red']], // on the pedestal (+1.6)
   exit: [40, 7], // in the sunken hall (−2.7)
-  door: { sector: 7, triggerX: 19, triggerY: 4.5, requiresCard: true }, // the east-annex corridor
+  doors: [{ sector: 7, triggerX: 19, triggerY: 4.5, requiresCard: 'red' }], // the east-annex corridor
 };

@@ -103,16 +103,17 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
 ### `core/lib/` — a single barrel for pure functions
 
 - **One** barrel: `core/lib/index.ts`, `export *` from each `lib/` file (one line per file). A cohesive
-  multi-file engine may live in a **sub-folder with its own sub-barrel** re-exported as one line — e.g.
-  `core/lib/raycaster/` (the game's pure map/DDA/collision/the per-kind enemy AI
-  (`ENEMY_CONFIG` — rush/turret/kite)/fire/floor-cast/step/`knockback` (axis-separated wall-clamped
-  shove) + projectile (`ProjectileSkin`: `'invite'|'paper'|'memo'`)/vitals/pickup combat modules + the
-  **keycards/locked doors** (`keys`) + the HR `playerSlow` mechanic + the
-  **procedural level generator** (`generate-level`) + **seeded PRNG** (`rng`; mulberry32
-  `makeRng`/`randInt`/`pick`) + the level/theme data (`Theme`/`THEME_CYCLE`; office themes
-  openspace/meeting/executive; the ASCII `LEVELS`/`parseCells` and hand-authored maps are gone —
-  level data is now **generated**; the only `Math.random` lives in `GameService` as the per-run seed)) →
-  `export * from './raycaster'`.
+  multi-file engine may live in a **sub-folder with its own sub-barrel**. The BSP game uses two:
+  - `core/lib/game/` — the pure combat subset both the standalone demo and the in-player game reuse: the
+    combat types (`KeycardColor`/`KEYCARD_COLORS`, `WeaponCombat`, `ProjectileSpec`, `ChainSpec`), the
+    magazine / fire-rate / reload subsystem (`stepArsenal`), and the shared combat-tuning constants
+    (`AIM_CONE`/`AMMO_START`/`MELEE_CONE`/`MELEE_RANGE`/`ARC_DURATION`). It is **re-exported through the
+    root barrel** as one line — `export * from './game'` — so consumers import it from `…/core/lib`.
+  - `core/lib/bsp-engine/` — the from-scratch DOOM-style **BSP software engine**: the map data model +
+    node builder (the BSP compiler), the front-to-back BSP walk + textured wall/floor/ceiling `renderer`,
+    `camera` projection, hitscan `raycast`, player `physics` (slide + step-up), and procedural `texture`s.
+    Big and feature-scoped, it is **not** folded into the root barrel; consumers import it directly through
+    its own sub-barrel, `…/core/lib/bsp-engine`.
 - **Consumers** import from the folder: `import { parseMarkdown, STORAGE_KEYS } from '…/core/lib';`.
 - **Intra-`lib`** imports go **file → file directly** (`select-articles.ts` →
   `import { readCount } from './read-count';`), **never the barrel**.
@@ -176,7 +177,7 @@ core/
   api/        api.token.ts  content-api.service.ts          # the API module (the .NET-API seam)
   services/   content/  game/  i18n/  player/  reviews/  search/  seo/  theme/  viewport/  # one folder per service (+ its .spec)
   content/    content.<lang>.ts + content.<lang>.json (one per Lang)  json-content.ts  article-bodies.ts (generated)
-  lib/        index.ts + one pure function per file (+ constants.ts, + the raycaster/ sub-module) — 100 % tested
+  lib/        index.ts + one pure function per file (+ constants.ts, + the bsp-engine/ and game/ sub-modules) — 100 % tested
 ```
 
 - `core/api/` holds **everything API-related**, kept separate from `services/`. To wire a real .NET
@@ -203,8 +204,11 @@ features/home/
             player-stage/  player-stage.component.{ts,html,scss}  # bg + scenes, reused inline + in the mini
             mini-player/   mini-player.component.{ts,html,scss}   # floating PiP, rendered at the shell
             typed/   typed.component.{ts,html,scss}      # no-reflow per-string typewriter (sd-typed)
-            game/    game.component.{ts,html,scss}  game-input.ts  game-renderer.ts  game-textures.ts  game-audio.ts  doom-hud.ts  weapon-view.ts  weapons.ts  loaded-image.ts  # DOOM: Return To Office raycaster: shell + co-located helpers (input · canvas paint · procedural art · Web Audio · composited image HUD · data-driven weapon viewmodel)
             scenes/  intro-scene/ stack-scene/ projects-scene/ timeline-scene/ outro-scene/
+features/bsp-demo/                                 # the hidden BSP game (OPEN SPACE.EXE) — a top-level lazy feature
+  bsp-demo.component.{ts,html,scss}                # sd-bsp-demo — the game shell; served at /bsp AND mounted in the player
+  render.worker.ts  render-pool.ts  load-textures.ts  # browser-only render code (SAB worker pool + WebP/procedural textures)
+  level-accueil.ts  level-hangar.ts  level-demo.ts  demo-map.ts  level-builder.ts  pickups.ts  enemies.ts  # pure/tested worked-example levels + entity helpers
 ```
 
 Features with internal routing keep a `*.routes.ts` at the feature root and a `*-detail/` folder for
@@ -217,7 +221,10 @@ the detail component (`articles/articles.routes.ts` + `article-detail/`; same fo
 
 `shared/icon/`, `shared/code-block/`, `shared/inline-runs/`; `layout/nav/`, `layout/prefs/`,
 `layout/channel-header/`, `layout/tabs-bar/`. Each is a folder holding the component + its
-co-located template/styles/spec.
+co-located template/styles/spec. `shared/game/` is the exception — not an `sd-` component but the
+cross-feature **presentational game helpers** (the `DoomHud` / `WeaponView` / `ClimbView` imperative
+helper classes + the `weapons` / `effects` JSON-bridge data + the shared `loaded-image` loader, each with
+its `.spec.ts`), engine-agnostic so any game surface — today `sd-bsp-demo` — can reuse them.
 
 ---
 
@@ -317,16 +324,22 @@ These are *cohesive groups*, not grab-bags: every member shares one purpose. Whe
 apart in concern, split them. A pure function never shares a file with another pure function — each
 `core/lib/*.ts` holds exactly one (its `.spec.ts` co-located alongside).
 
-A component may also own one or more **co-located imperative helper classes**, each in its own file — a
-stateful, browser-only engine that is neither a pure `core/lib` function nor an Angular service (DI would
-imply the wrong sharing). `sd-game` is the reference: it stays a thin shell (lifecycle + the `rAF` loop +
-the DOM-event boundary) by delegating to five such helper classes — `GameInput` (input → `MoveIntent`),
-`GameRenderer` (canvas paint), `GameAudio` (Web Audio music + sfx), `DoomHud` (the composited image HUD
-bar — the burnt-out developer face is one of its zones), `WeaponView` (the FPS weapon sprite + swing
-animation) — plus the `game-textures` module of procedural-art generators (functions, not a class — no
-state to own; `loaded-image.ts` is the shared async image loader `DoomHud` + `WeaponView` reuse). One class per file, `.spec.ts`
-alongside, instantiated with `new` by the component. Splitting a component this way (rather than letting
-it grow) keeps each unit small and unit-testable in isolation.
+A component may also own one or more **co-located imperative helpers** — each in its own file, a stateful
+browser-only class or render module that is neither a pure `core/lib` function nor an Angular service (DI
+would imply the wrong sharing). `sd-bsp-demo` is the reference: it stays a thin shell (lifecycle + the
+`rAF` loop + the DOM/touch-event boundary + the run state) and delegates the heavy lifting. The **pure**
+engine + combat live in `core/lib/bsp-engine` + `core/lib/game` (100 %-tested, no DOM); the **browser-only
+render code** is co-located in the feature — `render.worker.ts` (a worker painting one band of the frame),
+`render-pool.ts` (`createRenderPool` — the `SharedArrayBuffer` multi-worker pool, with a single-threaded
+main-thread fallback), and `load-textures.ts` (decoding the WebP art over the procedural base). For the
+on-screen chrome it instantiates the **shared** presentational helper classes from `shared/game/` with
+`new` — `DoomHud` (the composited image status bar, the burnt-out-developer face one of its zones),
+`WeaponView` (the FPS weapon sprite + fire/reload animation) and `ClimbView` (the two-handed mantle
+overlay) — all built on the shared `loaded-image` loader. One class/module per file, `.spec.ts` alongside
+wherever it is pure or DOM-light (the component + `render-pool` + `load-textures` are coverage-excluded as
+browser-only render code — see `testing.md`).
+Splitting a component this way (rather than letting it grow) keeps each unit small and unit-testable in
+isolation.
 
 ---
 

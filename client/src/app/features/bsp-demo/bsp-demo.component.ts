@@ -5,21 +5,19 @@ import {
   DestroyRef,
   ElementRef,
   inject,
+  input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
+import { I18nService } from '../../core/services/i18n/i18n.service';
 import {
-  barrelTexture,
-  brickTexture,
   buildBsp,
   castFloorCeil,
   castRay,
-  ceilTexture,
   climbTarget,
-  floorTexture,
   locateSubSector,
   mapSprites,
-  metalTexture,
   movePlayer,
   nearestTargetHit,
   renderFrame,
@@ -29,21 +27,25 @@ import {
   type Target,
   type Texture,
 } from '../../core/lib/bsp-engine';
-import { DEMO_LEVEL as LEVEL } from './level-demo'; // TEMP: demo map while L1 'Accueil' render is fixed (swap to ./level-accueil ACCUEIL)
-import { loadAtlasTexture, loadEnvTextures, projectileWidth } from './load-textures';
+import { M1_LOBBY as LEVEL } from './level-m1-lobby'; // M1 "Lobby / Accueil" — episode opener (WIP, built incrementally)
+import {
+  loadAtlasTexture,
+  loadEnvTextures,
+  proceduralTextures,
+  projectileWidth,
+} from './load-textures';
 import { ENEMY_SPECS, type EnemySpec, type EnemyProjectile } from './enemies';
 import {
   AMMO_BOX_SPECS,
-  ARMOR_SPEC,
   EXIT_RADIUS,
   EXIT_SPEC,
-  HEALTH_SPEC,
-  KEYCARD_COLOR,
-  KEYCARD_SPEC,
+  keycardSpec,
   PICKUP_RADIUS,
   PICKUP_TEXTURE_JOBS,
   VITAL_MAX,
+  vitalSpec,
   type AmmoBox,
+  type Keycard,
   type MarkerSpec,
   type Vital,
 } from './pickups';
@@ -59,7 +61,14 @@ import {
 import { WeaponView } from '../../shared/game/weapon-view';
 import { ClimbView } from '../../shared/game/climb-view';
 import { impactEffect, projectileEffect } from '../../shared/game/effects';
-import { ARC_DURATION, stepArsenal, type ChainSpec, type WeaponCombat } from '../../core/lib';
+import { IconComponent } from '../../shared/icon/icon.component';
+import {
+  ARC_DURATION,
+  stepArsenal,
+  type ChainSpec,
+  type KeycardColor,
+  type WeaponCombat,
+} from '../../core/lib';
 
 /** Keys we react to (lower-cased), covering both QWERTY (WASD) and AZERTY (ZQSD) + arrows. */
 const CONTROLS = new Set([
@@ -106,9 +115,12 @@ const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the res
 const RESERVE_START = 50; // starting reserve per ammo type at spawn (then clamped to each type's cap) — pickups top up
 const RESTART_DELAY = 1.2; // seconds after death/win before a click restarts (lets the end feedback settle)
 const HINT_DURATION = 1.8; // seconds a transient objective hint lingers (e.g. "badge requis" at a locked exit)
-const INSPECT_PICKUPS: boolean = true; // TEMP: ammo boxes spin but are never collected, so their art can be inspected up close
+const INSPECT_PICKUPS: boolean = false; // when true, ammo boxes spin but are never collected (art-inspection mode)
+const SPAWN_ENEMIES: boolean = true; // spawn the level's enemies (the live game in the player); /bsp shares the same scene
 const DOOR_OPEN_SPEED = 2.2; // openness units/second (≈0.45s for a door to fully raise)
 const DOOR_TRIGGER_RADIUS = 2.4; // approach this close to a door's trigger point to start it opening
+const SLIDE_OPEN_SPEED = 4; // sliding-glass panel openness units/second (a snappy automatic door)
+const SLIDE_TRIGGER_RADIUS = 4.5; // an automatic sliding door senses you a bit further out than a manual one
 const PROJECTILE_SPAWN_AHEAD = 0.25; // cells ahead of the camera a launched shot spawns — close, so it leaves from the gun
 // Screen-space projectile painting, mirroring the grid's blitEffect so a shot reads as leaving the weapon:
 const PROJECTILE_SCREEN_SCALE = 0.42; // on-screen height = this × effects size, relative to a same-distance wall
@@ -186,7 +198,7 @@ interface Barrel {
   alive: boolean;
 }
 
-/** A placed single-sprite floor marker (the level keycard, the exit sign). */
+/** A placed single-sprite floor marker (the exit sign). */
 interface Marker {
   x: number;
   y: number;
@@ -195,14 +207,14 @@ interface Marker {
 }
 
 /** A locked DOOR — a sector whose `ceilZ` animates between closed (== its floor, impassable) and open. Approach
- *  the trigger point WITH the keycard (if `requiresCard`) to open it; once opened it stays open (an unlock). */
+ *  the trigger point holding the matching badge (if `requiresCard`) to open it; once opened it stays open (an unlock). */
 interface Door {
   readonly sector: number; // the door sector whose ceilZ animates
   readonly triggerX: number; // approach within DOOR_TRIGGER_RADIUS of this point to open
   readonly triggerY: number;
   readonly closedCeilZ: number; // ceilZ when shut (== floorZ → no headroom → physics blocks it)
   readonly openCeilZ: number; // ceilZ when fully open (the sector's authored ceiling)
-  readonly requiresCard: boolean; // a badge-locked door won't open without the keycard
+  readonly requiresCard: KeycardColor | null; // the badge colour needed to open (null = no badge required)
   openness: number; // 0 shut .. 1 open
 }
 
@@ -235,18 +247,29 @@ interface Foe {
 }
 
 /**
- * A dev harness to WALK the BSP software engine: it blits {@link renderFrame}'s framebuffer onto a canvas
- * each animation frame and drives the camera with collisions + step-up. The fist moves/turns; clicking
- * the canvas grabs the pointer for mouse-look. Browser only (the loop starts in `afterNextRender`, so SSG/
- * prerender stays inert). Mounted at `/bsp`.
+ * The BSP software-engine game: it blits {@link renderFrame}'s framebuffer onto a canvas each animation
+ * frame and drives the camera with collisions + step-up. The fist moves/turns; clicking the canvas grabs
+ * the pointer for mouse-look. Browser only (the loop starts in `afterNextRender`, so SSG/prerender stays
+ * inert). Mounted by the player while the game is running — it then fills the player box and exposes the
+ * exit / fullscreen mount interface — and standalone at `/bsp`.
  */
 @Component({
   selector: 'sd-bsp-demo',
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './bsp-demo.component.html',
   styleUrl: './bsp-demo.component.scss',
+  templateUrl: './bsp-demo.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [IconComponent],
 })
 export class BspDemoComponent {
+  /** Asked to leave the game — the player owns the full exit (mode + any fullscreen it entered). */
+  public readonly exited = output<void>();
+  /** Current fullscreen state + whether native fullscreen is available (both driven by the player, which
+   *  owns the Fullscreen API). When available, the in-game button toggles it via `fullscreenToggle`. */
+  public readonly fullscreen = input(false);
+  public readonly fullscreenAvailable = input(false);
+  public readonly fullscreenToggle = output<void>();
+
+  protected readonly i18n = inject(I18nService);
   protected readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   protected readonly hudCanvas = viewChild.required<ElementRef<HTMLCanvasElement>>('hud');
   protected readonly fps = signal(0);
@@ -255,20 +278,15 @@ export class BspDemoComponent {
   protected readonly texturesLoaded = signal(false); // real WebP environment art swapped in for procedural
   protected readonly threads = signal(1); // render workers in use (1 = single-threaded fallback)
 
-  // The played level (`LEVEL` — currently the demo courtyard while L1 "Accueil" render is fixed). Its sectors
+  // The played level (`LEVEL` — L1 "Hangar"). Its sectors
   // are cloned into a MUTABLE per-instance copy so an animated DOOR can raise/lower a sector's `ceilZ` live
   // (the renderer + physics read sector heights straight off `source.sectors` each frame — no recompile needed).
   private readonly sectors = LEVEL.map.sectors.map((s) => ({ ...s }));
   private readonly mapSource: MapSource = { ...LEVEL.map, sectors: this.sectors };
   private readonly map = buildBsp(this.mapSource);
-  private readonly textures = new Map([
-    ['BRICK', brickTexture()],
-    ['METAL', metalTexture()],
-    ['FLOOR', floorTexture()],
-    ['STEP', metalTexture()],
-    ['CEIL', ceilTexture()],
-    ['BARREL', barrelTexture()],
-  ]);
+  // The main-thread render fallback library — the SAME procedural map the workers build, so the two can't
+  // drift (every extended palette key has a fallback until its WebP decodes). WebP swaps in via `setTextures`.
+  private readonly textures = proceduralTextures();
   // The CURRENT internal render resolution (software-rendered each frame, upscaled to the canvas' CSS size
   // with `image-rendering: pixelated`). Mutated by `applyResolution` on fullscreen toggle — windowed renders
   // at WINDOWED_RENDER (cheap, the viewport is only ~960px), fullscreen at FULLSCREEN_RENDER (native 1080p).
@@ -332,13 +350,15 @@ export class BspDemoComponent {
   private pickupFx = 0; // seconds left on the green pickup flash (collected an item)
   private vitals: Vital[] = []; // health/armour pickups on the floor, collected on proximity
   private ammoBoxes: AmmoBox[] = []; // spinning ammo boxes on the floor, collected on proximity
-  private hasKeycard = false; // collected the access badge → the exit unlocks
-  private keycard: Marker | null = null; // the badge on the floor (null once taken)
+  private keycards: Keycard[] = []; // spinning access badges on the floor, collected on proximity
+  private readonly heldCards = new Set<KeycardColor>(); // badge colours collected → unlock the matching doors
   private exit: Marker | null = null; // the exit sign marker (the level goal)
   private won = false; // reached the exit → the level-complete wash, frozen until a click restarts
   private wonClock = 0; // seconds since the win (gates the restart + fades the wash in)
   private hint = 0; // seconds left on a transient HUD hint (e.g. "badge requis" at a locked door)
   private doors: Door[] = []; // animated doors (the badge-locked annex gate); their ceilZ is driven each frame
+  private slides: number[] = []; // per-linedef sliding-door openness (0 shut … 1 retracted); fed to render + physics
+  private slidingDoors: { readonly line: number; readonly mx: number; readonly my: number }[] = [];
   private prevAngle = 0; // last frame's camera angle → the turn rate that aims the HUD face's gaze
   private turnEMA = 0; // smoothed turn rate → a steady gaze through a turn (no per-frame repaint flicker)
   private weaponIndex = 0;
@@ -394,7 +414,9 @@ export class BspDemoComponent {
 
           return;
         }
-        void canvasEl.requestPointerLock();
+        // `requestPointerLock` rejects with a SecurityError when re-locked too soon after an Escape (a browser
+        // rate-limit); it's harmless (the next click locks), so swallow it rather than leak an uncaught rejection.
+        Promise.resolve(canvasEl.requestPointerLock()).catch(() => undefined);
       };
       const onMouse = (event: MouseEvent): void => {
         if (document.pointerLockElement !== canvasEl || this.mantle !== null) {
@@ -408,7 +430,7 @@ export class BspDemoComponent {
       };
 
       const onResize = (): void => {
-        this.resizeHud();
+        // (The HUD backing store is sized by its ResizeObserver below; here we only queue the render resolution.)
         // Fullscreen → render at full 1080p (the canvas fills the screen); windowed → the cheaper res. Queue it
         // for the loop (a live rebuild mid-render would tear down the pool the frame is still painting into).
         const target = document.fullscreenElement !== null ? FULLSCREEN_RENDER : WINDOWED_RENDER;
@@ -470,10 +492,16 @@ export class BspDemoComponent {
       window.addEventListener('resize', onResize);
       document.addEventListener('fullscreenchange', onResize);
       this.resizeHud(); // size the HUD bar's backing store now the canvas is laid out
+      // …but on first paint the canvas may not be measurable yet (0-size behind the loading screen), so a
+      // one-shot `resizeHud` can no-op and leave the HUD blank until a manual resize. A ResizeObserver sizes it
+      // the instant it IS laid out, and again on every fullscreen/window resize — a robust single owner.
+      const hudResize = new ResizeObserver(() => this.resizeHud());
+
+      hudResize.observe(this.hudCanvas().nativeElement);
 
       // Multi-thread when the platform allows it (SharedArrayBuffer + cross-origin isolation); otherwise the
       // pool is null and we render single-threaded on the main thread. Either way the frame lands in `image`.
-      const pool = createRenderPool(this.config);
+      const pool = createRenderPool(this.config, this.mapSource);
       let disposed = false;
 
       this.threads.set(pool?.threads ?? 1);
@@ -500,7 +528,7 @@ export class BspDemoComponent {
 
         if (activePool !== null) {
           return activePool
-            .render(this.camera, sprites)
+            .render(this.camera, sprites, this.sectors, this.slides) // live sector heights + door slides → workers
             .then(() => activeImage.data.set(activePool.frame)); // workers → shared buf → blit
         }
         renderFrame(
@@ -513,6 +541,7 @@ export class BspDemoComponent {
           0,
           this.config.height,
           sprites,
+          this.slides,
         );
 
         return Promise.resolve();
@@ -617,6 +646,7 @@ export class BspDemoComponent {
         window.removeEventListener('wheel', onWheel);
         window.removeEventListener('resize', onResize);
         document.removeEventListener('fullscreenchange', onResize);
+        hudResize.disconnect();
       });
     });
   }
@@ -745,6 +775,7 @@ export class BspDemoComponent {
       PLAYER_RADIUS,
       STEP_MAX,
       HEADROOM,
+      this.slides,
     );
 
     this.camera.x = moved.x;
@@ -912,7 +943,10 @@ export class BspDemoComponent {
       });
     }
     for (const v of this.vitals) {
-      // A grounded vitals billboard (coffee / RAM stick) — a single frame, depth-occluded by the z-buffer pass.
+      // A grounded vitals billboard (health medkit/plant · mental figurine/card) — a turntable when `spin`,
+      // else a static frame-0 billboard; depth-occluded by the z-buffer pass.
+      const col = v.spec.spin ? Math.floor(v.age / (v.spec.frameMs / 1000)) % v.spec.frames : 0;
+
       sprites.push({
         x: v.x,
         y: v.y,
@@ -920,6 +954,10 @@ export class BspDemoComponent {
         tex: v.spec.texName,
         width: v.spec.worldHeight * v.spec.aspect,
         height: v.spec.worldHeight,
+        cols: v.spec.frames,
+        rows: 1,
+        col,
+        row: 0,
       });
     }
     for (const b of this.ammoBoxes) {
@@ -939,18 +977,34 @@ export class BspDemoComponent {
         row: 0,
       });
     }
-    for (const marker of [this.keycard, this.exit]) {
-      if (marker !== null) {
-        // The keycard / exit sign — a grounded single-frame billboard (the keycard drops once collected).
-        sprites.push({
-          x: marker.x,
-          y: marker.y,
-          z: marker.z,
-          tex: marker.spec.texName,
-          width: marker.spec.worldHeight * marker.spec.aspect,
-          height: marker.spec.worldHeight,
-        });
-      }
+    for (const k of this.keycards) {
+      // A spinning access badge (blue employee / yellow manager / red director): advance its turntable frame
+      // from its age (the quad never rotates) — mirrors the vitals/ammo turntables; drops once collected.
+      const col = Math.floor(k.age / (k.spec.frameMs / 1000)) % k.spec.frames;
+
+      sprites.push({
+        x: k.x,
+        y: k.y,
+        z: k.z,
+        tex: k.spec.texName,
+        width: k.spec.worldHeight * k.spec.aspect,
+        height: k.spec.worldHeight,
+        cols: k.spec.frames,
+        rows: 1,
+        col,
+        row: 0,
+      });
+    }
+    if (this.exit !== null) {
+      // The exit sign — a grounded single-frame billboard (the level goal).
+      sprites.push({
+        x: this.exit.x,
+        y: this.exit.y,
+        z: this.exit.z,
+        tex: this.exit.spec.texName,
+        width: this.exit.spec.worldHeight * this.exit.spec.aspect,
+        height: this.exit.spec.worldHeight,
+      });
     }
     for (const e of this.stressEnemies) {
       sprites.push({ x: e.x, y: e.y, z: e.z, tex: 'BARREL', width: 0.8, height: 1.7 }); // synthetic enemy billboard
@@ -962,6 +1016,9 @@ export class BspDemoComponent {
   /** Spawn the level's enemies (once the atlases have decoded) at their authored points, each seated on its
    *  sector floor: lobby Drones, a corridor Husk, a Guard on the badge dais, a Consultant in the atrium. */
   private spawnEnemies(): void {
+    if (!SPAWN_ENEMIES) {
+      return;
+    }
     for (const { spec, x, y } of LEVEL.enemies) {
       this.enemies.push({
         spec,
@@ -993,12 +1050,24 @@ export class BspDemoComponent {
     return LEVEL.map.sectors[locateSubSector(this.map.root, x, y).sector].floorZ;
   }
 
-  /** Place the level's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo) + the objective
-   *  markers (keycard, exit), each seated on its sector floor. Coordinates come from the level (`LEVEL`). */
+  /** Place the level's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, spinning access
+   *  badges) + the exit marker, each seated on its sector floor. Coordinates come from the level (`LEVEL`). */
   private spawnPickups(): void {
     this.vitals = [
-      ...LEVEL.health.map(([x, y]) => ({ spec: HEALTH_SPEC, x, y, z: this.floorAt(x, y) })),
-      ...LEVEL.armor.map(([x, y]) => ({ spec: ARMOR_SPEC, x, y, z: this.floorAt(x, y) })),
+      ...LEVEL.health.map(([x, y, size]) => ({
+        spec: vitalSpec('health', size),
+        x,
+        y,
+        z: this.floorAt(x, y),
+        age: 0,
+      })),
+      ...LEVEL.armor.map(([x, y, size]) => ({
+        spec: vitalSpec('armor', size),
+        x,
+        y,
+        z: this.floorAt(x, y),
+        age: 0,
+      })),
     ];
     this.ammoBoxes = AMMO_BOX_SPECS.map((spec, i) => ({
       spec,
@@ -1007,10 +1076,15 @@ export class BspDemoComponent {
       z: this.floorAt(LEVEL.ammo[i][0], LEVEL.ammo[i][1]),
       age: 0,
     }));
-    const [kx, ky] = LEVEL.keycard;
+    this.keycards = LEVEL.keycards.map(([x, y, color]) => ({
+      spec: keycardSpec(color),
+      x,
+      y,
+      z: this.floorAt(x, y),
+      age: 0,
+    }));
     const [ex, ey] = LEVEL.exit;
 
-    this.keycard = { spec: KEYCARD_SPEC, x: kx, y: ky, z: this.floorAt(kx, ky) };
     this.exit = { spec: EXIT_SPEC, x: ex, y: ey, z: this.floorAt(ex, ey) };
   }
 
@@ -1018,6 +1092,7 @@ export class BspDemoComponent {
    *  VITAL_MAX), a box tops up its OWN ammo type's reserve (capped, KEPT if the type is already full). */
   private stepPickups(dt: number): void {
     this.vitals = this.vitals.filter((v) => {
+      v.age += dt; // advance the turntable spin whether or not it is collected
       if (Math.hypot(v.x - this.camera.x, v.y - this.camera.y) >= PICKUP_RADIUS) {
         return true; // out of reach — keep it
       }
@@ -1054,19 +1129,22 @@ export class BspDemoComponent {
     this.stepObjective(dt);
   }
 
-  /** The level objective: collect the keycard on proximity (→ the HUD card bay; it unlocks the annex DOOR), and
-   *  finish the level on reaching the exit. The badge gate is the locked door, so the exit itself just wins. */
+  /** The level objective: spin + collect each access badge on proximity (→ the HUD card bay; each unlocks its
+   *  colour-matched DOOR), and finish the level on reaching the exit. The badge gate is the locked door, so the
+   *  exit itself just wins. */
   private stepObjective(dt: number): void {
     this.hint = Math.max(0, this.hint - dt);
-    if (
-      this.keycard !== null &&
-      Math.hypot(this.keycard.x - this.camera.x, this.keycard.y - this.camera.y) < PICKUP_RADIUS
-    ) {
-      this.keycard = null;
-      this.hasKeycard = true;
-      this.hud.addCard(KEYCARD_COLOR);
+    this.keycards = this.keycards.filter((k) => {
+      k.age += dt; // advance the badge turntable spin whether or not it is collected
+      if (Math.hypot(k.x - this.camera.x, k.y - this.camera.y) >= PICKUP_RADIUS) {
+        return true; // out of reach — keep it
+      }
+      this.heldCards.add(k.spec.color);
+      this.hud.addCard(k.spec.color); // light its card in the HUD bay
       this.pickupFx = PICKUP_FX_DURATION;
-    }
+
+      return false; // collected — drop it
+    });
     if (
       this.exit !== null &&
       Math.hypot(this.exit.x - this.camera.x, this.exit.y - this.camera.y) < EXIT_RADIUS
@@ -1080,11 +1158,10 @@ export class BspDemoComponent {
   /** Set up the level's door(s) and shut them — the badge-locked gate (`LEVEL.door`) between the lobby and
    *  the atrium, so the atrium + exit sit behind the badge: grab it on the dais, open this door, descend. */
   private spawnDoors(): void {
-    const d = LEVEL.door;
-    const sector = LEVEL.map.sectors[d.sector];
+    this.doors = LEVEL.doors.map((d) => {
+      const sector = LEVEL.map.sectors[d.sector];
 
-    this.doors = [
-      {
+      return {
         sector: d.sector,
         triggerX: d.triggerX,
         triggerY: d.triggerY,
@@ -1092,9 +1169,21 @@ export class BspDemoComponent {
         openCeilZ: sector.ceilZ, // the authored open ceiling
         requiresCard: d.requiresCard,
         openness: 0,
-      },
-    ];
+      };
+    });
     this.applyDoors(); // stamp the shut ceilZ now
+
+    // Sliding glass doors are proximity-driven + auto-closing; index them (line + midpoint) + reset openness.
+    this.slides = LEVEL.map.linedefs.map(() => 0);
+    this.slidingDoors = [];
+    LEVEL.map.linedefs.forEach((l, line) => {
+      if (l.sliding === true) {
+        const a = LEVEL.map.vertices[l.v1];
+        const b = LEVEL.map.vertices[l.v2];
+
+        this.slidingDoors.push({ line, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 });
+      }
+    });
   }
 
   /** Drive each door's animation: a player in trigger range (holding the badge, for a locked door) opens it; a
@@ -1104,7 +1193,7 @@ export class BspDemoComponent {
       const near =
         Math.hypot(door.triggerX - this.camera.x, door.triggerY - this.camera.y) <
         DOOR_TRIGGER_RADIUS;
-      const mayOpen = !door.requiresCard || this.hasKeycard;
+      const mayOpen = door.requiresCard === null || this.heldCards.has(door.requiresCard);
 
       if (near && mayOpen) {
         door.openness = Math.min(1, door.openness + DOOR_OPEN_SPEED * dt);
@@ -1113,6 +1202,23 @@ export class BspDemoComponent {
       }
     }
     this.applyDoors();
+    this.stepSliding(dt);
+  }
+
+  /** Sliding glass doors: proximity-driven + AUTO-CLOSING. Each animates toward open when the player is within
+   *  range and back toward shut when they leave; `this.slides[line]` feeds both the renderer + physics. */
+  private stepSliding(dt: number): void {
+    const step = SLIDE_OPEN_SPEED * dt;
+
+    for (const s of this.slidingDoors) {
+      const target =
+        Math.hypot(s.mx - this.camera.x, s.my - this.camera.y) < SLIDE_TRIGGER_RADIUS ? 1 : 0;
+
+      this.slides[s.line] =
+        target > this.slides[s.line]
+          ? Math.min(target, this.slides[s.line] + step)
+          : Math.max(target, this.slides[s.line] - step);
+    }
   }
 
   /** Write each door's current ceilZ into the live sector heights — the renderer + physics read these straight
@@ -1344,7 +1450,7 @@ export class BspDemoComponent {
     this.deadClock = 0;
     this.won = false;
     this.wonClock = 0;
-    this.hasKeycard = false;
+    this.heldCards.clear();
     this.hint = 0;
     this.hud.clearCards();
     this.hp = 100;

@@ -126,6 +126,131 @@ describe('renderFrame', () => {
     expect(foundSky).toBe(true);
   });
 
+  it('washes a cool GLASS tint over a see-through pane (blended over the back sector)', () => {
+    const tex = (sector: number): SideDef => ({
+      sector,
+      xOffset: 0,
+      yOffset: 0,
+      upperTex: 'BRICK',
+      lowerTex: 'BRICK',
+      middleTex: 'BRICK',
+    });
+    // Room A (near, y[0..8]) → a shared edge at y=8 → Room B (back, y[8..16]); camera in A looking +y at it.
+    const corridor = (glass: boolean): MapSource => ({
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 8, y: 0 },
+        { x: 0, y: 8 },
+        { x: 8, y: 8 },
+        { x: 0, y: 16 },
+        { x: 8, y: 16 },
+      ],
+      sectors: [
+        { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 220 }, // 0 = A (near)
+        { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 220 }, // 1 = B (back)
+      ],
+      linedefs: [
+        { v1: 0, v2: 2, front: tex(0), back: null }, // A west
+        { v1: 2, v2: 3, front: tex(0), back: tex(1), glass }, // A|B shared (glass?)
+        { v1: 3, v2: 1, front: tex(0), back: null }, // A east
+        { v1: 1, v2: 0, front: tex(0), back: null }, // A south
+        { v1: 2, v2: 4, front: tex(1), back: null }, // B west
+        { v1: 4, v2: 5, front: tex(1), back: null }, // B north
+        { v1: 5, v2: 3, front: tex(1), back: null }, // B east
+      ],
+      things: [],
+    });
+    const cam: Camera = { x: 4, y: 2, angle: Math.PI / 2, z: 1.6 };
+    const plain = renderFrame(buildBsp(corridor(false)), cam, CONFIG, TEX);
+    const glassed = renderFrame(buildBsp(corridor(true)), cam, CONFIG, TEX);
+
+    // The tint pass ran → the frames differ ...
+    expect(Array.from(glassed)).not.toEqual(Array.from(plain));
+    // ... and the difference is a COOL shift: somewhere the glazed pixel's (b − r) is clearly higher.
+    let cooler = false;
+
+    for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+      const dPlain = plain[p * 4 + 2] - plain[p * 4];
+      const dGlass = glassed[p * 4 + 2] - glassed[p * 4];
+
+      if (dGlass > dPlain + 12) {
+        cooler = true;
+        break;
+      }
+    }
+    expect(cooler).toBe(true);
+  });
+
+  it('retracts a SLIDING glass panel as it opens (more open → less of the pane is tinted)', () => {
+    const tex = (sector: number): SideDef => ({
+      sector,
+      xOffset: 0,
+      yOffset: 0,
+      upperTex: 'BRICK',
+      lowerTex: 'BRICK',
+      middleTex: 'BRICK',
+    });
+    const doorMap = buildBsp({
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 8, y: 0 },
+        { x: 0, y: 8 },
+        { x: 8, y: 8 },
+        { x: 0, y: 16 },
+        { x: 8, y: 16 },
+      ],
+      sectors: [
+        { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 220 },
+        { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 220 },
+      ],
+      linedefs: [
+        { v1: 0, v2: 2, front: tex(0), back: null },
+        { v1: 2, v2: 3, front: tex(0), back: tex(1), glass: true, sliding: true }, // index 1 = sliding glass door
+        { v1: 3, v2: 1, front: tex(0), back: null },
+        { v1: 1, v2: 0, front: tex(0), back: null },
+        { v1: 2, v2: 4, front: tex(1), back: null },
+        { v1: 4, v2: 5, front: tex(1), back: null },
+        { v1: 5, v2: 3, front: tex(1), back: null },
+      ],
+      things: [],
+    });
+    const cam: Camera = { x: 4, y: 2, angle: Math.PI / 2, z: 1.6 };
+    const at = (open: number): Uint8ClampedArray =>
+      renderFrame(doorMap, cam, CONFIG, TEX, undefined, undefined, 0, CONFIG.height, undefined, [
+        0,
+        open,
+        0,
+        0,
+        0,
+        0,
+        0,
+      ]);
+    // openness 1 → the panel is fully retracted (no pane, no tint); use it as the baseline.
+    const openFull = at(1);
+    const tintedVs = (buf: Uint8ClampedArray): number => {
+      let n = 0;
+
+      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+        const i = p * 4;
+
+        if (
+          buf[i] !== openFull[i] ||
+          buf[i + 1] !== openFull[i + 1] ||
+          buf[i + 2] !== openFull[i + 2]
+        ) {
+          n++;
+        }
+      }
+
+      return n;
+    };
+
+    expect(tintedVs(at(0))).toBeGreaterThan(tintedVs(at(0.5))); // shut tints the whole pane; half-open, half of it
+    expect(tintedVs(at(0.5))).toBeGreaterThan(0); // half-open still tints part of the pane
+    // No `slides` array at all → the sliding pane defaults to shut (exercises the `?? 0` fallback).
+    expect(tintedVs(renderFrame(doorMap, cam, CONFIG, TEX))).toBeGreaterThan(0);
+  });
+
   it('textures the whole view — ceiling, walls and floor are all cast/sampled (no flat bands)', () => {
     const buf = renderFrame(MAP, { x: 4, y: 5, angle: 0.3, z: 1.6 }, CONFIG, TEX);
 
