@@ -60,6 +60,44 @@ describe('castRay', () => {
   });
 });
 
+describe('castRay — glass stops a projectile but not a sight line', () => {
+  // A room x[0..10] with a two-sided divider at x=7 (linedef index 4) + the far wall at x=10.
+  const room = (flags: { glass?: boolean; sliding?: boolean }): MapSource => ({
+    sectors: [{ floorZ: 0, ceilZ: 3, floorTex: 'f', ceilTex: 'c', light: 200 }],
+    things: [],
+    vertices: [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+      { x: 7, y: 0 },
+      { x: 7, y: 10 },
+    ],
+    linedefs: [
+      { v1: 0, v2: 1, front: side, back: null },
+      { v1: 1, v2: 2, front: side, back: null }, // far wall x=10 (the fallback hit)
+      { v1: 2, v2: 3, front: side, back: null },
+      { v1: 3, v2: 0, front: side, back: null },
+      { v1: 4, v2: 5, front: side, back: side, ...flags }, // index 4 = the x=7 divider
+    ],
+  });
+
+  it('a sight line (blockGlass off) passes through glass to the far wall', () => {
+    expect(castRay(buildBsp(room({ glass: true })), 5, 5, 1, 0, 100)?.x).toBeCloseTo(10);
+  });
+
+  it('a projectile (blockGlass on) stops at the glass', () => {
+    expect(castRay(buildBsp(room({ glass: true })), 5, 5, 1, 0, 100, true)?.x).toBeCloseTo(7);
+  });
+
+  it('a projectile passes an OPEN sliding door but stops at a shut one', () => {
+    const map = buildBsp(room({ glass: true, sliding: true }));
+
+    expect(castRay(map, 5, 5, 1, 0, 100, true, [0, 0, 0, 0, 1])?.x).toBeCloseTo(10); // index 4 open → through
+    expect(castRay(map, 5, 5, 1, 0, 100, true, [0, 0, 0, 0, 0])?.x).toBeCloseTo(7); // shut → stops
+  });
+});
+
 describe('nearestTargetHit', () => {
   // Shooting from the origin straight along +x.
   const A: Target = { x: 5, y: 0, radius: 0.5 }; // dead ahead, in range

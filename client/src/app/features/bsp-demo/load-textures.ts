@@ -42,6 +42,7 @@ export function proceduralTextures(): Map<string, Texture> {
     ['SLAB', floorTexture()],
     ['LOBBY_FLOOR', floorTexture()],
     ['CITY', brickTexture()],
+    ['DOOR_GLASS', metalTexture()], // sliding glass door leaf (WebP carries alpha: opaque frame + clear glass)
     // Themed walls (per-zone identity for the episode).
     ['LOBBY', brickTexture()],
     ['KITCHEN', brickTexture()],
@@ -94,6 +95,7 @@ const ENV_ASSETS: Readonly<Record<string, { url: string; worldSize: number }>> =
   SLAB: { url: '/game/textures/floor_slab_512.webp', worldSize: 4 }, // sub-basement concrete
   LOBBY_FLOOR: { url: '/game/textures/floor_lobby_512.webp', worldSize: 4 }, // bright lobby terrazzo
   CITY: { url: '/game/textures/backdrop_city_512.webp', worldSize: 8 }, // exterior cityscape backdrop — worldSize 8 = an 8-tall/8-wide far wall shows exactly ONE copy, aligned to TEX_ANCHOR (64) at z0..z8 (no tiling)
+  DOOR_GLASS: { url: '/game/textures/door_glass_512.webp', worldSize: 4 }, // sliding glass door leaf; ALPHA = clear glass, opaque = alu frame + handle (mapped per-panel by the glass pass, not tiled)
   // Themed walls — per-zone identity for the episode.
   LOBBY: { url: '/game/textures/wall_lobby_512.webp', worldSize: 4 }, // reception (M1)
   KITCHEN: { url: '/game/textures/wall_kitchen_512.webp', worldSize: 4 }, // cafeteria (M5)

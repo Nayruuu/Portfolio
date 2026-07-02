@@ -92,7 +92,7 @@ export class MapBuilder {
     y2: number,
     front: number,
     back: number,
-    tex = 'GLASS_INT',
+    tex = 'DOOR_GLASS',
   ): void {
     this.lines.push({
       v1: this.vertex(x1, y1),

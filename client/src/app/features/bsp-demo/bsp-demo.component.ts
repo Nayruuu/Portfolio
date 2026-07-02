@@ -120,7 +120,7 @@ const SPAWN_ENEMIES: boolean = true; // spawn the level's enemies (the live game
 const DOOR_OPEN_SPEED = 2.2; // openness units/second (≈0.45s for a door to fully raise)
 const DOOR_TRIGGER_RADIUS = 2.4; // approach this close to a door's trigger point to start it opening
 const SLIDE_OPEN_SPEED = 4; // sliding-glass panel openness units/second (a snappy automatic door)
-const SLIDE_TRIGGER_RADIUS = 4.5; // an automatic sliding door senses you a bit further out than a manual one
+const SLIDE_TRIGGER_RADIUS = 4; // an automatic sliding door senses you as you approach (then it stays open)
 const PROJECTILE_SPAWN_AHEAD = 0.25; // cells ahead of the camera a launched shot spawns — close, so it leaves from the gun
 // Screen-space projectile painting, mirroring the grid's blitEffect so a shot reads as leaving the weapon:
 const PROJECTILE_SCREEN_SCALE = 0.42; // on-screen height = this × effects size, relative to a same-distance wall
@@ -1205,8 +1205,8 @@ export class BspDemoComponent {
     this.stepSliding(dt);
   }
 
-  /** Sliding glass doors: proximity-driven + AUTO-CLOSING. Each animates toward open when the player is within
-   *  range and back toward shut when they leave; `this.slides[line]` feeds both the renderer + physics. */
+  /** Sliding glass doors: proximity-driven + AUTO-CLOSING (a real automatic door). Each animates toward open
+   *  when the player is within range and back toward shut when they leave; `this.slides` feeds render + physics. */
   private stepSliding(dt: number): void {
     const step = SLIDE_OPEN_SPEED * dt;
 
@@ -1305,6 +1305,7 @@ export class BspDemoComponent {
       PLAYER_RADIUS,
       STEP_MAX,
       HEADROOM,
+      this.slides, // respect open sliding doors (else foes stay stuck behind them)
     );
 
     e.walkDist += Math.hypot(moved.x - e.x, moved.y - e.y);
@@ -1350,8 +1351,8 @@ export class BspDemoComponent {
     for (const shot of this.enemyShots) {
       const step = shot.proj.speed * dt;
 
-      if (castRay(this.map, shot.x, shot.y, shot.dx, shot.dy, step) !== null) {
-        shot.alive = false; // struck a wall
+      if (castRay(this.map, shot.x, shot.y, shot.dx, shot.dy, step, true, this.slides) !== null) {
+        shot.alive = false; // struck a wall (or glass / a shut sliding door)
         continue;
       }
       shot.x += shot.dx * step;
@@ -1411,7 +1412,17 @@ export class BspDemoComponent {
         continue;
       }
       const e = this.enemies[i];
-      const moved = movePlayer(this.map, e.x, e.y, p.x, p.y, PLAYER_RADIUS, STEP_MAX, HEADROOM);
+      const moved = movePlayer(
+        this.map,
+        e.x,
+        e.y,
+        p.x,
+        p.y,
+        PLAYER_RADIUS,
+        STEP_MAX,
+        HEADROOM,
+        this.slides,
+      );
 
       e.x = moved.x;
       e.y = moved.y;
@@ -1525,6 +1536,7 @@ export class BspDemoComponent {
           PLAYER_RADIUS,
           STEP_MAX,
           HEADROOM,
+          this.slides,
         );
 
         e.x = moved.x;
@@ -1633,7 +1645,7 @@ export class BspDemoComponent {
   private stepProjectiles(dt: number): void {
     for (const p of this.projectiles) {
       const step = p.speed * dt;
-      const wall = castRay(this.map, p.x, p.y, p.dx, p.dy, step);
+      const wall = castRay(this.map, p.x, p.y, p.dx, p.dy, step, true, this.slides); // glass/shut door stops shots
       const reach = wall === null ? step : Math.min(step, wall.dist);
       // Floor/ceiling collision: a shot diving at the ground (or into a step that rises above it) bursts there
       // instead of sailing on under the world — capped by the wall, so it can't reach a floor behind a wall.

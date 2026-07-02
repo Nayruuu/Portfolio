@@ -112,11 +112,11 @@ function buildMap(): { map: MapSource; doorSector: number } {
   }); // glass-fronted entry ATRIUM (spawn), 8 tall — matches the exterior so the full city backdrop shows
   const ENTR = b.sector({
     floorZ: 0,
-    ceilZ: 3.0,
+    ceilZ: 4.0,
     floorTex: 'LOBBY_FLOOR',
     ceilTex: 'CEIL',
     light: 236,
-  }); // automatic sliding glass entrance door
+  }); // automatic sliding glass entrance (z0..4) — a normal door height, transom above to the atrium
   const EXT = b.sector({
     floorZ: 0,
     ceilZ: 8,
@@ -138,7 +138,7 @@ function buildMap(): { map: MapSource; doorSector: number } {
   // --- automatic glass ENTRANCE door (ENTR, x20..28 y120..124) -------------------------------------
   b.solid(20, 120, 20, 124, ENTR, 'GLASS_INT'); // west
   b.solid(28, 124, 28, 120, ENTR, 'GLASS_INT'); // east
-  b.slidingDoor(20, 124, 28, 124, ENTR, PORCH, 'GLASS_INT'); // automatic SLIDING GLASS entrance (porch → interior)
+  b.slidingDoor(20, 124, 28, 124, ENTR, PORCH, 'DOOR_GLASS'); // automatic SLIDING GLASS entrance (porch → interior)
 
   // --- glass-fronted PORCH octagon (spawn, x16..32 y124..138) — the frontage windows ---------------
   b.solid(16, 130, 16, 134, PORCH, 'GLASS_INT'); // west window

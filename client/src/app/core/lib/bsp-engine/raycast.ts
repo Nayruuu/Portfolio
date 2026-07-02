@@ -1,3 +1,4 @@
+import { SLIDE_OPEN } from './physics';
 import type { CompiledMap } from './types';
 
 /** Where a hitscan ray met the world: the forward distance + the world point. */
@@ -11,8 +12,12 @@ export interface RayHit {
  * Cast a hitscan ray from `(ox, oy)` along the UNIT direction `(dx, dy)` and return the nearest solid wall
  * it strikes within `maxDist`, or `null` (it reached max range through open space). Only one-sided linedefs
  * (`back === null` — the solid edges of the world) block the ray; two-sided portals (steps, doorways) let a
- * shot pass, which is what we want for a chest-height bullet. The hit drives a weapon's impact + caps how
- * far an enemy can be shot along the same ray.
+ * shot pass, which is what we want for a chest-height bullet (and for line-of-sight through glass). The hit
+ * drives a weapon's impact + caps how far an enemy can be shot along the same ray.
+ *
+ * With `blockGlass` (a flying PROJECTILE, not a sight line), a two-sided line also stops the ray when it is
+ * solid GLASS — a glass window, or a SLIDING door still shut (`slides[i] < SLIDE_OPEN`; an open door lets it
+ * through). Sight lines leave `blockGlass` false so foes can still see (and be seen) through the glass.
  */
 export function castRay(
   map: CompiledMap,
@@ -21,13 +26,25 @@ export function castRay(
   dx: number,
   dy: number,
   maxDist: number,
+  blockGlass = false,
+  slides?: readonly number[],
 ): RayHit | null {
   let best = maxDist;
   let hit: RayHit | null = null;
+  const lines = map.source.linedefs;
 
-  for (const line of map.source.linedefs) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
     if (line.back !== null) {
-      continue; // a two-sided portal does not stop the ray
+      const solidGlass =
+        blockGlass &&
+        line.glass === true &&
+        (line.sliding !== true || (slides?.[i] ?? 0) < SLIDE_OPEN);
+
+      if (!solidGlass) {
+        continue; // a two-sided portal (or an open glass door / a sight line) does not stop the ray
+      }
     }
     const a = map.source.vertices[line.v1];
     const b = map.source.vertices[line.v2];

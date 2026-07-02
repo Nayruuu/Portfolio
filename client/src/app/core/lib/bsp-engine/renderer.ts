@@ -302,14 +302,30 @@ function castSky(
   }
 }
 
+/** Per-column record of the visible glass a frame produced, consumed by the deferred {@link blendGlass} pass. */
+interface GlassPanes {
+  readonly top: Int32Array; // the CLIPPED (on-screen) span to paint, per column
+  readonly bot: Int32Array; // `bot < top` = no glass in that column (default -1) or off this row band
+  readonly vTop: Int32Array; // the UNCLIPPED door top/bottom (may run off-screen) — the leaf texture's V anchor
+  readonly vBot: Int32Array;
+  readonly tu: Float32Array; // a sliding leaf's texture column here (−1 = a plain window → flat tint)
+  readonly shade: Float32Array; // per-column shade for a sliding leaf's opaque frame texels
+  readonly depth: Float32Array; // the leaf's wall distance → z-buffered at opaque frame texels so sprites occlude
+  tex: Texture | null; // the sliding door leaf texture (its alpha = clear glass); null if only plain windows
+}
+
 /**
- * Deferred GLASS pass: wash a cool translucent tint over each recorded glass-pane span (a see-through
- * two-sided glass line's opening), run AFTER the wall pass drew the back sector through it — the single
- * front-to-back pass can't blend over content it hasn't drawn yet. `top[x]`/`bot[x]` are the pane's span in
- * column `x`; `bot` defaults to -1 (`bot < top` = no glass there, or the span is off this worker's row band).
+ * Deferred GLASS pass, run AFTER the wall pass drew the back sector through each opening (the single
+ * front-to-back pass can't blend over content it hasn't drawn yet). A PLAIN window column just gets a cool
+ * translucent tint. A SLIDING-DOOR leaf column samples the leaf texture per pixel: an opaque texel stamps the
+ * aluminium frame / handle; a clear (alpha) texel is see-through glass and gets the same tint.
  */
-function blendGlass(buf32: Uint32Array, dims: Dims, top: Int32Array, bot: Int32Array): void {
+function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: GlassPanes): void {
   const { width, rowStart, rowEnd } = dims;
+  const { top, bot, vTop, vBot, tu, shade, depth, tex } = panes;
+  const tw = tex?.width ?? 0;
+  const th = tex?.height ?? 0;
+  const px = tex?.pixels ?? null;
 
   for (let x = 0; x < width; x++) {
     const y0 = Math.max(rowStart, top[x]);
@@ -318,15 +334,41 @@ function blendGlass(buf32: Uint32Array, dims: Dims, top: Int32Array, bot: Int32A
     if (y1 < y0) {
       continue;
     }
+    const doorTex = px !== null && tu[x] >= 0 ? px : null; // a sliding leaf column samples this; null = plain window
+    const col = doorTex !== null ? Math.min(tw - 1, tu[x] | 0) : 0;
+    const vt = vTop[x]; // anchor the texture V to the FULL door extent (may be off-screen), not the clipped span,
+    const vh = vBot[x] - vt; // so the leaf keeps world scale + its top/bottom run off-screen when you're up close
+    const sh = shade[x];
     let i = y0 * width + x;
 
     for (let y = y0; y <= y1; y++) {
-      const c = buf32[i];
-      const r = (((c & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_R;
-      const g = ((((c >> 8) & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_G;
-      const b = ((((c >> 16) & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_B;
+      let framed = false;
+      let cr = 0;
+      let cg = 0;
+      let cb = 0;
 
-      buf32[i] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+      if (doorTex !== null) {
+        const v = Math.min(th - 1, Math.max(0, (((y - vt) / vh) * th) | 0));
+        const ti = (v * tw + col) << 2;
+
+        if (doorTex[ti + 3] >= 128) {
+          framed = true; // an opaque aluminium frame / handle texel
+          cr = (doorTex[ti] * sh) | 0;
+          cg = (doorTex[ti + 1] * sh) | 0;
+          cb = (doorTex[ti + 2] * sh) | 0;
+        }
+      }
+      if (framed) {
+        buf32[i] = (0xff000000 | (cb << 16) | (cg << 8) | cr) >>> 0;
+        zbuf[i] = depth[x]; // the frame is opaque at the leaf's depth → sprites behind it are now occluded
+      } else {
+        const c = buf32[i]; // clear glass (plain window, or a leaf's alpha texel) → cool see-through tint
+        const r = (((c & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_R;
+        const g = ((((c >> 8) & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_G;
+        const b = ((((c >> 16) & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_B;
+
+        buf32[i] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+      }
       i += width;
     }
   }
@@ -471,7 +513,16 @@ export function renderFrame(
   // washes a tint over it (deferred — the back sector must be drawn through the opening first). Only allocated
   // when the map has glass, so glass-free levels pay nothing. `bot` defaults to -1 = "no glass in this column".
   const glass = map.source.linedefs.some((l) => l.glass === true)
-    ? { top: new Int32Array(width), bot: new Int32Array(width).fill(-1) }
+    ? {
+        top: new Int32Array(width), // CLIPPED (on-screen) span to actually paint
+        bot: new Int32Array(width).fill(-1),
+        vTop: new Int32Array(width), // UNCLIPPED door top/bottom (may be off-screen) → the texture-V reference,
+        vBot: new Int32Array(width), // so a leaf's art keeps world scale + runs OFF-SCREEN when you're up close
+        tu: new Float32Array(width).fill(-1), // sliding-leaf texture column (−1 = plain window → flat tint)
+        shade: new Float32Array(width), // per-column shade for a sliding leaf's opaque frame texels
+        depth: new Float32Array(width), // the leaf's wall distance → written to the z-buffer at opaque frame texels
+        tex: null as Texture | null, // the sliding door leaf texture (alpha = glass), set on the first leaf column
+      }
     : null;
 
   eachSegFrontToBack(map.root, camera, (seg) => {
@@ -619,20 +670,41 @@ export function renderFrame(
 
       // GLASS: record this pane's see-through opening (between the neighbour's ceiling and floor, clipped to
       // the column's open window) so `blendGlass` can wash a tint over it once the back sector is drawn. A
-      // SLIDING door only records the still-COVERED fraction — the panel retracts toward v1 as it opens, so
-      // columns past `(1 − openness) × linedef length` are clear (no pane).
+      // SLIDING door is a DOUBLE door — two panels meeting at the centre, each retracting to its own side —
+      // so only the two still-covered edge bands are recorded; the clear gap grows from the middle outward.
       if (line.glass && glass) {
-        let covered = true;
+        let covered = line.sliding !== true; // a plain window always records; a sliding leaf only where covered
+        let leafU = -1; // the door-leaf texture column for this covered pixel (−1 = plain window)
 
         if (line.sliding) {
           const v2 = map.source.vertices[line.v2];
           const lineLen = Math.hypot(v2.x - lineStart.x, v2.y - lineStart.y);
+          const halfClosed = lineLen / 2;
+          const open = slides?.[seg.linedef] ?? 0;
+          const half = (1 - open) * halfClosed; // each leaf's remaining covered width
 
-          covered = u < (1 - (slides?.[seg.linedef] ?? 0)) * lineLen;
+          // The texture SLIDES with the leaf (offset by `open × width`): the leaf's outer edge disappears into
+          // the wall pocket first, so the handle keeps its size and translates — it does NOT stretch/clip in place.
+          if (u < half) {
+            leafU = (u / halfClosed + open) * midImg.width; // left leaf, retracting toward the pocket at u=0
+            covered = true;
+          } else if (u > lineLen - half) {
+            leafU = ((lineLen - u) / halfClosed + open) * midImg.width; // right leaf, mirrored
+            covered = true;
+          }
         }
         if (covered) {
           glass.top[x] = Math.max(top, yNeighCeil);
           glass.bot[x] = Math.min(bot, yNeighFloor);
+          glass.tu[x] = leafU;
+
+          if (leafU >= 0) {
+            glass.vTop[x] = yNeighCeil; // full door extent (unclipped) — the leaf texture is anchored to THIS,
+            glass.vBot[x] = yNeighFloor; // so it keeps world scale + runs off-screen when the door is huge
+            glass.shade[x] = shade;
+            glass.depth[x] = forward;
+            glass.tex = midImg;
+          }
         }
       }
 
@@ -679,7 +751,7 @@ export function renderFrame(
   // Deferred glass tint over each recorded pane (after the walls drew the back through it, before sprites so a
   // sprite in front of the pane still occludes it).
   if (glass) {
-    blendGlass(buf32, dims, glass.top, glass.bot);
+    blendGlass(buf32, zbuf, dims, glass);
   }
 
   drawSprites(buf32, zbuf, dims, sprites ?? mapSprites(map), map, camera, focal, horizon, textures);

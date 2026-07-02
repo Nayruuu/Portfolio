@@ -188,8 +188,16 @@ describe('renderFrame', () => {
       yOffset: 0,
       upperTex: 'BRICK',
       lowerTex: 'BRICK',
-      middleTex: 'BRICK',
+      middleTex: 'DOORGLASS', // the sliding leaf texture (alpha channel = clear glass)
     });
+    // A 2×2 leaf texture, half opaque alu frame + half clear glass → exercises BOTH blend branches.
+    const doorGlass = {
+      width: 2,
+      height: 2,
+      worldSize: 4,
+      pixels: new Uint8ClampedArray([90, 90, 90, 255, 0, 0, 0, 0, 0, 0, 0, 0, 90, 90, 90, 255]),
+    };
+    const TEXD = new Map(TEX).set('DOORGLASS', doorGlass);
     const doorMap = buildBsp({
       vertices: [
         { x: 0, y: 0 },
@@ -216,7 +224,7 @@ describe('renderFrame', () => {
     });
     const cam: Camera = { x: 4, y: 2, angle: Math.PI / 2, z: 1.6 };
     const at = (open: number): Uint8ClampedArray =>
-      renderFrame(doorMap, cam, CONFIG, TEX, undefined, undefined, 0, CONFIG.height, undefined, [
+      renderFrame(doorMap, cam, CONFIG, TEXD, undefined, undefined, 0, CONFIG.height, undefined, [
         0,
         open,
         0,
@@ -248,7 +256,7 @@ describe('renderFrame', () => {
     expect(tintedVs(at(0))).toBeGreaterThan(tintedVs(at(0.5))); // shut tints the whole pane; half-open, half of it
     expect(tintedVs(at(0.5))).toBeGreaterThan(0); // half-open still tints part of the pane
     // No `slides` array at all → the sliding pane defaults to shut (exercises the `?? 0` fallback).
-    expect(tintedVs(renderFrame(doorMap, cam, CONFIG, TEX))).toBeGreaterThan(0);
+    expect(tintedVs(renderFrame(doorMap, cam, CONFIG, TEXD))).toBeGreaterThan(0);
   });
 
   it('textures the whole view — ceiling, walls and floor are all cast/sampled (no flat bands)', () => {
