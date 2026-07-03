@@ -490,27 +490,48 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   **steps up** through a climbable portal; a too-tall-but-still-climbable ledge **auto-mantles** — the
   two-handed pull `ClimbView` overlay plays over the vault.
 
-  Rendering is a **multi-threaded software rasteriser**: a **`SharedArrayBuffer` worker pool** splits the
-  frame into N horizontal bands, each worker painting straight into one shared framebuffer + z-buffer,
-  composited once all report done. It needs **cross-origin isolation** (COOP/COEP) + `SharedArrayBuffer`;
-  when those are unavailable (or during SSR) it **falls back to single-threaded** main-thread rendering, so
-  `/bsp` always works. The framebuffer renders **below display resolution** and is upscaled **pixelated**
-  for the authentic software look; on `/bsp` a readout shows **FPS · frame ms · thread count · texture
-  source** (WebP vs procedural). Textures have a **procedural fallback** baked in code (brick / metal /
+  Rendering is **one engine with three executions**. The default is the **WebGPU compute backend**: the CPU
+  keeps the DOOM algorithm (the BSP walk, clipping, per-column span extraction — ~0.5 ms) and emits a compact
+  **command buffer**; a hand-written **WGSL compute shader** executes the per-pixel work (texture sampling,
+  shading, layered glass, portal phases, sprites) massively parallel — no triangle rasterization anywhere,
+  proven **99.4–99.98 % pixel-identical** to the CPU reference. When WebGPU is unavailable (or via
+  `?renderer=cpu`) it falls back to the **multi-threaded software rasteriser**: a **`SharedArrayBuffer`
+  worker pool** splits the frame into N horizontal bands painting into one shared framebuffer + z-buffer
+  (needs COOP/COEP), governed under CPU contention by a **workers-only ladder** (measured shrink trials with
+  audit/revert — the image never blurs: **render resolution never adapts**); and when SAB is unavailable too
+  (or during SSR) it falls back to **single-threaded** main-thread rendering, so `/bsp` always works. The
+  framebuffer renders **below display resolution** and is upscaled **pixelated** for the authentic software
+  look; on `/bsp` a readout shows **FPS · frame ms · backend · thread count · texture source** (WebP vs
+  procedural). Textures have a **procedural fallback** baked in code (brick / metal /
   floor / ceiling / …) so the world renders with no assets, and the real **WebP art is decoded and swapped
   in over that base** at runtime; assets **preload** up front so nothing pops in mid-play.
 
   Systems already built: a **per-zone texture palette** (walls BRICK / METAL / RACKS / CUBICLE / SCREEN /
-  PILLAR / DAMAGED / GLASS; floors FLOOR / CARPET / TILE / MARBLE / GRATING / SLAB; ceilings CEIL /
-  CONCRETE / TECHNICAL / NEON; doors DOOR_RED / DOOR_BLUE / DOOR_YELLOW), so each floor reads as its own
-  office district; a **3-tier keycard/badge** access system (employee = blue, manager = yellow, director =
-  red) gating colour-matched doors, with a **HUD card bay**; rotating **turntable pickups** — health
-  (medkit / plant) and mental (figurine / card) **vitals** plus **ammo boxes** (each box's cap read from
-  `weapons.json`); a **data-driven arsenal** of eight DOOM-archetype weapons (fist / pistol / shotgun /
-  chaingun / plasma / rocket / bfg / chainsaw) with per-weapon **magazine + reload** (`stepArsenal`), a
-  shared FPS **`WeaponView`** sprite/animation, **weapon switching** (1–8 / mouse wheel) and **reload** (R
-  / right-click); an **office bestiary** of enemies; and **animated doors** (keycard doors open in place;
-  the zone-exit airlock fades to black then advances the level). The status bar is the composited DOOM-1993
+  PILLAR / DAMAGED / GLASS / GLASS_INT / LOBBY / WOOD / ELEVATOR / KITCHEN / EXEC; floors FLOOR / CARPET /
+  TILE / MARBLE / LOBBY_FLOOR / GRATING / SLAB; ceilings CEIL / CEIL_LUX / CONCRETE / TECHNICAL / NEON;
+  doors DOOR_RED / DOOR_BLUE / DOOR_YELLOW / DOOR_GLASS; exterior backdrops CITY / CITY_STREET), so each floor reads as its
+  own office district; **transparent glass** — tinted see-through panes, textured curtain-wall windows
+  (`glassPane`, mullions opaque / glass clear onto a painted exterior view) and automatic **double sliding
+  glass doors** (two leaves parting from the centre, proximity-driven, auto-closing), all blocking movement
+  and projectiles while enemies still see through; a **3-tier keycard/badge** access system (employee =
+  blue, manager = yellow, director = red) gating colour-matched doors, with a **HUD card bay**; rotating
+  **turntable pickups** — health (medkit / plant) and mental (figurine / card) **vitals** plus **ammo
+  boxes** (each box's cap read from `weapons.json`); a **data-driven arsenal** of eight DOOM-archetype
+  weapons (fist / pistol / shotgun / chaingun / plasma / rocket / bfg / chainsaw) with per-weapon
+  **magazine + reload** (`stepArsenal`), a shared FPS **`WeaponView`** sprite/animation, **weapon
+  switching** (1–8 / mouse wheel) and **reload** (R / right-click); an **office bestiary** of enemies;
+  **decor prop billboards** (potted plant, crashed reception monitor, directory totem — green-screen art
+  under `public/game/props/`); **animated doors** (keycard doors open in place); and the **open-building
+  zone system** — the tower is a graph of per-floor maps (`exits` walk-into transitions → named `entries`,
+  short fade) with **per-zone world-state persistence** (kills, taken pickups and opened doors survive a
+  round trip; the player's inventory travels), so badges collected on one floor open doors on another and
+  backtracking is real. Zone seams can be **live portals** (`zonePortal` linedefs): the opening renders the
+  NEIGHBOURING zone's actual map through it — a recursive translated BSP walk clipped to the seam's columns,
+  depth-1, z-buffer-coherent (local glass tints what the portal shows) — something the original 1993 engine
+  never did. A **passable** seam goes further: the player walks straight through it — an instant zone swap
+  (~1 ms, no fade, view-continuous since both sides are mirrored) — while the **warm neighbour** behind a
+  visible seam stays alive (its enemies simulate and render through the window); enemies and shots never
+  cross a seam. The status bar is the composited DOOM-1993
   image HUD (**`DoomHud`**): the **health / mental** red-digit screens, the **burnt-out-developer reactive
   face** (its gaze tracks your turn, grimacing when you take damage), the **ARMS** weapon grid, the weapon
   bay, and the **keycard** slots.
@@ -523,14 +544,16 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   that **forces landscape** — CSS-rotated 90° in portrait, since an FPS needs width — with the page behind
   **scroll-locked** and the bottom bars (tabs + prefs-dock) hidden (`body:has(.player sd-bsp-demo)`).
 
-  **Built vs planned.** Built today: the BSP engine + the systems above + a few **worked-example levels**
-  — `level-accueil` (a hand-authored reception→climax techbase), the wired **`level-hangar`** (a large
-  original techbase showcasing a spiral staircase + verticality) and the engine-showcase `demo-map`.
-  Planned: the full **9-level episode** — M1 Lobby → M2 Open-space → M3 RH (with a secret exit to M9) → M4
-  Meeting rooms (**mid-boss: the Middle-Manager**) → M5 Cafétéria → M6 Direction/C-suite → M7 Server room →
-  M8 Datacenter (**final boss: the Overseer's spider**, a Spider-Mastermind homage) → M9 Archives (secret)
-  — plus the **two bosses**, **audio** (music + SFX), and the **menu / intertitle screens**. The full
-  per-level canon lives in the `level-designer` agent.
+  **Built vs planned.** Built today: the BSP engine + the systems above, **`level-m1-lobby`** (the episode
+  opener — a premium corporate ground floor: two-door glass entrance sas onto a street view, marble-inlay
+  concourse under a luminous cornice ceiling, reception → turnstiles → dead elevator bank, wood-panelled
+  lounge, lateral staircase to the upper reception hall), and the earlier **worked-example levels** —
+  `level-accueil` (a hand-authored reception→climax techbase), **`level-hangar`** (a large original
+  techbase showcasing a spiral staircase + verticality) and the engine-showcase `demo-map`.
+  Planned: the rest of the **9-level episode** (M2 Open-space → … → M9 Archives), plus the **two bosses**,
+  **audio** (music + SFX), and the **menu / intertitle screens**. The per-level canon (the 9-floor table,
+  palettes, badges, beats AND each level's built/planned status) lives in the `level-designer` agent —
+  this doc doesn't duplicate it.
 
 ### 4.2 Video-meta · like-bar · comments · up-next
 

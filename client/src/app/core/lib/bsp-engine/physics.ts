@@ -7,8 +7,9 @@ import type { CompiledMap, LineDef } from './types';
  * the floor difference is climbable and there is headroom. Pure: `(map, pos, delta, …) -> resolved pos +
  * floor height`. The caller drives camera height from `floorZ`.
  *
- * A linedef BLOCKS the player when it is one-sided (the edge of the world), or two-sided but the far floor
- * is too high to step onto (`> stepMax`) or the far sector is too short to fit (`ceil - floor < headroom`).
+ * A linedef BLOCKS the player when it is one-sided (the edge of the world — unless it is a PASSABLE
+ * zone-portal seam and the mover may `crossSeams`), or two-sided but the far floor is too high to step
+ * onto (`> stepMax`) or the far sector is too short to fit (`ceil - floor < headroom`).
  * Resolution pushes the player to `radius` away from each blocking wall along its normal (so crossing is
  * prevented and tangential motion is preserved — sliding).
  */
@@ -44,7 +45,8 @@ function closestOnSeg(
 export const SLIDE_OPEN = 0.7;
 
 /** Does `line` block a player standing on floor `fromFloor` at (`fromX`,`fromY`)? `slides[lineIndex]` is a
- *  sliding door's openness (0 shut … 1 fully retracted); absent = shut. */
+ *  sliding door's openness (0 shut … 1 fully retracted); absent = shut. `crossSeams` opens PASSABLE
+ *  zone-portal seams for this body (the player — the game swaps zones as he steps over the line). */
 function isBlocking(
   map: CompiledMap,
   line: LineDef,
@@ -55,15 +57,22 @@ function isBlocking(
   stepMax: number,
   headroom: number,
   slides: readonly number[] | undefined,
+  crossSeams: boolean,
 ): boolean {
   if (line.back === null) {
-    return true; // one-sided wall — the edge of the world
+    // A PASSABLE live seam is an open doorway into the next zone — but only for a body allowed to
+    // `crossSeams` (the player). Everyone else (enemies) keeps treating every seam as a solid wall:
+    // entities never cross zones.
+    return !(crossSeams && line.zonePortal?.passable === true);
   }
   if (line.sliding) {
     return (slides?.[lineIndex] ?? 0) < SLIDE_OPEN; // a sliding door bars the way until it is mostly open
   }
   if (line.glass) {
     return true; // a see-through glass wall (window / partition) still blocks the player
+  }
+  if (line.fence === true) {
+    return true; // blocking furniture edge (counter / turnstile rail) — renders open, never crossable
   }
 
   const a = map.source.vertices[line.v1];
@@ -74,7 +83,9 @@ function isBlocking(
   return far.floorZ - fromFloor > stepMax || far.ceilZ - far.floorZ < headroom;
 }
 
-/** Move the player by (`dx`,`dy`) from (`x`,`y`), sliding off blocking walls; returns the resolved pose. */
+/** Move the player by (`dx`,`dy`) from (`x`,`y`), sliding off blocking walls; returns the resolved pose.
+ *  With `crossSeams`, PASSABLE zone-portal seams stop blocking this body (see {@link isBlocking}) — the
+ *  caller detects the line crossing and performs the zone swap. */
 export function movePlayer(
   map: CompiledMap,
   x: number,
@@ -85,6 +96,7 @@ export function movePlayer(
   stepMax: number,
   headroom: number,
   slides?: readonly number[],
+  crossSeams = false,
 ): MoveResult {
   const fromFloor = map.source.sectors[locateSubSector(map.root, x, y).sector].floorZ;
   let px = x + dx;
@@ -97,7 +109,7 @@ export function movePlayer(
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
 
-    if (!isBlocking(map, line, li, x, y, fromFloor, stepMax, headroom, slides)) {
+    if (!isBlocking(map, line, li, x, y, fromFloor, stepMax, headroom, slides, crossSeams)) {
       continue;
     }
 

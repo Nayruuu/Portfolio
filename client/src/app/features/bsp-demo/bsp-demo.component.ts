@@ -22,12 +22,17 @@ import {
   nearestTargetHit,
   renderFrame,
   type Camera,
+  type CompiledMap,
   type MapSource,
+  type Sector,
   type Sprite,
   type Target,
   type Texture,
+  type ZoneNeighbor,
 } from '../../core/lib/bsp-engine';
-import { M1_LOBBY as LEVEL } from './level-m1-lobby'; // M1 "Lobby / Accueil" — episode opener (WIP, built incrementally)
+import type { Level } from './level-accueil';
+import { LEVELS, parseLevelParams, resolveZone, type LevelParams } from './level-select';
+import { zoneStates, type ZoneSnapshot } from './zone-state';
 import {
   loadAtlasTexture,
   loadEnvTextures,
@@ -49,7 +54,8 @@ import {
   type MarkerSpec,
   type Vital,
 } from './pickups';
-import { createRenderPool } from './render-pool';
+import { createGpuRenderer, type GpuRenderer } from './gpu-renderer';
+import { createRenderPool, type RenderPool } from './render-pool';
 import { DoomHud, type Gaze } from '../../shared/game/doom-hud';
 import {
   AMMO_MAX,
@@ -64,9 +70,12 @@ import { impactEffect, projectileEffect } from '../../shared/game/effects';
 import { IconComponent } from '../../shared/icon/icon.component';
 import {
   ARC_DURATION,
+  initialRenderGovernor,
   stepArsenal,
+  stepRenderGovernor,
   type ChainSpec,
   type KeycardColor,
+  type RenderGovernorState,
   type WeaponCombat,
 } from '../../core/lib';
 
@@ -114,6 +123,8 @@ const PICKUP_FX_DURATION = 0.3; // seconds the player's green pickup flash linge
 const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the rest hits health) — DOOM green armour
 const RESERVE_START = 50; // starting reserve per ammo type at spawn (then clamped to each type's cap) — pickups top up
 const RESTART_DELAY = 1.2; // seconds after death/win before a click restarts (lets the end feedback settle)
+const ZONE_FADE = 0.35; // seconds each side of a zone swap fades (to black, swap the floor, back in)
+const SEAM_HYST = 0.1; // cells the player lands INSIDE the new zone past a crossed seam — the positional hysteresis that keeps grazing the line from oscillating swaps
 const HINT_DURATION = 1.8; // seconds a transient objective hint lingers (e.g. "badge requis" at a locked exit)
 const INSPECT_PICKUPS: boolean = false; // when true, ammo boxes spin but are never collected (art-inspection mode)
 const SPAWN_ENEMIES: boolean = true; // spawn the level's enemies (the live game in the player); /bsp shares the same scene
@@ -130,8 +141,11 @@ const PROJECTILE_CROSSHAIR_BLEND = 2; // cells: within this a shot is pulled to 
 const SHOT_FX_DURATION = 0.09; // seconds the muzzle flash + impact spark linger after a shot
 const IMPACT_SCREEN_SCALE = 0.9; // on-screen size of an impact burst vs a same-distance wall (mirrors the grid)
 const IMPACT_MAX_HEIGHT_FRACTION = 0.5; // cap a point-blank burst at this fraction of the canvas height
-// Adaptive internal render resolution: small when the canvas is embedded in the ~960px viewport (a near-free
-// quality match, ~2× cheaper), full 1080p when it fills the screen in fullscreen (native, no upscale blur).
+// Internal render resolution per display mode: 720p when the canvas is embedded in the ~960px viewport (a
+// near-free quality match, ~2× cheaper), full 1080p when it fills the screen in fullscreen (native, no
+// upscale blur). Each mode ALWAYS renders at 100% of its tier — sharpness is part of the product. Under
+// contention the RENDER GOVERNOR (core/lib/game/render-governor.ts) trades the pool's ACTIVE WORKER COUNT
+// only (join stalls shrink it, proven calm grows it back); it never touches the resolution.
 const WINDOWED_RENDER = { width: 1280, height: 720 } as const;
 const FULLSCREEN_RENDER = { width: 1920, height: 1080 } as const;
 const CHARGE_GLOW_PEAK = 0.7; // peak green charge-buildup tint at full BFG spin-up (mirrors the grid)
@@ -149,6 +163,7 @@ const STRESS_RAMP_STEP = 8; // enemies added per ramp tick
 const STRESS_RAMP_INTERVAL = 2; // seconds between ramp ticks
 const ENEMY_SPEED = 2; // chase speed (world units / second)
 const ENEMY_FIRE_INTERVAL = 1.5; // seconds between an enemy's shots while it can see the player
+const PERF_RING_SIZE = 4096; // frames the dev perf ring (`?perflog=1`) holds — a power of two (index masks)
 
 /** A projectile in flight: a 3D position + horizontal heading + speed, the effects `kind` that draws it, and
  *  its blast on impact. It flies along the firing pitch — `z` climbs by `vSlope` per cell travelled — so a
@@ -206,6 +221,18 @@ interface Marker {
   spec: MarkerSpec;
 }
 
+/** A sector whose heights the game may animate live (doors) — the mutable per-zone clone of {@link Sector}. */
+type MutableSector = { -readonly [K in keyof Sector]: Sector[K] };
+
+/** A zone-graph exit placed in the world: walk into it → transition to zone `to` at its named `entry`. */
+interface ZoneExit {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number; // seated on its floor (the marker's base)
+  readonly to: string;
+  readonly entry: string;
+}
+
 /** A locked DOOR — a sector whose `ceilZ` animates between closed (== its floor, impassable) and open. Approach
  *  the trigger point holding the matching badge (if `requiresCard`) to open it; once opened it stays open (an unlock). */
 interface Door {
@@ -218,7 +245,8 @@ interface Door {
   openness: number; // 0 shut .. 1 open
 }
 
-/** A thrower's projectile in flight: a spinning billboard that hurts the player on contact (dodgeable). */
+/** A thrower's projectile in flight: a spinning billboard that hurts the player on contact (dodgeable).
+ *  Liveness is positional: `stepEnemyShots` compacts spent shots out of its zone's array in place. */
 interface EnemyShot {
   x: number;
   y: number;
@@ -227,7 +255,62 @@ interface EnemyShot {
   readonly dy: number;
   readonly proj: EnemyProjectile;
   traveled: number;
-  alive: boolean;
+}
+
+/** A PASSABLE live seam of the active map, pre-resolved for the per-frame crossing test: the seam segment,
+ *  its unit normal pointing OUT of the room (the crossing direction — the seam's back side), and the zone
+ *  transform (neighbor point + (`dx`,`dy`) = this map's point). */
+interface SeamEdge {
+  readonly ax: number;
+  readonly ay: number;
+  readonly bx: number;
+  readonly by: number;
+  readonly len: number;
+  readonly nx: number; // unit normal toward the seam's BACK side (into the neighbor zone)
+  readonly ny: number;
+  readonly zone: string;
+  readonly dx: number;
+  readonly dy: number;
+}
+
+/**
+ * One zone's full LIVE world state — everything `loadZone` builds for the active floor. The active zone
+ * holds this as the component's flat fields; the WARM neighbor (the zone behind a visible passable seam)
+ * holds one of these: its enemies simulate each frame in THEIR map, its sprites show through the seam, and
+ * on a crossing the warm world is ADOPTED wholesale as the active one (continuity — nothing reloads) while
+ * the outgoing world becomes the new warm zone (the reverse portal).
+ */
+interface WarmZone {
+  readonly key: string;
+  readonly level: Level;
+  // Entities exist only once the atlases have decoded: a bare (unpopulated) world is geometry-only, and
+  // its snapshot must never be persisted — takenFlags would read its empty pickup lists as "all taken".
+  readonly populated: boolean;
+  readonly sectors: MutableSector[];
+  readonly mapSource: MapSource;
+  readonly map: CompiledMap;
+  readonly targets: Barrel[];
+  enemies: Foe[];
+  readonly enemyShots: EnemyShot[];
+  vitals: (Vital & { idx: number })[];
+  ammoBoxes: (AmmoBox & { idx: number })[];
+  keycards: (Keycard & { idx: number })[];
+  readonly doors: Door[];
+  readonly slides: number[];
+  exit: Marker | null;
+}
+
+/** One zone's combat frame, as the enemy/enemy-shot steppers see it: the ACTIVE zone hands the real player
+ *  and hurt callback; the WARM zone hands the player's seam-translated ghost and a no-op hurt (its foes can
+ *  never land a hit across the seam anyway — `castRay` blocks their sight lines at the line). */
+interface CombatFrame {
+  readonly map: CompiledMap;
+  readonly slides: readonly number[];
+  readonly enemies: Foe[];
+  readonly shots: EnemyShot[];
+  readonly px: number;
+  readonly py: number;
+  readonly hurt: (dmg: number) => void;
 }
 
 /** A live or dying enemy instance: its `spec` (kind) + world pose + walk-anim travel, hp, the white hit-flash
@@ -276,14 +359,39 @@ export class BspDemoComponent {
   protected readonly frameMs = signal(0); // avg CPU cost per frame — the real headroom signal (rAF caps fps to vsync)
   protected readonly frameMaxMs = signal(0); // WORST frame in the window — the spike/stutter signal
   protected readonly texturesLoaded = signal(false); // real WebP environment art swapped in for procedural
-  protected readonly threads = signal(1); // render workers in use (1 = single-threaded fallback)
+  protected readonly threads = signal(1); // ACTIVE render workers (governor-driven; 1 = single-threaded fallback)
+  protected readonly poolSize = signal(1); // spawned render workers (the pool never respawns — idle ones wait warm)
+  protected readonly backend = signal<'cpu' | 'gpu'>('cpu'); // active render backend (`?renderer=gpu` + WebGPU OK → 'gpu')
 
-  // The played level (`LEVEL` — L1 "Hangar"). Its sectors
-  // are cloned into a MUTABLE per-instance copy so an animated DOOR can raise/lower a sector's `ceilZ` live
-  // (the renderer + physics read sector heights straight off `source.sectors` each frame — no recompile needed).
-  private readonly sectors = LEVEL.map.sectors.map((s) => ({ ...s }));
-  private readonly mapSource: MapSource = { ...LEVEL.map, sectors: this.sectors };
-  private readonly map = buildBsp(this.mapSource);
+  // --- The CURRENT zone. The open building loads one floor at a time: `loadZone` swaps every level-bound
+  // structure below (sectors copy, compiled BSP, barrels, enemies, pickups, doors, exits) while the player's
+  // inventory travels through. Dev URL params (`?level=&spawn=&noenemies=1` — see level-select.ts) shape the
+  // INITIAL load; `noenemies` strips every zone. Assigned by the constructor's initial `loadZone`.
+  private readonly params: LevelParams = parseLevelParams(
+    typeof location === 'undefined' ? '' : location.search,
+  );
+  private zoneKey = ''; // '' only before the constructor's initial loadZone — then always a LEVELS key
+  private level!: Level;
+  private zoneSnap: ZoneSnapshot | null = null; // the zone's restored snapshot, re-applied by the spawn fns
+  // The zone's sectors, cloned into a MUTABLE per-zone copy so an animated DOOR can raise/lower a sector's
+  // `ceilZ` live (renderer + physics read sector heights straight off `source.sectors` each frame).
+  private sectors!: MutableSector[];
+  private mapSource!: MapSource;
+  private map!: CompiledMap;
+  // The zone's LIVE-portal neighbors: every zone this map's `zonePortal` seams look into, compiled once per
+  // session (`compiledZones` caches them — zones are small) and re-derived by each `loadZone`. The workers
+  // receive the sources (each builds its own BSP); the main-thread fallback renders the compiled forms.
+  // Neighbors render their REGISTRY geometry (static heights, doors shut) — the LIFE behind a passable seam
+  // comes from the WARM zone below, whose sprites feed the render as the neighbor-sprites channel.
+  private readonly compiledZones = new Map<string, CompiledMap>();
+  private neighborMaps: ReadonlyMap<string, CompiledMap> = new Map();
+  private neighborSources: ReadonlyMap<string, MapSource> = new Map();
+  // The active map's PASSABLE seams (pre-resolved segments + transforms) — the per-frame crossing test.
+  private seams: SeamEdge[] = [];
+  // The WARM neighbor: the zone behind the active map's passable seam, kept ALIVE while it is visible —
+  // its enemies simulate each frame (in their own map, against the player's seam-translated ghost) and its
+  // sprites render through the window. One warm zone max. Crossing the seam adopts it as the active world.
+  private warm: WarmZone | null = null;
   // The main-thread render fallback library — the SAME procedural map the workers build, so the two can't
   // drift (every extended palette key has a fallback until its WebP decodes). WebP swaps in via `setTextures`.
   private readonly textures = proceduralTextures();
@@ -294,18 +402,9 @@ export class BspDemoComponent {
     ...WINDOWED_RENDER,
     fov: Math.PI / 2,
   };
-  private readonly camera = {
-    x: LEVEL.spawn.x,
-    y: LEVEL.spawn.y,
-    angle: LEVEL.spawn.angle,
-    z: EYE_HEIGHT,
-    pitch: 0,
-  } satisfies Camera;
-  // Shootable billboards: the map's static sprites, each a target a hitscan can cull (destructible barrels).
-  private readonly targets: Barrel[] = mapSprites(this.map).map((sprite) => ({
-    sprite,
-    alive: true,
-  }));
+  private readonly camera = { x: 0, y: 0, angle: 0, z: EYE_HEIGHT, pitch: 0 } satisfies Camera; // placed by loadZone
+  // Shootable billboards: the zone map's static sprites, each a target a hitscan can cull (destructible barrels).
+  private targets: Barrel[] = [];
   private projectiles: Projectile[] = []; // launched shots in flight (projectile weapons), stepped each frame
   private arcs: Arc[] = []; // short-lived plasma chain-lightning visuals, aged out each frame
   private impacts: Impact[] = []; // burst-strip animations playing at hit points, aged out each frame
@@ -333,26 +432,62 @@ export class BspDemoComponent {
   private lastTime = 0;
   private frameId = 0;
   private tickStart = 0;
-  private framesSinceTick = 0;
+  private rendersSinceTick = 0; // COMPLETED renders in the roll-up window (the visual rate)
   private msAccum = 0;
-  private msMax = 0; // worst single frame in the current window → the spike readout
+  private msMax = 0; // worst single render in the current window → the spike readout
+  private stallMax = 0; // worst join straggler stall in the current window → the contention readout
+  private lastRenderMs = 0; // the last completed render's measurements — the ring's render columns
+  private lastStallMs = 0;
+  private lastSlowest = 0;
+  private lastComputeMs = 0; // last join's fastest-band compute (the governor's compute input)
+  // The render governor's state — the pure contention-resilience controller (see render-governor.ts).
+  // Null when there is no worker pool: the main-thread fallback has no join to stall, and its compute
+  // cost is the platform's single-thread baseline — nothing for the governor to trade.
+  private governor: RenderGovernorState | null = null;
   // Perf telemetry (localhost only — never in prod): a session id + whether to POST samples to the dev server's
   // /perf sink, so a play session can be read back + analysed offline instead of eyeballing the HUD.
   private readonly perfSid = typeof performance === 'undefined' ? 0 : Math.round(performance.now());
   private readonly perfLog =
     typeof location !== 'undefined' &&
     (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  // Dev-only per-frame ring (`?perflog=1` — see level-select.ts): the last PERF_RING_SIZE rAF-to-rAF deltas +
+  // render costs, exposed on `window.__bspPerfRing` for a scripted reader (p50/p95/p99/spike analysis). Null
+  // when off — the loop then pays a single null check and allocates nothing.
+  private perfRing: {
+    readonly delta: Float64Array;
+    readonly render: Float64Array;
+    readonly stall: Float64Array; // join straggler stall (slowest band vs median — see JoinStats)
+    readonly slowest: Float64Array; // worker index of the stalled band (the straggler's identity)
+    readonly workers: Float64Array; // active worker count that frame (the governor's rung)
+    readonly compute: Float64Array; // fastest-band compute (the governor's compute input)
+    n: number;
+  } | null = null;
+  private perfRingLast = 0; // previous frame's rAF timestamp (0 = no previous frame yet)
   private readonly hud = new DoomHud();
   private hp = 100; // player health — drained by enemy strikes/blasts/clips, refilled by coffee pickups
   private armor = 0; // player armour — soaks a fraction of each hit, refilled by RAM-stick pickups
   private dead = false; // hp hit 0 → the world freezes under a game-over wash until a click restarts
   private deadClock = 0; // seconds since death (gates the restart + fades the game-over wash in)
   private pickupFx = 0; // seconds left on the green pickup flash (collected an item)
-  private vitals: Vital[] = []; // health/armour pickups on the floor, collected on proximity
-  private ammoBoxes: AmmoBox[] = []; // spinning ammo boxes on the floor, collected on proximity
-  private keycards: Keycard[] = []; // spinning access badges on the floor, collected on proximity
+  // Floor pickups, each carrying its spawn index (`idx`) so a zone snapshot can flag WHICH were taken.
+  private vitals: (Vital & { idx: number })[] = []; // health/armour, collected on proximity
+  private ammoBoxes: (AmmoBox & { idx: number })[] = []; // spinning ammo boxes, collected on proximity
+  private keycards: (Keycard & { idx: number })[] = []; // spinning access badges, collected on proximity
   private readonly heldCards = new Set<KeycardColor>(); // badge colours collected → unlock the matching doors
-  private exit: Marker | null = null; // the exit sign marker (the level goal)
+  private exit: Marker | null = null; // the legacy exit sign marker (the win goal; null when `exits` rule)
+  private zoneExits: ZoneExit[] = []; // the zone's graph exits (walk-into transition points)
+  private exitsLocked = false; // arrival guard: exits re-arm once the player has LEFT every exit radius
+  private transition: {
+    readonly to: string;
+    readonly entry: string;
+    clock: number;
+    swapped: boolean;
+  } | null = null; // the in-flight zone swap (fade out → loadZone → fade in)
+  private pool: RenderPool | null = null; // the worker render pool (null = single-threaded fallback / pre-init)
+  // The WebGPU compute backend (`?renderer=gpu` — dev opt-in, see gpu-renderer.ts). Null until its async init
+  // lands, and again after any GPU failure: the CPU path (pool or main thread) is ALWAYS the running fallback.
+  private gpu: GpuRenderer | null = null;
+  private atlasesReady = false; // enemy/pickup atlases decoded → later zone loads can spawn immediately
   private won = false; // reached the exit → the level-complete wash, frozen until a click restarts
   private wonClock = 0; // seconds since the win (gates the restart + fades the wash in)
   private hint = 0; // seconds left on a transient HUD hint (e.g. "badge requis" at a locked door)
@@ -384,11 +519,30 @@ export class BspDemoComponent {
   constructor() {
     const destroyRef = inject(DestroyRef);
 
+    // The initial zone load — the SAME code path as every open-building transition (URL level or default).
+    // Pure map/data work, so it is prerender-safe; enemies/pickups spawn once the atlases decode below.
+    this.loadZone(this.params.levelKey);
+
     afterNextRender(() => {
       const context = this.canvas().nativeElement.getContext('2d');
 
       if (context === null) {
         return;
+      }
+
+      // Dev perf ring (`?perflog=1`): allocate once and expose on `window` so a scripted perf run can read
+      // the raw per-frame series back. Off (the default) → null, and the loop allocates/writes nothing.
+      if (this.params.perfRing) {
+        this.perfRing = {
+          delta: new Float64Array(PERF_RING_SIZE),
+          render: new Float64Array(PERF_RING_SIZE),
+          stall: new Float64Array(PERF_RING_SIZE),
+          slowest: new Float64Array(PERF_RING_SIZE),
+          workers: new Float64Array(PERF_RING_SIZE),
+          compute: new Float64Array(PERF_RING_SIZE),
+          n: 0,
+        };
+        (window as unknown as Record<string, unknown>)['__bspPerfRing'] = this.perfRing;
       }
 
       const canvasEl = this.canvas().nativeElement;
@@ -402,7 +556,6 @@ export class BspDemoComponent {
       canvasEl.height = this.config.height;
 
       this.climbView.preload(); // decode the mantle hands now, so the first vault never shows a blank frame
-      this.spawnDoors(); // shut the badge-locked annex door from the first frame (before the loop starts)
       const onDown = (event: KeyboardEvent): void => this.onKey(event, true);
       const onUp = (event: KeyboardEvent): void => this.onKey(event, false);
       const onClick = (): void => {
@@ -431,12 +584,13 @@ export class BspDemoComponent {
 
       const onResize = (): void => {
         // (The HUD backing store is sized by its ResizeObserver below; here we only queue the render resolution.)
-        // Fullscreen → render at full 1080p (the canvas fills the screen); windowed → the cheaper res. Queue it
-        // for the loop (a live rebuild mid-render would tear down the pool the frame is still painting into).
-        const target = document.fullscreenElement !== null ? FULLSCREEN_RENDER : WINDOWED_RENDER;
+        // Fullscreen → render at full 1080p (the canvas fills the screen); windowed → the cheaper res —
+        // always 100% of the tier. Queue it for the loop (a live rebuild mid-render would tear down the
+        // pool the frame is still painting into).
+        const tier = document.fullscreenElement !== null ? FULLSCREEN_RENDER : WINDOWED_RENDER;
 
-        if (target.width !== this.config.width || target.height !== this.config.height) {
-          pendingRes = { width: target.width, height: target.height };
+        if (tier.width !== this.config.width || tier.height !== this.config.height) {
+          pendingRes = { width: tier.width, height: tier.height };
         }
       };
       const onMousedown = (event: MouseEvent): void => {
@@ -501,10 +655,49 @@ export class BspDemoComponent {
 
       // Multi-thread when the platform allows it (SharedArrayBuffer + cross-origin isolation); otherwise the
       // pool is null and we render single-threaded on the main thread. Either way the frame lands in `image`.
-      const pool = createRenderPool(this.config, this.mapSource);
+      // Kept on `this.pool` too, so `loadZone` can re-point the SAME workers at the next zone's geometry.
+      const pool = createRenderPool(
+        this.config,
+        this.zoneKey,
+        this.mapSource,
+        this.neighborSources,
+      );
       let disposed = false;
 
-      this.threads.set(pool?.threads ?? 1);
+      this.pool = pool;
+
+      this.threads.set(pool?.active ?? 1);
+      this.poolSize.set(pool?.threads ?? 1);
+      // `?nogov=1` (dev — see level-select.ts) pins the pool at full workers / full resolution: the
+      // A/B control for measuring what the governor buys under contention.
+      this.governor =
+        pool === null || this.params.noGovernor ? null : initialRenderGovernor(pool.threads);
+
+      // The WEBGPU COMPUTE backend is the DEFAULT (`?renderer=cpu` forces the worker-pool path — see
+      // level-select.ts). Its init is async; until it lands — and on ANY failure (no WebGPU, device loss) —
+      // the CPU path keeps rendering (no user-visible error, the debug readout shows the active backend).
+      // The governor stays CPU-path-only.
+      if (this.params.renderer !== 'cpu') {
+        void createGpuRenderer(this.config).then((gpu) => {
+          if (gpu === null || disposed) {
+            gpu?.dispose();
+            if (!disposed) {
+              console.info('[bsp] WebGPU unavailable — staying on the CPU renderer');
+            }
+
+            return;
+          }
+          gpu.resize(this.config); // the resolution may have changed while the device was initializing
+          gpu.setTextures(this.textures);
+          this.gpu = gpu;
+          this.backend.set('gpu');
+          console.info('[bsp] WebGPU compute backend active');
+          if (this.params.perfRing) {
+            // Dev perf hook (like __bspPerfRing): a STABLE stats object, mutated in place each frame.
+            (window as unknown as Record<string, unknown>)['__bspGpuStats'] = gpu.stats;
+          }
+        });
+      }
 
       // Switch the render targets to a new resolution (framebuffer/z-buffer/canvas + the worker bands). The pool
       // re-points its EXISTING workers (they keep their built map + textures) — no respawn, so it costs a few ms.
@@ -517,18 +710,43 @@ export class BspDemoComponent {
         image = context.createImageData(width, height);
         zbuffer = new Float32Array(width * height);
         pool?.resize(this.config);
+        this.gpu?.resize(this.config);
       };
 
       const renderInto = (): Promise<void> => {
         const sprites = this.liveSprites(); // alive billboards this frame (a culled barrel drops out)
+        // The WARM zone's live billboards, in ITS coordinates — rendered through the seam windows.
+        const neighborSprites =
+          this.warm === null ? undefined : new Map([[this.warm.key, this.worldSprites(this.warm)]]);
         // Capture the current pool + framebuffer: a resolution rebuild only swaps them between frames, so the
         // pair stays consistent for this render (and the locals keep the non-null narrowing in the callback).
         const activePool = pool;
         const activeImage = image;
+        const gpu = this.gpu;
 
+        if (gpu !== null) {
+          // The GPU path: build the command buffer on the main thread (the FULL renderFrame surface —
+          // live sprites, sliding doors, zone-portal neighbours with the warm zone's life), dispatch the
+          // compute pass, read back into the same ImageData the shared blit + overlay stack paints. Any
+          // failure (a lost device) silently drops back to the CPU path for good — the next kick renders CPU.
+          return gpu
+            .render(
+              this.map,
+              this.camera,
+              activeImage.data,
+              sprites,
+              this.slides,
+              this.zoneNeighbors(neighborSprites),
+            )
+            .catch(() => {
+              this.gpu = null;
+              this.backend.set('cpu');
+              gpu.dispose();
+            });
+        }
         if (activePool !== null) {
           return activePool
-            .render(this.camera, sprites, this.sectors, this.slides) // live sector heights + door slides → workers
+            .render(this.camera, sprites, this.sectors, this.slides, neighborSprites) // live heights + slides + warm life → workers
             .then(() => activeImage.data.set(activePool.frame)); // workers → shared buf → blit
         }
         renderFrame(
@@ -542,43 +760,89 @@ export class BspDemoComponent {
           this.config.height,
           sprites,
           this.slides,
+          this.zoneNeighbors(neighborSprites),
         );
 
         return Promise.resolve();
       };
 
+      // The rAF chain is NEVER gated on the workers' frame join (the root of contention stutter: one
+      // descheduled worker used to freeze display AND input for its whole scheduling quantum). The world
+      // advances and the chain re-arms every display frame; a render is KICKED only when the pool is
+      // idle, and its completion blits + releases. A join straggler therefore costs one REPEATED frame
+      // on screen — never a frozen pipeline. Render and blit never overlap (the next kick waits for the
+      // release), so the single shared framebuffer stays safe, as do the between-frames contracts of
+      // `applyResolution` / `setWorkers` — both actuate only while no render is in flight.
+      let renderBusy = false; // a render (kick → join → blit) is in flight
+      let lastBlit = 0; // previous blit's timestamp → the dt stepping the weapon/HUD animations
+
       const loop = (now: number): void => {
-        if (pendingRes !== null) {
-          applyResolution(pendingRes.width, pendingRes.height); // safe here: no render is in flight
-          pendingRes = null;
-        }
         const dt = this.lastTime === 0 ? 0 : Math.min(0.05, (now - this.lastTime) / 1000);
 
         this.lastTime = now;
         this.advance(dt);
+        this.measureDisplay(now);
 
-        const renderStart = performance.now();
-
-        void renderInto().then(() => {
-          if (disposed) {
-            return;
+        if (!renderBusy) {
+          renderBusy = true;
+          if (pendingRes !== null) {
+            applyResolution(pendingRes.width, pendingRes.height); // safe here: no render is in flight
+            pendingRes = null;
           }
-          context.putImageData(image, 0, 0);
-          this.drawProjectiles(context);
-          this.drawImpacts(context);
-          this.drawArcs(context);
-          this.drawWeapon(dt, context);
-          this.drawHurtFx(context);
-          this.drawPickupFx(context);
-          this.drawChargeFx(context);
-          this.drawCrosshair(context);
-          this.drawHint(context);
-          this.drawHud(dt);
-          this.drawGameOver(context);
-          this.drawWinScreen(context);
-          this.measureFps(now, performance.now() - renderStart);
-          this.frameId = requestAnimationFrame(loop);
-        });
+          const renderStart = performance.now();
+
+          void renderInto().then(() => {
+            if (disposed) {
+              return;
+            }
+            context.putImageData(image, 0, 0);
+            const blitNow = performance.now();
+            const drawDt = lastBlit === 0 ? dt : Math.min(0.05, (blitNow - lastBlit) / 1000);
+
+            lastBlit = blitNow;
+            this.drawProjectiles(context);
+            this.drawImpacts(context);
+            this.drawArcs(context);
+            this.drawWeapon(drawDt, context);
+            this.drawHurtFx(context);
+            this.drawPickupFx(context);
+            this.drawChargeFx(context);
+            this.drawCrosshair(context);
+            this.drawHint(context);
+            this.drawZoneFade(context);
+            this.drawHud(drawDt);
+            this.drawGameOver(context);
+            this.drawWinScreen(context);
+            // GPU frames have no worker join — their stats stay out of the stall/governor loop entirely.
+            const join = pool === null || this.gpu !== null ? null : pool.stats;
+
+            this.recordRender(
+              performance.now() - renderStart,
+              join?.stallMs ?? 0,
+              join?.slowest ?? 0,
+              join?.computeMs ?? 0,
+            );
+            // CONTENTION governor (pure — render-governor.ts): straggler stalls shrink the active worker
+            // set, proven calm grows it back — resolution is never traded. Applied HERE, while no render
+            // is in flight, so a re-band never races one.
+            if (pool !== null && join !== null && this.governor !== null) {
+              const prev = this.governor;
+              const next = stepRenderGovernor(prev, {
+                stallMs: join.stallMs,
+                computeMs: join.computeMs,
+                joinMs: join.joinMs,
+              });
+
+              this.governor = next;
+              if (next.workers !== prev.workers) {
+                pool.setWorkers(next.workers);
+                this.threads.set(pool.active);
+              }
+            }
+            renderBusy = false; // release AFTER the actuations — the next kick sees a settled pool
+          });
+        }
+        this.frameId = requestAnimationFrame(loop);
       };
 
       this.frameId = requestAnimationFrame(loop);
@@ -586,13 +850,11 @@ export class BspDemoComponent {
       // Decode the real environment textures off the served WebP and swap them in live (each worker, or the
       // main thread, reads the map each frame). A failed/SSR load leaves the procedural textures untouched.
       void loadEnvTextures().then((loaded) => {
-        if (pool !== null) {
-          pool.setTextures(loaded);
-        } else {
-          for (const [name, texture] of loaded) {
-            this.textures.set(name, texture);
-          }
+        pool?.setTextures(loaded);
+        for (const [name, texture] of loaded) {
+          this.textures.set(name, texture); // the main-thread fallback AND the GPU pool read this map
         }
+        this.gpu?.setTextures(this.textures);
         this.texturesLoaded.set(loaded.size > 0);
       });
 
@@ -626,15 +888,21 @@ export class BspDemoComponent {
             this.textures.set(name, texture);
           }
           pool?.setTextures(loaded);
-          this.seedReserves();
+          this.gpu?.setTextures(this.textures); // the enemy/pickup atlases join the GPU texel pool too
+          this.atlasesReady = true; // later zone loads spawn immediately (the art is decoded once, globally)
+          this.seedReserves(); // the NEW-GAME ammo seed — zone transitions never re-run it
           this.spawnEnemies();
           this.spawnPickups();
+          this.refreshWarm(); // the warm neighbor can only populate now its art exists
         },
       );
 
       destroyRef.onDestroy(() => {
         disposed = true;
         pool?.dispose();
+        this.pool = null;
+        this.gpu?.dispose();
+        this.gpu = null;
         cancelAnimationFrame(this.frameId);
         window.removeEventListener('keydown', onDown);
         window.removeEventListener('keyup', onUp);
@@ -721,9 +989,15 @@ export class BspDemoComponent {
 
       return;
     }
+    if (this.transition !== null) {
+      this.stepTransition(dt); // the fade owns the world: everything freezes while the building swaps floors
+
+      return;
+    }
     this.stepStress(dt); // DEBUG load test (no-op unless toggled) — runs before projectiles so its shots step now
-    this.stepEnemies(dt); // real enemies chase / shoot / throw
-    this.stepEnemyShots(dt); // throwers' projectiles fly at the player
+    this.stepEnemies(this.activeFrame(), dt); // real enemies chase / shoot / throw
+    this.stepEnemyShots(this.activeFrame(), dt); // throwers' projectiles fly at the player
+    this.stepWarm(dt); // the warm neighbor lives too: its foes think in THEIR map behind the seam
     this.stepProjectiles(dt);
     this.stepPickups(dt); // spin the ammo boxes + collect anything the player is standing on
     this.stepDoors(dt); // animate doors (after pickups, so this frame's badge state gates the door) before moving
@@ -776,7 +1050,14 @@ export class BspDemoComponent {
       STEP_MAX,
       HEADROOM,
       this.slides,
+      true, // the player may cross PASSABLE seams — the crossing check right below performs the swap
     );
+
+    // SEAMLESS crossing: stepping over a passable live seam swaps zones INSTANTLY — no fade. The portal
+    // already showed exactly what now surrounds the player, so the view must not (and does not) jump.
+    if (this.seams.length > 0 && this.crossSeam(fromX, fromY, moved.x, moved.y)) {
+      return; // the world swapped under our feet; next frame continues in the new zone
+    }
 
     this.camera.x = moved.x;
     this.camera.y = moved.y;
@@ -880,9 +1161,48 @@ export class BspDemoComponent {
   /** The world billboards still alive this frame — the render's per-frame sprite list (culled barrels drop
    *  out). Projectiles are NOT here: they are painted screen-space over the frame by `drawProjectiles`. */
   private liveSprites(): Sprite[] {
-    const sprites = this.targets.filter((t) => t.alive).map((t) => t.sprite);
+    const sprites = this.worldSprites({
+      targets: this.targets,
+      enemies: this.enemies,
+      enemyShots: this.enemyShots,
+      vitals: this.vitals,
+      ammoBoxes: this.ammoBoxes,
+      keycards: this.keycards,
+      exit: this.exit,
+    });
 
-    for (const e of this.enemies) {
+    if (this.atlasesReady) {
+      // Each zone-graph exit shows the same exit sign (its art decodes with the pickup atlases). Active
+      // zone only — a warm neighbor's graph exits stay signless behind the window.
+      for (const e of this.zoneExits) {
+        sprites.push({
+          x: e.x,
+          y: e.y,
+          z: e.z,
+          tex: EXIT_SPEC.texName,
+          width: EXIT_SPEC.worldHeight * EXIT_SPEC.aspect,
+          height: EXIT_SPEC.worldHeight,
+        });
+      }
+    }
+    for (const e of this.stressEnemies) {
+      sprites.push({ x: e.x, y: e.y, z: e.z, tex: 'BARREL', width: 0.8, height: 1.7 }); // synthetic enemy billboard
+    }
+
+    return sprites;
+  }
+
+  /** ONE zone's entity billboards — the active zone's (inside {@link liveSprites}) or the WARM neighbor's,
+   *  whose list feeds the render's neighbor-sprites channel in its own coordinates. */
+  private worldSprites(
+    world: Pick<
+      WarmZone,
+      'targets' | 'enemies' | 'enemyShots' | 'vitals' | 'ammoBoxes' | 'keycards' | 'exit'
+    >,
+  ): Sprite[] {
+    const sprites = world.targets.filter((t) => t.alive).map((t) => t.sprite);
+
+    for (const e of world.enemies) {
       const s = e.spec;
       // The hit-flash decays over its duration (0→1 additive brighten); the body flinches UP with it. A dying
       // enemy carries no flash — the death animation owns its feedback.
@@ -925,7 +1245,7 @@ export class BspDemoComponent {
         sprites.push({ ...base, tex: s.texName, cols: s.walkCols, rows: s.walkRows, col, row: 0 });
       }
     }
-    for (const shot of this.enemyShots) {
+    for (const shot of world.enemyShots) {
       // The thrown projectile: a spinning front strip billboard at its world point.
       const col = Math.floor(shot.traveled * shot.proj.spinRate) % shot.proj.frames;
 
@@ -942,7 +1262,7 @@ export class BspDemoComponent {
         row: 0,
       });
     }
-    for (const v of this.vitals) {
+    for (const v of world.vitals) {
       // A grounded vitals billboard (health medkit/plant · mental figurine/card) — a turntable when `spin`,
       // else a static frame-0 billboard; depth-occluded by the z-buffer pass.
       const col = v.spec.spin ? Math.floor(v.age / (v.spec.frameMs / 1000)) % v.spec.frames : 0;
@@ -960,7 +1280,7 @@ export class BspDemoComponent {
         row: 0,
       });
     }
-    for (const b of this.ammoBoxes) {
+    for (const b of world.ammoBoxes) {
       // A spinning ammo box: advance the turntable frame from its age (the quad never rotates).
       const col = Math.floor(b.age / (b.spec.frameMs / 1000)) % b.spec.frames;
 
@@ -977,7 +1297,7 @@ export class BspDemoComponent {
         row: 0,
       });
     }
-    for (const k of this.keycards) {
+    for (const k of world.keycards) {
       // A spinning access badge (blue employee / yellow manager / red director): advance its turntable frame
       // from its age (the quad never rotates) — mirrors the vitals/ammo turntables; drops once collected.
       const col = Math.floor(k.age / (k.spec.frameMs / 1000)) % k.spec.frames;
@@ -995,45 +1315,54 @@ export class BspDemoComponent {
         row: 0,
       });
     }
-    if (this.exit !== null) {
-      // The exit sign — a grounded single-frame billboard (the level goal).
+    if (world.exit !== null) {
+      // The legacy exit sign — a grounded single-frame billboard (the level goal).
       sprites.push({
-        x: this.exit.x,
-        y: this.exit.y,
-        z: this.exit.z,
-        tex: this.exit.spec.texName,
-        width: this.exit.spec.worldHeight * this.exit.spec.aspect,
-        height: this.exit.spec.worldHeight,
+        x: world.exit.x,
+        y: world.exit.y,
+        z: world.exit.z,
+        tex: world.exit.spec.texName,
+        width: world.exit.spec.worldHeight * world.exit.spec.aspect,
+        height: world.exit.spec.worldHeight,
       });
-    }
-    for (const e of this.stressEnemies) {
-      sprites.push({ x: e.x, y: e.y, z: e.z, tex: 'BARREL', width: 0.8, height: 1.7 }); // synthetic enemy billboard
     }
 
     return sprites;
   }
 
-  /** Spawn the level's enemies (once the atlases have decoded) at their authored points, each seated on its
-   *  sector floor: lobby Drones, a corridor Husk, a Guard on the badge dais, a Consultant in the atrium. */
+  /** Spawn the active zone's enemies (once the atlases have decoded) — see {@link buildEnemies}. */
   private spawnEnemies(): void {
+    this.enemies = this.buildEnemies(this.level, this.map, this.zoneSnap);
+  }
+
+  /** Build a zone's enemy roster, each foe seated on its sector floor. The zone's snapshot (if any) is
+   *  re-applied per roster index: a dead enemy comes back as a CORPSE frozen on its last death frame, a
+   *  survivor at the position + hp it was left with. Shared by the active spawn and the warm-zone build. */
+  private buildEnemies(level: Level, map: CompiledMap, snap: ZoneSnapshot | null): Foe[] {
     if (!SPAWN_ENEMIES) {
-      return;
+      return [];
     }
-    for (const { spec, x, y } of LEVEL.enemies) {
-      this.enemies.push({
+
+    return level.enemies.map(({ spec, x, y }, i) => {
+      const saved = snap?.enemies[i];
+      const dead = saved?.dead ?? false;
+      const atX = saved?.x ?? x;
+      const atY = saved?.y ?? y;
+
+      return {
         spec,
-        x,
-        y,
-        z: this.floorAt(x, y),
+        x: atX,
+        y: atY,
+        z: this.floorOn(level, map, atX, atY),
         walkDist: 0,
-        hp: spec.hp,
-        dying: false,
-        deathTime: 0,
+        hp: dead ? 0 : (saved?.hp ?? spec.hp),
+        dying: dead,
+        deathTime: dead ? spec.deathFrames / spec.deathFps : 0, // holds the last frame — a settled corpse
         hitFlash: 0,
         windup: 0,
         cooldown: 0,
-      });
-    }
+      };
+    });
   }
 
   /** Seed every ammo type's reserve at spawn — RESERVE_START, clamped to each type's cap (so a low-cap type
@@ -1044,48 +1373,72 @@ export class BspDemoComponent {
     }
   }
 
-  /** The floor height at a map point (its sub-sector's `floorZ`, pristine — never the animated door ceiling) —
-   *  seats each entity on whatever sector it sits on (the badge on the +1.6 dais, the exit in the −0.8 atrium). */
+  /** The active zone's floor height at a map point — see {@link floorOn}. */
   private floorAt(x: number, y: number): number {
-    return LEVEL.map.sectors[locateSubSector(this.map.root, x, y).sector].floorZ;
+    return this.floorOn(this.level, this.map, x, y);
   }
 
-  /** Place the level's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, spinning access
-   *  badges) + the exit marker, each seated on its sector floor. Coordinates come from the level (`LEVEL`). */
-  private spawnPickups(): void {
-    this.vitals = [
-      ...LEVEL.health.map(([x, y, size]) => ({
-        spec: vitalSpec('health', size),
-        x,
-        y,
-        z: this.floorAt(x, y),
-        age: 0,
-      })),
-      ...LEVEL.armor.map(([x, y, size]) => ({
-        spec: vitalSpec('armor', size),
-        x,
-        y,
-        z: this.floorAt(x, y),
-        age: 0,
-      })),
-    ];
-    this.ammoBoxes = AMMO_BOX_SPECS.map((spec, i) => ({
-      spec,
-      x: LEVEL.ammo[i][0],
-      y: LEVEL.ammo[i][1],
-      z: this.floorAt(LEVEL.ammo[i][0], LEVEL.ammo[i][1]),
-      age: 0,
-    }));
-    this.keycards = LEVEL.keycards.map(([x, y, color]) => ({
-      spec: keycardSpec(color),
-      x,
-      y,
-      z: this.floorAt(x, y),
-      age: 0,
-    }));
-    const [ex, ey] = LEVEL.exit;
+  /** The floor height at a map point (its sub-sector's `floorZ`, pristine — never the animated door ceiling) —
+   *  seats each entity on whatever sector it sits on (the badge on the +1.6 dais, the exit in the −0.8 atrium). */
+  private floorOn(level: Level, map: CompiledMap, x: number, y: number): number {
+    return level.map.sectors[locateSubSector(map.root, x, y).sector].floorZ;
+  }
 
-    this.exit = { spec: EXIT_SPEC, x: ex, y: ey, z: this.floorAt(ex, ey) };
+  /** Place the active zone's floor pickups + the legacy exit marker — see {@link buildPickups}. */
+  private spawnPickups(): void {
+    const built = this.buildPickups(this.level, this.map, this.zoneSnap);
+
+    this.vitals = built.vitals;
+    this.ammoBoxes = built.ammoBoxes;
+    this.keycards = built.keycards;
+    this.exit = built.exit;
+  }
+
+  /** Build a zone's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, spinning access
+   *  badges) + the legacy exit marker, each seated on its sector floor. Each pickup carries its spawn index
+   *  and anything the zone's snapshot flags as TAKEN is skipped — collected items stay gone on return.
+   *  Shared by the active spawn and the warm-zone build. */
+  private buildPickups(
+    level: Level,
+    map: CompiledMap,
+    snap: ZoneSnapshot | null,
+  ): Pick<WarmZone, 'vitals' | 'ammoBoxes' | 'keycards' | 'exit'> {
+    const floor = (x: number, y: number): number => this.floorOn(level, map, x, y);
+    const vitals = [
+      ...level.health.map(([x, y, size]) => ({ spec: vitalSpec('health', size), x, y })),
+      ...level.armor.map(([x, y, size]) => ({ spec: vitalSpec('armor', size), x, y })),
+    ]
+      .map((v, idx) => ({ ...v, idx, z: floor(v.x, v.y), age: 0 }))
+      .filter((v) => snap?.vitalsTaken[v.idx] !== true);
+    const ammoBoxes = AMMO_BOX_SPECS.map((spec, idx) => ({
+      spec,
+      idx,
+      x: level.ammo[idx][0],
+      y: level.ammo[idx][1],
+      z: floor(level.ammo[idx][0], level.ammo[idx][1]),
+      age: 0,
+    })).filter((b) => snap?.ammoTaken[b.idx] !== true);
+    const keycards = level.keycards
+      .map(([x, y, color], idx) => ({
+        spec: keycardSpec(color),
+        idx,
+        x,
+        y,
+        z: floor(x, y),
+        age: 0,
+      }))
+      .filter((k) => snap?.cardsTaken[k.idx] !== true);
+    const exit = level.exit;
+
+    return {
+      vitals,
+      ammoBoxes,
+      keycards,
+      exit:
+        exit === undefined
+          ? null
+          : { spec: EXIT_SPEC, x: exit[0], y: exit[1], z: floor(exit[0], exit[1]) },
+    };
   }
 
   /** Spin the ammo boxes + collect any pickup the player overlaps: coffee/RAM refill health/armour (capped at
@@ -1145,6 +1498,22 @@ export class BspDemoComponent {
 
       return false; // collected — drop it
     });
+    // OPEN-BUILDING transition: walking into an `exits[]` point swaps the zone behind a short fade. The
+    // arrival side stays LOCKED until the player has left every exit radius — no instant bounce-back
+    // through the reciprocal exit next to the entry point.
+    if (this.transition === null) {
+      const inside = this.zoneExits.find(
+        (e) => Math.hypot(e.x - this.camera.x, e.y - this.camera.y) < EXIT_RADIUS,
+      );
+
+      if (this.exitsLocked) {
+        this.exitsLocked = inside !== undefined;
+      } else if (inside !== undefined) {
+        this.transition = { to: inside.to, entry: inside.entry, clock: 0, swapped: false };
+        this.fireHeld = false;
+      }
+    }
+    // The legacy single exit (levels outside the graph): reaching it wins, exactly as before.
     if (
       this.exit !== null &&
       Math.hypot(this.exit.x - this.camera.x, this.exit.y - this.camera.y) < EXIT_RADIUS
@@ -1155,11 +1524,21 @@ export class BspDemoComponent {
     }
   }
 
-  /** Set up the level's door(s) and shut them — the badge-locked gate (`LEVEL.door`) between the lobby and
-   *  the atrium, so the atrium + exit sit behind the badge: grab it on the dais, open this door, descend. */
+  /** Set up the active zone's door(s) + sliding-door index — see {@link buildDoors}. Sliding glass doors
+   *  always reset shut: they are proximity-driven and reopen on approach. */
   private spawnDoors(): void {
-    this.doors = LEVEL.doors.map((d) => {
-      const sector = LEVEL.map.sectors[d.sector];
+    this.doors = this.buildDoors(this.level, this.zoneSnap);
+    this.applyDoors(this.doors, this.sectors); // stamp the current ceilZ now
+    this.slides = this.level.map.linedefs.map(() => 0);
+    this.indexSlidingDoors();
+  }
+
+  /** Build a zone's animated doors — badge-locked gates start shut, but a door the zone's snapshot
+   *  remembers as opened comes back open (a permanent unlock survives leaving the floor). Shared by the
+   *  active spawn and the warm-zone build. */
+  private buildDoors(level: Level, snap: ZoneSnapshot | null): Door[] {
+    return level.doors.map((d, i) => {
+      const sector = level.map.sectors[d.sector];
 
       return {
         sector: d.sector,
@@ -1168,22 +1547,379 @@ export class BspDemoComponent {
         closedCeilZ: sector.floorZ, // shut → ceil meets floor → no headroom → blocked
         openCeilZ: sector.ceilZ, // the authored open ceiling
         requiresCard: d.requiresCard,
-        openness: 0,
+        openness: snap?.doors[i] ?? 0,
       };
     });
-    this.applyDoors(); // stamp the shut ceilZ now
+  }
 
-    // Sliding glass doors are proximity-driven + auto-closing; index them (line + midpoint) + reset openness.
-    this.slides = LEVEL.map.linedefs.map(() => 0);
+  /** Index the active zone's sliding glass doors (line + trigger midpoint) for the proximity drive. */
+  private indexSlidingDoors(): void {
     this.slidingDoors = [];
-    LEVEL.map.linedefs.forEach((l, line) => {
+    this.level.map.linedefs.forEach((l, line) => {
       if (l.sliding === true) {
-        const a = LEVEL.map.vertices[l.v1];
-        const b = LEVEL.map.vertices[l.v2];
+        const a = this.level.map.vertices[l.v1];
+        const b = this.level.map.vertices[l.v2];
 
         this.slidingDoors.push({ line, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 });
       }
     });
+  }
+
+  /** Index the zone's graph exits (walk-into transition points), each seated on its floor for the marker. */
+  private spawnExits(): void {
+    this.zoneExits = (this.level.exits ?? []).map((e) => ({
+      ...e,
+      z: this.floorAt(e.x, e.y),
+    }));
+  }
+
+  /**
+   * Swap the live world to zone `key` — THE load path (initial URL level, every fade graph transition,
+   * and the `fresh` restart; a passable-seam crossing takes the seamless {@link swapZones} path instead). It snapshots the zone being left into {@link zoneStates}, rebuilds every level-bound
+   * structure from the registry, re-points the render workers at the new geometry (rebuilt in place — no
+   * respawn, no leak), restores the target zone's snapshot (corpses stay down, taken pickups stay gone,
+   * opened doors stay open), and places the player: at the named `entry`, else the dev spawn override
+   * (URL level only), else the level spawn. Player inventory (hp / mental / ammo / arsenal / badges)
+   * deliberately travels through untouched. `fresh` = a NEW GAME: the whole building resets first.
+   */
+  private loadZone(key: string, entry?: string, fresh = false): void {
+    if (fresh) {
+      zoneStates.reset();
+      this.warm = null; // a NEW GAME: the warm world must not leak pre-reset state back into the store
+    } else if (this.zoneKey !== '') {
+      zoneStates.snapshot(this.zoneKey, this.captureZone()); // leaving — persist the visible world state
+    }
+    const zone = resolveZone(key, entry, this.params);
+
+    this.zoneKey = zone.key;
+    this.level = zone.level;
+    this.zoneSnap = zoneStates.restore(zone.key);
+    this.sectors = this.level.map.sectors.map((s) => ({ ...s }));
+    this.mapSource = { ...this.level.map, sectors: this.sectors };
+    this.map = buildBsp(this.mapSource);
+    this.gatherNeighbors();
+    this.gatherSeams();
+    this.pool?.setMaps(this.zoneKey, this.mapSource, this.neighborSources); // the workers rebuild their BSPs in place (textures kept)
+    this.targets = mapSprites(this.map).map((sprite, i) => ({
+      sprite,
+      alive: this.zoneSnap?.barrels[i] !== false, // popped barrels stay popped
+    }));
+    this.projectiles = [];
+    this.enemyShots = [];
+    this.impacts = [];
+    this.arcs = [];
+    this.enemies = [];
+    this.mantle = null;
+    this.spawnDoors();
+    this.spawnExits();
+    if (this.atlasesReady) {
+      this.spawnEnemies();
+      this.spawnPickups();
+    } // else: the initial atlas decode spawns them (reading the same `zoneSnap`)
+    this.camera.x = zone.at.x;
+    this.camera.y = zone.at.y;
+    this.camera.angle = zone.at.angle;
+    this.camera.z = this.floorAt(zone.at.x, zone.at.y) + EYE_HEIGHT;
+    this.camera.pitch = 0;
+    this.exitsLocked = true; // re-arm only once the player has left the arrival-side exit radius
+    this.refreshWarm(); // warm up the zone behind this map's passable seam (a fresh load = a fresh warm world)
+  }
+
+  /** Derive the current zone's LIVE-portal neighbor maps: every zone referenced by a `zonePortal` linedef,
+   *  compiled lazily (once per session) off its registry geometry. See the fields' doc for the contract. */
+  private gatherNeighbors(): void {
+    const sources = new Map<string, MapSource>();
+    const compiled = new Map<string, CompiledMap>();
+
+    for (const line of this.mapSource.linedefs) {
+      const zone = line.zonePortal?.zone;
+
+      if (zone === undefined || sources.has(zone) || LEVELS[zone] === undefined) {
+        continue;
+      }
+      let full = this.compiledZones.get(zone);
+
+      if (full === undefined) {
+        full = buildBsp(LEVELS[zone].map);
+        this.compiledZones.set(zone, full);
+      }
+      sources.set(zone, full.source);
+      compiled.set(zone, full);
+    }
+    this.neighborSources = sources;
+    this.neighborMaps = compiled;
+  }
+
+  /** Pre-resolve the active map's PASSABLE seams (segment + outward normal + zone transform) for the
+   *  per-frame crossing test. A seam naming an unknown zone stays a stage-2 window (never crossable). */
+  private gatherSeams(): void {
+    this.seams = [];
+    for (const line of this.mapSource.linedefs) {
+      const portal = line.zonePortal;
+
+      if (portal?.passable !== true || LEVELS[portal.zone] === undefined) {
+        continue;
+      }
+      const a = this.mapSource.vertices[line.v1];
+      const b = this.mapSource.vertices[line.v2];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+
+      this.seams.push({
+        ax: a.x,
+        ay: a.y,
+        bx: b.x,
+        by: b.y,
+        len,
+        nx: -(b.y - a.y) / len, // unit normal toward the seam's BACK side — out of the room, into `zone`
+        ny: (b.x - a.x) / len,
+        zone: portal.zone,
+        dx: portal.dx,
+        dy: portal.dy,
+      });
+    }
+  }
+
+  /** The render's neighbor channel for the main-thread fallback: the compiled registry maps, plus the
+   *  warm zone's live sprites where a warm world exists (the workers assemble the same map per frame). */
+  private zoneNeighbors(
+    sprites: ReadonlyMap<string, readonly Sprite[]> | undefined,
+  ): ReadonlyMap<string, ZoneNeighbor> {
+    const out = new Map<string, ZoneNeighbor>();
+
+    for (const [key, map] of this.neighborMaps) {
+      out.set(key, { map, sprites: sprites?.get(key) });
+    }
+
+    return out;
+  }
+
+  /** (Re)build the WARM neighbor — the zone behind the active map's first passable seam, restored from its
+   *  snapshot (corpses stay down, taken pickups stay gone) and simulated from now on. Any previous warm
+   *  world is snapshotted first, so nothing it lived through is lost. One warm zone max, by design. */
+  private refreshWarm(): void {
+    if (this.warm !== null && this.warm.populated) {
+      zoneStates.snapshot(this.warm.key, this.snapshotWorld(this.warm)); // a bare world has nothing to say
+    }
+    const seam = this.seams[0];
+
+    this.warm = seam === undefined ? null : this.buildWarm(seam.zone);
+    // Pre-compile every zone the WARM map's own seams look into (usually the reverse seam → the ACTIVE
+    // zone itself), so a later crossing finds its render neighbors ready — the swap costs no BSP build.
+    for (const line of this.warm?.mapSource.linedefs ?? []) {
+      const zone = line.zonePortal?.zone;
+
+      if (zone !== undefined && LEVELS[zone] !== undefined && !this.compiledZones.has(zone)) {
+        this.compiledZones.set(zone, buildBsp(LEVELS[zone].map));
+      }
+    }
+  }
+
+  /** Build a zone's full live world in the background — `loadZone`'s twin for the WARM neighbor: its own
+   *  mutable sectors + compiled BSP (so a crossing later adopts pointers, compiling nothing) and its
+   *  snapshot-restored entities. Enemies/pickups need the decoded atlases; before that the world is bare
+   *  geometry and the atlas callback's `refreshWarm` populates it. */
+  private buildWarm(key: string): WarmZone {
+    const zone = resolveZone(key, undefined, this.params); // respects ?noenemies= for every zone
+    const snap = zoneStates.restore(zone.key);
+    const sectors = zone.level.map.sectors.map((sec) => ({ ...sec }));
+    const mapSource = { ...zone.level.map, sectors };
+    const map = buildBsp(mapSource);
+    const doors = this.buildDoors(zone.level, snap);
+    const pickups = this.atlasesReady
+      ? this.buildPickups(zone.level, map, snap)
+      : { vitals: [], ammoBoxes: [], keycards: [], exit: null };
+
+    this.applyDoors(doors, sectors); // a remembered-open door is open for the warm sim's foes too
+
+    return {
+      key: zone.key,
+      level: zone.level,
+      populated: this.atlasesReady,
+      sectors,
+      mapSource,
+      map,
+      targets: mapSprites(map).map((sprite, i) => ({
+        sprite,
+        alive: snap?.barrels[i] !== false, // popped barrels stay popped
+      })),
+      enemies: this.atlasesReady ? this.buildEnemies(zone.level, map, snap) : [],
+      enemyShots: [],
+      doors,
+      slides: zone.level.map.linedefs.map(() => 0), // sliding doors rest shut in a warm zone
+      ...pickups,
+    };
+  }
+
+  /** The ACTIVE zone's live world as a {@link WarmZone} — what a crossing demotes to the warm slot. */
+  private captureWorld(): WarmZone {
+    return {
+      key: this.zoneKey,
+      level: this.level,
+      populated: this.atlasesReady,
+      sectors: this.sectors,
+      mapSource: this.mapSource,
+      map: this.map,
+      targets: this.targets,
+      enemies: this.enemies,
+      enemyShots: this.enemyShots,
+      vitals: this.vitals,
+      ammoBoxes: this.ammoBoxes,
+      keycards: this.keycards,
+      doors: this.doors,
+      slides: this.slides,
+      exit: this.exit,
+    };
+  }
+
+  /** Adopt a live world as the ACTIVE zone — the seamless half of a crossing: every pointer swaps in place
+   *  (nothing reloads, nothing respawns) and only the location-derived indexes are re-derived. */
+  private adoptWorld(world: WarmZone): void {
+    this.zoneKey = world.key;
+    this.level = world.level;
+    this.zoneSnap = null; // adoption IS the restore — the world arrives live
+    this.sectors = world.sectors;
+    this.mapSource = world.mapSource;
+    this.map = world.map;
+    this.targets = world.targets;
+    this.enemies = world.enemies;
+    this.enemyShots = world.enemyShots;
+    this.vitals = world.vitals;
+    this.ammoBoxes = world.ammoBoxes;
+    this.keycards = world.keycards;
+    this.doors = world.doors;
+    this.slides = world.slides;
+    this.exit = world.exit;
+    this.indexSlidingDoors();
+    this.spawnExits();
+    this.gatherNeighbors();
+    this.gatherSeams();
+  }
+
+  /** Does the movement step `from → to` cross a passable seam (front → back, within its span)? If so,
+   *  perform the seamless zone swap and return true. The hysteresis lives in {@link swapZones}: the player
+   *  lands ≥ {@link SEAM_HYST} beyond the line, so grazing it can't oscillate. */
+  private crossSeam(fromX: number, fromY: number, toX: number, toY: number): boolean {
+    for (const seam of this.seams) {
+      const dFrom = (fromX - seam.ax) * seam.nx + (fromY - seam.ay) * seam.ny; // signed dist, + = beyond
+      const dTo = (toX - seam.ax) * seam.nx + (toY - seam.ay) * seam.ny;
+
+      if (dFrom >= 0 || dTo < 0) {
+        continue; // no front → back crossing on this step
+      }
+      const t = dFrom / (dFrom - dTo); // where along the step the line is met
+      const cx = fromX + (toX - fromX) * t;
+      const cy = fromY + (toY - fromY) * t;
+      const u =
+        ((cx - seam.ax) * (seam.bx - seam.ax) + (cy - seam.ay) * (seam.by - seam.ay)) /
+        (seam.len * seam.len);
+
+      if (u < 0 || u > 1) {
+        continue; // crossed the infinite line, but off the seam's actual span
+      }
+      this.swapZones(seam, toX, toY, dTo);
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * The SEAMLESS zone swap — the crossing counterpart of `loadZone`, with no fade and no reload: the warm
+   * world (already compiled + simulated) is ADOPTED as the active zone, the outgoing live world becomes the
+   * new warm neighbor (the reverse portal), and the player is TRANSLATED by the seam's transform — heading,
+   * pitch and eye height untouched, so the view continues exactly where the portal left off. The workers
+   * just promote the neighbor map they already hold (see `RenderPool.swapTo`). Inventory travels untouched.
+   */
+  private swapZones(seam: SeamEdge, toX: number, toY: number, beyond: number): void {
+    const t0 = performance.now();
+    // Positional hysteresis: land at least SEAM_HYST past the line, so a graze can't instantly re-cross.
+    const push = Math.max(0, SEAM_HYST - beyond);
+    const x = toX + seam.nx * push;
+    const y = toY + seam.ny * push;
+
+    zoneStates.snapshot(this.zoneKey, this.captureZone()); // bookkeeping (the WARM world keeps the live continuity)
+    const outgoing = this.captureWorld(); // the old zone STAYS ALIVE — it becomes the warm neighbor
+    const incoming =
+      this.warm !== null && this.warm.key === seam.zone ? this.warm : this.buildWarm(seam.zone);
+
+    this.adoptWorld(incoming);
+    this.warm = outgoing;
+    // Translate the player into the new zone's coordinates (a pure translation — the geometry both sides
+    // of the seam is mirrored, so nothing on screen moves).
+    this.camera.x = x - seam.dx;
+    this.camera.y = y - seam.dy;
+    // In-flight visuals follow the same translation (they age out in a blink); the player's own launched
+    // shots are dropped — like enemies, projectiles never cross zones.
+    this.projectiles = [];
+    this.impacts = this.impacts.map((i) => ({ ...i, x: i.x - seam.dx, y: i.y - seam.dy }));
+    this.arcs = this.arcs.map((a) => ({
+      ...a,
+      ax: a.ax - seam.dx,
+      ay: a.ay - seam.dy,
+      bx: a.bx - seam.dx,
+      by: a.by - seam.dy,
+    }));
+    this.pool?.swapTo(this.zoneKey, this.neighborSources); // workers: promote the held map — no rebuild
+    this.exitsLocked = true; // generic arrival guard for any walk-into exits the new zone may have
+    console.info(
+      `[bsp] seam swap ${outgoing.key} → ${this.zoneKey} in ${(performance.now() - t0).toFixed(2)} ms`,
+    );
+  }
+
+  /** Capture everything the player could have VISIBLY changed in the ACTIVE zone — see {@link snapshotWorld}. */
+  private captureZone(): ZoneSnapshot {
+    return this.snapshotWorld(this.captureWorld());
+  }
+
+  /** Capture everything a zone's live world could have visibly changed — the acceptance test is "nothing
+   *  respawns on return". Index-aligned with the level's authoring arrays (see {@link ZoneSnapshot}). */
+  private snapshotWorld(world: WarmZone): ZoneSnapshot {
+    return {
+      enemies: world.level.enemies.map((spawn, i) => {
+        const e = world.enemies[i]; // absent before the atlases decode — persist the authored roster untouched
+
+        return e === undefined
+          ? { x: spawn.x, y: spawn.y, hp: spawn.spec.hp, dead: false }
+          : { x: e.x, y: e.y, hp: e.hp, dead: e.dying }; // dying-in-progress persists as a corpse
+      }),
+      barrels: world.targets.map((t) => t.alive),
+      vitalsTaken: this.takenFlags(
+        world.level.health.length + world.level.armor.length,
+        world.vitals,
+      ),
+      ammoTaken: this.takenFlags(world.level.ammo.length, world.ammoBoxes),
+      cardsTaken: this.takenFlags(world.level.keycards.length, world.keycards),
+      doors: world.doors.map((d) => d.openness),
+    };
+  }
+
+  /** Taken flags for an index-carrying pickup list: `true` where no pickup with that spawn index remains.
+   *  Before the atlases decode nothing has spawned, so nothing can have been taken. */
+  private takenFlags(count: number, remaining: readonly { idx: number }[]): boolean[] {
+    if (!this.atlasesReady) {
+      return Array.from({ length: count }, () => false);
+    }
+    const left = new Set(remaining.map((p) => p.idx));
+
+    return Array.from({ length: count }, (_, i) => !left.has(i));
+  }
+
+  /** Advance the zone swap: fade to black over {@link ZONE_FADE}, swap the floor at black, fade back in. */
+  private stepTransition(dt: number): void {
+    const t = this.transition;
+
+    if (t === null) {
+      return;
+    }
+    t.clock += dt;
+    if (!t.swapped && t.clock >= ZONE_FADE) {
+      this.loadZone(t.to, t.entry);
+      t.swapped = true;
+    }
+    if (t.clock >= 2 * ZONE_FADE) {
+      this.transition = null;
+    }
   }
 
   /** Drive each door's animation: a player in trigger range (holding the badge, for a locked door) opens it; a
@@ -1201,7 +1937,7 @@ export class BspDemoComponent {
         this.hint = HINT_DURATION; // locked — the badge is needed
       }
     }
-    this.applyDoors();
+    this.applyDoors(this.doors, this.sectors);
     this.stepSliding(dt);
   }
 
@@ -1221,24 +1957,76 @@ export class BspDemoComponent {
     }
   }
 
-  /** Write each door's current ceilZ into the live sector heights — the renderer + physics read these straight
-   *  off `source.sectors` each frame, so a raised ceiling both shows AND becomes passable. */
-  private applyDoors(): void {
-    for (const door of this.doors) {
-      this.sectors[door.sector].ceilZ =
+  /** Write each door's current ceilZ into a zone's live sector heights — the renderer + physics read these
+   *  straight off `source.sectors` each frame, so a raised ceiling both shows AND becomes passable. */
+  private applyDoors(doors: readonly Door[], sectors: MutableSector[]): void {
+    for (const door of doors) {
+      sectors[door.sector].ceilZ =
         door.closedCeilZ + (door.openCeilZ - door.closedCeilZ) * door.openness;
     }
   }
 
-  /** Real-enemy AI (per-spec). With line of sight a foe holds at its `standoff` (a melee Husk in your face, a
-   *  ranged Guard on a firing lane), and when ready TELEGRAPHS a wind-up (feet planted, attack animation); on
-   *  release it lands a melee strike if in reach, else lobs a projectile. `walkDist` drives the walk frame. */
-  private stepEnemies(dt: number): void {
-    if (this.enemies.length === 0) {
+  /** The ACTIVE zone's {@link CombatFrame}: the live map/foes, the real player, the real hurt. */
+  private activeFrame(): CombatFrame {
+    return {
+      map: this.map,
+      slides: this.slides,
+      enemies: this.enemies,
+      shots: this.enemyShots,
+      px: this.camera.x,
+      py: this.camera.y,
+      hurt: (dmg) => this.hurtPlayer(dmg),
+    };
+  }
+
+  /** Keep the WARM neighbor alive: spin its pickups and run its enemy AI against the player's ghost —
+   *  the camera translated into the warm zone's coordinates through the seam. Its foes think in THEIR
+   *  map; the seam blocks their sight lines (and everything else), so nothing crosses until the player
+   *  does — at which point this state is adopted as-is, positions and all. */
+  private stepWarm(dt: number): void {
+    const warm = this.warm;
+
+    if (warm === null) {
+      return;
+    }
+    for (const v of warm.vitals) {
+      v.age += dt;
+    }
+    for (const b of warm.ammoBoxes) {
+      b.age += dt;
+    }
+    for (const k of warm.keycards) {
+      k.age += dt;
+    }
+    const seam = this.seams.find((s) => s.zone === warm.key);
+
+    if (seam === undefined) {
+      return; // no live seam into the warm zone (defensive — warm zones are seam-derived)
+    }
+    const frame: CombatFrame = {
+      map: warm.map,
+      slides: warm.slides,
+      enemies: warm.enemies,
+      shots: warm.enemyShots,
+      px: this.camera.x - seam.dx, // the player, in the warm zone's coordinates
+      py: this.camera.y - seam.dy,
+      hurt: () => undefined, // a warm foe can never truly reach the player across the seam
+    };
+
+    this.stepEnemies(frame, dt);
+    this.stepEnemyShots(frame, dt);
+  }
+
+  /** Real-enemy AI (per-spec), over one zone's {@link CombatFrame} — the active zone or the warm neighbor.
+   *  With line of sight a foe holds at its `standoff` (a melee Husk in your face, a ranged Guard on a firing
+   *  lane), and when ready TELEGRAPHS a wind-up (feet planted, attack animation); on release it lands a melee
+   *  strike if in reach, else lobs a projectile. `walkDist` drives the walk frame. */
+  private stepEnemies(frame: CombatFrame, dt: number): void {
+    if (frame.enemies.length === 0 && frame.shots.length === 0) {
       return;
     }
 
-    for (const e of this.enemies) {
+    for (const e of frame.enemies) {
       e.hitFlash = Math.max(0, e.hitFlash - dt); // fade the white hit-flash
       e.cooldown = Math.max(0, e.cooldown - dt);
 
@@ -1247,8 +2035,8 @@ export class BspDemoComponent {
 
         continue;
       }
-      const dx = this.camera.x - e.x;
-      const dy = this.camera.y - e.y;
+      const dx = frame.px - e.x;
+      const dy = frame.py - e.y;
       const dist = Math.hypot(dx, dy) || 1;
       const nx = dx / dist;
       const ny = dy / dist;
@@ -1261,21 +2049,21 @@ export class BspDemoComponent {
         e.windup = Math.max(0, e.windup - dt);
         if (e.windup === 0) {
           if (s.meleeReach > 0 && dist <= s.meleeReach) {
-            this.hurtPlayer(s.meleeDamage);
+            frame.hurt(s.meleeDamage);
           } else if (s.shotgun !== undefined) {
-            this.fireShotgun(e, nx, ny, dist);
+            this.fireShotgun(frame, e, nx, ny, dist);
           } else if (
             s.thrower !== undefined &&
-            castRay(this.map, e.x, e.y, nx, ny, dist) === null
+            castRay(frame.map, e.x, e.y, nx, ny, dist) === null
           ) {
-            this.throwProjectile(e, nx, ny);
+            this.throwProjectile(frame, e, nx, ny);
           }
           e.cooldown = s.cooldownTime;
         }
 
         continue;
       }
-      if (castRay(this.map, e.x, e.y, nx, ny, dist) !== null) {
+      if (castRay(frame.map, e.x, e.y, nx, ny, dist) !== null) {
         continue; // no line of sight → idle (no wander yet)
       }
       const canMelee = s.meleeReach > 0 && dist <= s.meleeReach;
@@ -1285,19 +2073,20 @@ export class BspDemoComponent {
       if (e.cooldown === 0 && (canMelee || canShoot || canThrow)) {
         e.windup = s.windup; // ready + in range → start the telegraph
       } else if (dist > s.standoff + STANDOFF_BAND) {
-        this.moveEnemy(e, nx, ny, dt); // close in toward the standoff
+        this.moveEnemy(frame, e, nx, ny, dt); // close in toward the standoff
       } else if (dist < s.standoff - STANDOFF_BAND) {
-        this.moveEnemy(e, -nx, -ny, dt); // crowded → ease back toward the lane
+        this.moveEnemy(frame, e, -nx, -ny, dt); // crowded → ease back toward the lane
       }
     }
-    this.separateEnemies();
+    this.separateEnemies(frame);
   }
 
-  /** Move one enemy by its speed along a unit direction (collision-aware), accumulating `walkDist` for the legs. */
-  private moveEnemy(e: Foe, dirX: number, dirY: number, dt: number): void {
+  /** Move one enemy by its speed along a unit direction (collision-aware), accumulating `walkDist` for the
+   *  legs. Enemies never `crossSeams`: a passable seam stays a solid wall to them — they don't change zones. */
+  private moveEnemy(frame: CombatFrame, e: Foe, dirX: number, dirY: number, dt: number): void {
     const reach = e.spec.speed * dt;
     const moved = movePlayer(
-      this.map,
+      frame.map,
       e.x,
       e.y,
       dirX * reach,
@@ -1305,7 +2094,7 @@ export class BspDemoComponent {
       PLAYER_RADIUS,
       STEP_MAX,
       HEADROOM,
-      this.slides, // respect open sliding doors (else foes stay stuck behind them)
+      frame.slides, // respect open sliding doors (else foes stay stuck behind them)
     );
 
     e.walkDist += Math.hypot(moved.x - e.x, moved.y - e.y);
@@ -1317,24 +2106,24 @@ export class BspDemoComponent {
   /** Fire a shotgunner's blast: INSTANT (hitscan), no projectile — it connects if the player is still within
    *  range + line of sight at the moment of release (so backing out of range during the wind-up dodges it). The
    *  firing tell is the enemy's own attack animation. */
-  private fireShotgun(e: Foe, nx: number, ny: number, dist: number): void {
+  private fireShotgun(frame: CombatFrame, e: Foe, nx: number, ny: number, dist: number): void {
     const gun = e.spec.shotgun;
 
     if (
       gun !== undefined &&
       dist <= gun.range &&
-      castRay(this.map, e.x, e.y, nx, ny, dist) === null
+      castRay(frame.map, e.x, e.y, nx, ny, dist) === null
     ) {
-      this.hurtPlayer(gun.damage);
+      frame.hurt(gun.damage);
     }
   }
 
   /** Lob a thrower's projectile from its upper body toward the player (a flying, dodgeable spinning billboard). */
-  private throwProjectile(e: Foe, nx: number, ny: number): void {
-    if (e.spec.thrower === undefined || this.enemyShots.length > 60) {
+  private throwProjectile(frame: CombatFrame, e: Foe, nx: number, ny: number): void {
+    if (e.spec.thrower === undefined || frame.shots.length > 60) {
       return;
     }
-    this.enemyShots.push({
+    frame.shots.push({
       x: e.x,
       y: e.y,
       z: e.z + e.spec.worldHeight * 0.6,
@@ -1342,50 +2131,53 @@ export class BspDemoComponent {
       dy: ny,
       proj: e.spec.thrower,
       traveled: 0,
-      alive: true,
     });
   }
 
-  /** Step the thrown projectiles: fly forward, hurt the player on contact, die on a wall or past range. */
-  private stepEnemyShots(dt: number): void {
-    for (const shot of this.enemyShots) {
+  /** Step one zone's thrown projectiles: fly forward, hurt the player on contact, die on a wall or past
+   *  range. Compacts `frame.shots` in place (the array is shared with the zone's world state). */
+  private stepEnemyShots(frame: CombatFrame, dt: number): void {
+    const shots = frame.shots;
+    let live = 0;
+
+    for (const shot of shots) {
       const step = shot.proj.speed * dt;
 
-      if (castRay(this.map, shot.x, shot.y, shot.dx, shot.dy, step, true, this.slides) !== null) {
-        shot.alive = false; // struck a wall (or glass / a shut sliding door)
-        continue;
+      if (castRay(frame.map, shot.x, shot.y, shot.dx, shot.dy, step, true, frame.slides) !== null) {
+        continue; // struck a wall (or glass / a shut sliding door / a seam) — spent
       }
       shot.x += shot.dx * step;
       shot.y += shot.dy * step;
       shot.traveled += step;
 
-      if (Math.hypot(this.camera.x - shot.x, this.camera.y - shot.y) <= PLAYER_HIT_RADIUS) {
-        this.hurtPlayer(shot.proj.damage);
-        shot.alive = false;
-      } else if (shot.traveled > shot.proj.range) {
-        shot.alive = false;
+      if (Math.hypot(frame.px - shot.x, frame.py - shot.y) <= PLAYER_HIT_RADIUS) {
+        frame.hurt(shot.proj.damage);
+      } else if (shot.traveled <= shot.proj.range) {
+        shots[live++] = shot; // still flying
       }
     }
-    this.enemyShots = this.enemyShots.filter((shot) => shot.alive);
+    shots.length = live;
   }
 
-  /** Keep living enemies from stacking: push apart every overlapping pair (circle-circle, symmetric), then
-   *  apply each push through `movePlayer` so the nudge still respects walls. O(n²), fine for these counts. */
-  private separateEnemies(): void {
-    const n = this.enemies.length;
+  /** Keep one zone's living enemies from stacking: push apart every overlapping pair (circle-circle,
+   *  symmetric), then apply each push through `movePlayer` so the nudge still respects walls. O(n²), fine
+   *  for these counts. */
+  private separateEnemies(frame: CombatFrame): void {
+    const enemies = frame.enemies;
+    const n = enemies.length;
 
     if (n < 2) {
       return;
     }
-    const push = this.enemies.map(() => ({ x: 0, y: 0 }));
+    const push = enemies.map(() => ({ x: 0, y: 0 }));
 
     for (let i = 0; i < n; i++) {
-      if (this.enemies[i].dying) {
+      if (enemies[i].dying) {
         continue;
       }
       for (let j = i + 1; j < n; j++) {
-        const a = this.enemies[i];
-        const b = this.enemies[j];
+        const a = enemies[i];
+        const b = enemies[j];
 
         if (b.dying) {
           continue;
@@ -1411,9 +2203,9 @@ export class BspDemoComponent {
       if (p.x === 0 && p.y === 0) {
         continue;
       }
-      const e = this.enemies[i];
+      const e = enemies[i];
       const moved = movePlayer(
-        this.map,
+        frame.map,
         e.x,
         e.y,
         p.x,
@@ -1421,7 +2213,7 @@ export class BspDemoComponent {
         PLAYER_RADIUS,
         STEP_MAX,
         HEADROOM,
-        this.slides,
+        frame.slides,
       );
 
       e.x = moved.x;
@@ -1454,13 +2246,14 @@ export class BspDemoComponent {
     this.fireHeld = false;
   }
 
-  /** Restart the fight: restore vitals + the starting loadout, reset the camera to spawn, and re-place every
-   *  enemy + pickup (clearing all in-flight shots/effects). */
+  /** Restart the run — a NEW GAME: restore vitals + the starting loadout, then reload the current zone
+   *  `fresh` (the whole building's zone state resets, every enemy + pickup + door respawns). */
   private resetGame(): void {
     this.dead = false;
     this.deadClock = 0;
     this.won = false;
     this.wonClock = 0;
+    this.transition = null;
     this.heldCards.clear();
     this.hint = 0;
     this.hud.clearCards();
@@ -1468,17 +2261,6 @@ export class BspDemoComponent {
     this.armor = 0;
     this.hurtFx = 0;
     this.pickupFx = 0;
-    this.camera.x = LEVEL.spawn.x;
-    this.camera.y = LEVEL.spawn.y;
-    this.camera.z = EYE_HEIGHT;
-    this.camera.angle = LEVEL.spawn.angle;
-    this.camera.pitch = 0;
-    this.mantle = null;
-    this.enemies = [];
-    this.enemyShots = [];
-    this.projectiles = [];
-    this.impacts = [];
-    this.arcs = [];
     this.weaponIndex = 0;
     this.weaponView = new WeaponView(
       ARSENAL[0],
@@ -1487,9 +2269,7 @@ export class BspDemoComponent {
     );
     ARSENAL.forEach((weapon, i) => (this.mag[i] = weapon.magSize ?? 0));
     this.seedReserves();
-    this.spawnEnemies();
-    this.spawnPickups();
-    this.spawnDoors(); // re-shut the badge-locked door for the fresh run
+    this.loadZone(this.zoneKey, undefined, true); // fresh: resets the building + respawns everything
   }
 
   /** DEBUG stress mode (toggle G): ramp synthetic enemies and run a realistic per-frame AI cost — a line-of-
@@ -2354,6 +3134,24 @@ export class BspDemoComponent {
     ctx.restore();
   }
 
+  /** The zone-swap wash: black at the floor swap, ramping in/out over {@link ZONE_FADE} on either side —
+   *  the brief blackout that sells moving through the building (the HUD bar stays, DOOM-style). */
+  private drawZoneFade(ctx: CanvasRenderingContext2D): void {
+    const t = this.transition;
+
+    if (t === null) {
+      return;
+    }
+    const alpha = t.swapped
+      ? Math.max(0, 1 - (t.clock - ZONE_FADE) / ZONE_FADE)
+      : Math.min(1, t.clock / ZONE_FADE);
+
+    ctx.save();
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.restore();
+  }
+
   /** A transient objective hint near the centre (e.g. "BADGE REQUIS" at a locked exit), fading over its life. */
   private drawHint(ctx: CanvasRenderingContext2D): void {
     if (this.hint <= 0) {
@@ -2430,22 +3228,60 @@ export class BspDemoComponent {
     return (turnRate > 0 ? far : -far) as Gaze;
   }
 
-  /** Roll up the achieved frame rate + average render cost, published ~4×/second (not every frame). */
-  private measureFps(now: number, frameCost: number): void {
-    this.framesSinceTick += 1;
+  /** Record one COMPLETED render (called per join, not per rAF): its cost + join-stall measurements feed
+   *  the overlay averages, the telemetry beacon, and the ring's render columns until the next completion. */
+  private recordRender(
+    frameCost: number,
+    stallMs: number,
+    slowest: number,
+    computeMs: number,
+  ): void {
+    this.lastRenderMs = frameCost;
+    this.lastStallMs = stallMs;
+    this.lastSlowest = slowest;
+    this.lastComputeMs = computeMs;
+    this.rendersSinceTick += 1;
     this.msAccum += frameCost;
     this.msMax = Math.max(this.msMax, frameCost);
+    this.stallMax = Math.max(this.stallMax, stallMs);
+  }
+
+  /** Per-rAF display bookkeeping: the ring row + the ~4×/second overlay/telemetry roll-up. The `fps`
+   *  readout counts RENDERED frames (distinct images on screen — the honest visual rate now the rAF chain
+   *  never blocks on the join); the delta column is the display cadence itself. */
+  private measureDisplay(now: number): void {
+    // Dev perf ring: one row per DISPLAY frame — the raw rAF-to-rAF delta (any pause shows — GC, layout,
+    // a blocked main thread) + the LAST COMPLETED render's cost / straggler stall (which worker, how
+    // late) / active worker count, duplicated across the rAFs it stays on screen (duration-weighted).
+    // `n` counts total frames; the reader derives the ring window from it.
+    if (this.perfRing !== null) {
+      if (this.perfRingLast !== 0) {
+        const i = this.perfRing.n % PERF_RING_SIZE;
+
+        this.perfRing.delta[i] = now - this.perfRingLast;
+        this.perfRing.render[i] = this.lastRenderMs;
+        this.perfRing.stall[i] = this.lastStallMs;
+        this.perfRing.slowest[i] = this.lastSlowest;
+        this.perfRing.workers[i] = this.pool?.active ?? 1;
+        this.perfRing.compute[i] = this.lastComputeMs;
+        this.perfRing.n += 1;
+      }
+      this.perfRingLast = now;
+    }
 
     if (this.tickStart === 0) {
       this.tickStart = now;
     } else if (now - this.tickStart >= 250) {
-      this.fps.set(Math.round((this.framesSinceTick * 1000) / (now - this.tickStart)));
-      this.frameMs.set(Math.round((this.msAccum / this.framesSinceTick) * 10) / 10);
+      this.fps.set(Math.round((this.rendersSinceTick * 1000) / (now - this.tickStart)));
+      if (this.rendersSinceTick > 0) {
+        this.frameMs.set(Math.round((this.msAccum / this.rendersSinceTick) * 10) / 10);
+      }
       this.frameMaxMs.set(Math.round(this.msMax * 10) / 10);
       this.logPerf(now);
-      this.framesSinceTick = 0;
+      this.rendersSinceTick = 0;
       this.msAccum = 0;
       this.msMax = 0;
+      this.stallMax = 0;
       this.tickStart = now;
     }
   }
@@ -2465,6 +3301,8 @@ export class BspDemoComponent {
       ms: this.frameMs(),
       max: this.frameMaxMs(),
       th: this.threads(),
+      pool: this.poolSize(),
+      stall: Math.round(this.stallMax * 100) / 100, // worst join straggler stall in the window (ms)
       w: this.config.width,
       h: this.config.height,
       fs: typeof document !== 'undefined' && document.fullscreenElement !== null,

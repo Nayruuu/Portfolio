@@ -40,15 +40,16 @@ client/src/app/
 │
 ├── core/                       ← logique client/infra, sans UI
 │   ├── api/                    ← le seam vers l'API .NET (content-api.service, api.token)
-│   ├── services/               ← state signal / SignalStore (content, i18n, player, reviews, search, seo, theme, viewport)
+│   ├── services/               ← state signal / SignalStore (content, game, i18n, player, reviews, search, seo, theme, viewport)
 │   ├── lib/                    ← fonctions pures, testées à 100 % (markdown, tokenize, site, constants…)
 │   └── content/                ← un content.<lang>.json par langue + bridge typé partagé + article-bodies.ts généré
 │
-├── shared/                     ← présentationnel transverse (icon, code-block, inline-runs)
+├── shared/                     ← présentationnel transverse (icon, code-block, inline-runs) + game (helpers BSP partagés)
 ├── layout/                     ← le shell (nav, prefs, channel-header, tabs-bar)
 │
 └── features/                   ← un dossier lazy-loaded par feature
-    ├── home/                   ← player (+ scènes, jeu DOOM-like "Return To Office", mini-player flottant), video-meta, comments, like-bar, up-next
+    ├── home/                   ← player (+ scènes, mini-player flottant), video-meta, comments, like-bar, up-next
+    ├── bsp-demo/               ← le jeu caché OPEN SPACE.EXE (moteur BSP software maison, monté dans le player + servi sur /bsp)
     ├── articles/               ← liste filtrable (+ article-detail)
     ├── series/                 ← cards thématiques (+ series-detail)
     └── about/ · stack/ · contact/

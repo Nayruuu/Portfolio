@@ -8,6 +8,78 @@ import {
 } from '../../core/lib/bsp-engine';
 import { projectileEffect } from '../../shared/game/effects';
 
+/** A placeholder DECOR billboard (a potted plant) — a "bidon" stand-in until real prop art lands. Transparent
+ *  background + a green bush in a terracotta pot; feature-layer, so not bound by the core-coverage guard. */
+function plantPlaceholder(): Texture {
+  const size = 64;
+  const pixels = new Uint8ClampedArray(size * size * 4); // transparent by default
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+
+      if (y >= 44 && y < 60 && x >= 24 && x < 40) {
+        pixels[i] = 96; // terracotta pot
+        pixels[i + 1] = 62;
+        pixels[i + 2] = 42;
+        pixels[i + 3] = 255;
+      } else {
+        const dx = x - 32;
+        const dy = y - 24;
+
+        if (dx * dx + dy * dy < 380) {
+          const k = (x * 7 + y * 3) % 11 < 3 ? 0.65 : 1; // leafy speckle
+
+          pixels[i] = 44 * k; // green foliage
+          pixels[i + 1] = 122 * k;
+          pixels[i + 2] = 52 * k;
+          pixels[i + 3] = 255;
+        }
+      }
+    }
+  }
+
+  return { width: size, height: size, pixels };
+}
+
+/** A placeholder GLASS PANE — a "bidon" stand-in until real glass art lands (see `prompts/glass_pane.md`). Mostly
+ *  clear (alpha 0 → see-through + cool tint), with an opaque aluminium mullion frame (border + central cross) and
+ *  a couple of diagonal reflection glints. Sampled per pixel like a door leaf; feature-layer, coverage-exempt. */
+function glassPaneTexture(): Texture {
+  const size = 64;
+  const pixels = new Uint8ClampedArray(size * size * 4); // clear by default
+  const frame = 3;
+  const mid = size / 2;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const onMullion =
+        x < frame ||
+        x >= size - frame ||
+        y < frame ||
+        y >= size - frame ||
+        Math.abs(x - mid) < frame ||
+        Math.abs(y - mid) < frame;
+
+      if (onMullion) {
+        pixels[i] = 150; // opaque aluminium mullion (alpha ≥ 128 → stamped as the frame)
+        pixels[i + 1] = 156;
+        pixels[i + 2] = 164;
+        pixels[i + 3] = 255;
+      } else if ((x + y) % 26 < 4) {
+        pixels[i] = 214; // a soft diagonal reflection glint (semi-opaque → still stamped over the tint)
+        pixels[i + 1] = 228;
+        pixels[i + 2] = 242;
+        pixels[i + 3] = 150;
+      }
+      // else: left at alpha 0 → clear glass (see-through + the cool tint from blendGlass)
+    }
+  }
+
+  return { width: size, height: size, pixels };
+}
+
 /** The procedural fallback library (no assets needed) — what renders before, or instead of, the WebP art. */
 export function proceduralTextures(): Map<string, Texture> {
   return new Map<string, Texture>([
@@ -17,6 +89,9 @@ export function proceduralTextures(): Map<string, Texture> {
     ['STEP', metalTexture()],
     ['CEIL', ceilTexture()],
     ['BARREL', barrelTexture()],
+    ['PROP', plantPlaceholder()], // potted lobby plant — real art in ENV_ASSETS (this is the offline fallback)
+    ['PROP_SCREEN', metalTexture()], // crashed reception monitor — real art in ENV_ASSETS
+    ['PROP_TOTEM', metalTexture()], // lobby directory totem — real art in ENV_ASSETS
     // Extended palette (WebP swaps in via `loadEnvTextures`; these are the pre-decode / SSR fallbacks).
     ['CUBICLE', brickTexture()],
     ['SCREEN', metalTexture()],
@@ -25,6 +100,10 @@ export function proceduralTextures(): Map<string, Texture> {
     ['RACKS', metalTexture()],
     ['GLASS', metalTexture()],
     ['GLASS_INT', metalTexture()],
+    ['GLASS_PANE', glassPaneTexture()], // textured see-through pane (mullions + reflections + clear), sampled like a door leaf
+    ['ELEVATOR', metalTexture()], // closed corporate elevator doors (dead) — real art in ENV_ASSETS
+    ['WOOD', brickTexture()], // warm wood veneer accent wall (premium lobby) — real art in ENV_ASSETS
+    ['CEIL_LUX', ceilTexture()], // white luminous cornice ceiling (premium lobby) — real art in ENV_ASSETS
     ['CONCRETE', ceilTexture()],
     ['TECHNICAL', ceilTexture()],
     ['NEON', ceilTexture()],
@@ -42,6 +121,7 @@ export function proceduralTextures(): Map<string, Texture> {
     ['SLAB', floorTexture()],
     ['LOBBY_FLOOR', floorTexture()],
     ['CITY', brickTexture()],
+    ['CITY_STREET', brickTexture()], // entrance frontage — ground-level deserted street backdrop
     ['DOOR_GLASS', metalTexture()], // sliding glass door leaf (WebP carries alpha: opaque frame + clear glass)
     // Themed walls (per-zone identity for the episode).
     ['LOBBY', brickTexture()],
@@ -95,7 +175,16 @@ const ENV_ASSETS: Readonly<Record<string, { url: string; worldSize: number }>> =
   SLAB: { url: '/game/textures/floor_slab_512.webp', worldSize: 4 }, // sub-basement concrete
   LOBBY_FLOOR: { url: '/game/textures/floor_lobby_512.webp', worldSize: 4 }, // bright lobby terrazzo
   CITY: { url: '/game/textures/backdrop_city_512.webp', worldSize: 8 }, // exterior cityscape backdrop — worldSize 8 = an 8-tall/8-wide far wall shows exactly ONE copy, aligned to TEX_ANCHOR (64) at z0..z8 (no tiling)
+  CITY_STREET: { url: '/game/textures/city_street_512.webp', worldSize: 8 }, // entrance frontage — deserted ground-level street (one clean copy)
   DOOR_GLASS: { url: '/game/textures/door_glass_512.webp', worldSize: 4 }, // sliding glass door leaf; ALPHA = clear glass, opaque = alu frame + handle (mapped per-panel by the glass pass, not tiled)
+  GLASS_PANE: { url: '/game/textures/glass_pane_512.webp', worldSize: 4 }, // curtain-wall window; ALPHA = clear glass, opaque = alu mullions + reflections (mapped once across each window by the glass pass)
+  ELEVATOR: { url: '/game/textures/elevator_512.webp', worldSize: 4 }, // dead corporate elevator doors (one door unit per 4-wide car opening)
+  WOOD: { url: '/game/textures/wall_wood_512.webp', worldSize: 4 }, // warm wood veneer accent panels (reception / lounge / elevator surrounds)
+  CEIL_LUX: { url: '/game/textures/ceiling_lux_512.webp', worldSize: 4 }, // white luminous cornice ceiling (LED cove grid + spots)
+  // Decor prop billboards (green-screen art keyed to alpha offline; worldSize is unused by sprites).
+  PROP: { url: '/game/props/prop_plant.webp', worldSize: 4 }, // potted lobby plant
+  PROP_SCREEN: { url: '/game/props/prop_screen.webp', worldSize: 4 }, // crashed reception monitor
+  PROP_TOTEM: { url: '/game/props/prop_totem.webp', worldSize: 4 }, // lobby directory totem
   // Themed walls — per-zone identity for the episode.
   LOBBY: { url: '/game/textures/wall_lobby_512.webp', worldSize: 4 }, // reception (M1)
   KITCHEN: { url: '/game/textures/wall_kitchen_512.webp', worldSize: 4 }, // cafeteria (M5)

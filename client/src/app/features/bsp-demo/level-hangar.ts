@@ -83,7 +83,8 @@ function buildMap(): { map: MapSource; doorSector: number } {
     ceilTex: 'CEIL',
     light: 205,
   }); // 13 sortie (exit)
-  // Spiral wedge steps (indices 14..20): floorZ climbs +rise per step under a flat open ceiling (so the radial
+  const STUB = b.sector({ floorZ: 0, ceilZ: 4.6, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 168 }); // 14 seam stub → M1
+  // Spiral wedge steps (indices 15..21): floorZ climbs +rise per step under a flat open ceiling (so the radial
   // portals always clear HEADROOM); the light brightens as you climb toward the balcony.
   const W: number[] = [];
 
@@ -165,10 +166,20 @@ function buildMap(): { map: MapSource; doorSector: number } {
   b.solid(10, 40, 6, 44, SAS); // NW chamfer
   b.solid(6, 44, 6, 52, SAS);
   b.solid(6, 52, 10, 56, SAS); // SW chamfer
-  b.solid(10, 56, 22, 56, SAS);
+  b.solid(10, 56, 14, 56, SAS); // south wall west of the seam stub
+  b.portal(14, 56, 18, 56, SAS, STUB); // sas ↔ seam stub (same heights — a plain opening)
+  b.solid(18, 56, 22, 56, SAS); // south wall east of the seam stub
   b.solid(22, 56, 22, 51, SAS);
   b.solid(22, 47, 22, 40, SAS);
   b.solid(22, 40, 10, 40, SAS);
+  // SEAM STUB (x14..18, y56..60) — a short corridor south out of the sas (floor 0, ceil 4.6 — a touch
+  // taller than the sas so the seam window stays generous), ending in the LIVE + PASSABLE zone portal back
+  // down to M1's hall stub — the lobby renders through the opening and WALKING THROUGH it crosses zones
+  // seamlessly (no fade). Reciprocal of M1's seam: translation (−10, 30) maps M1's seam line (24..28, 30)
+  // onto ours (14..18, 60). TRANSLATION only, so both stubs run north–south.
+  b.solid(14, 56, 14, 60, STUB); // west
+  b.solid(18, 60, 18, 56, STUB); // east
+  b.zonePortal(14, 60, 18, 60, STUB, { zone: 'm1', dx: -10, dy: 30, passable: true });
   // CORRIDOR sas→hub (x22..30, y47..51)
   b.solid(30, 47, 22, 47, COR1);
   b.solid(22, 51, 30, 51, COR1);
@@ -250,6 +261,11 @@ function buildMap(): { map: MapSource; doorSector: number } {
   b.thing(56, 72, 0, 'barrel'); // catwalk cover
   b.thing(71, 90, 0, 'barrel'); // storage cover
   b.thing(36, 82, 0, 'barrel'); // sortie cover
+  // TEMP seam-proof props (remove with M2): two barrels on the M1 sight line — one in the seam stub, one
+  // in the sas beyond it — so the LIVE window from M1's hall visibly shows the hangar ALIVE (and gives the
+  // seamless-crossing proof something to destroy and re-find persisted).
+  b.thing(15, 57.5, 0, 'barrel'); // seam stub, just behind the window (M1 sees it at (25, 27.5))
+  b.thing(17, 54.5, 0, 'barrel'); // sas, through the stub opening — deeper on the same axis
 
   return { map: b.build(), doorSector: DOOR };
 }
@@ -288,6 +304,12 @@ export const HANGAR: Level = {
     [70, 90], // server cell (BFG) — storage, the deep reward
   ],
   keycards: [[70, 42, 'red']], // on the balcony (+3.15), sniper-guarded
-  exit: [38, 80], // deep in the sunken sortie (−1.0)
+  entries: {
+    'from-m1': { x: 16, y: 57.2, angle: Math.PI * 1.5 }, // in the seam stub, walking north into the sas
+  },
+  // NO graph `exits`: the TEMP edge back down to M1's upstairs hall is the PASSABLE live seam at the
+  // stub's south end — walking through the window IS the crossing (seamless, no fade). M2 replaces it.
+  // (`entries` stay: named arrival points for the fade mechanism / dev loads.)
+  exit: [38, 80], // deep in the sunken sortie (−1.0) — the hangar keeps its own win flow
   doors: [{ sector: built.doorSector, triggerX: 43, triggerY: 62, requiresCard: 'red' }],
 };

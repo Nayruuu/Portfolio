@@ -113,6 +113,77 @@ describe('movePlayer', () => {
   });
 });
 
+describe('passable zone-portal seams (the seamless crossing)', () => {
+  const stex = (sector: number): SideDef => ({
+    sector,
+    xOffset: 0,
+    yOffset: 0,
+    upperTex: 'S',
+    lowerTex: 'S',
+    middleTex: 'S',
+  });
+  // One room x0..8 / y0..8 whose whole north edge (y=8) is a one-sided live seam into 'next'.
+  const seamRoom = (passable: boolean | undefined): MapSource => ({
+    sectors: [{ floorZ: 0, ceilZ: 4, floorTex: 'F', ceilTex: 'C', light: 200 }],
+    things: [],
+    vertices: [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 0, y: 8 },
+      { x: 8, y: 8 },
+    ],
+    linedefs: [
+      { v1: 0, v2: 2, front: stex(0), back: null },
+      {
+        v1: 2,
+        v2: 3,
+        front: stex(0),
+        back: null,
+        zonePortal: {
+          zone: 'next',
+          dx: 0,
+          dy: -8,
+          ...(passable === undefined ? {} : { passable }),
+        },
+      },
+      { v1: 3, v2: 1, front: stex(0), back: null },
+      { v1: 1, v2: 0, front: stex(0), back: null },
+    ],
+  });
+
+  it('lets a body allowed to crossSeams walk straight through a passable seam', () => {
+    const r = movePlayer(buildBsp(seamRoom(true)), 4, 7, 0, 2, R, STEP, HEAD, undefined, true);
+
+    expect(r.y).toBeCloseTo(9, 5); // clean through the line — the caller now swaps zones
+    expect(r.x).toBeCloseTo(4, 5);
+  });
+
+  it('still blocks a body NOT allowed to crossSeams (enemies never cross zones)', () => {
+    const r = movePlayer(buildBsp(seamRoom(true)), 4, 7, 0, 2, R, STEP, HEAD);
+
+    expect(r.y).toBeCloseTo(8 - R, 5); // parked a radius off the seam, like any solid wall
+  });
+
+  it('keeps a NON-passable seam solid even for a crossSeams body (stage-2 windows stay windows)', () => {
+    for (const passable of [false, undefined]) {
+      const r = movePlayer(
+        buildBsp(seamRoom(passable)),
+        4,
+        7,
+        0,
+        2,
+        R,
+        STEP,
+        HEAD,
+        undefined,
+        true,
+      );
+
+      expect(r.y).toBeCloseTo(8 - R, 5);
+    }
+  });
+});
+
 describe('glass walls block the player (see-through but solid)', () => {
   const gtex = (sector: number): SideDef => ({
     sector,
@@ -158,6 +229,18 @@ describe('glass walls block the player (see-through but solid)', () => {
     const r = movePlayer(buildBsp(twoRoom(true)), 3, 2, 2, 0, R, STEP, HEAD); // charge east into the glass
 
     expect(r.x).toBeLessThan(4); // stopped short — the glass blocked (though you can see through it)
+  });
+
+  it('BLOCKS the player at a FENCE edge (blocking furniture), even though the far floor is walkable', () => {
+    const src = twoRoom(false);
+    // Same two rooms, but the shared edge is a FENCE (a counter/turnstile rim): renders open, never crossable.
+    const fenced: MapSource = {
+      ...src,
+      linedefs: src.linedefs.map((l, i) => (i === 2 ? { ...l, fence: true } : l)),
+    };
+    const r = movePlayer(buildBsp(fenced), 3, 2, 2, 0, R, STEP, HEAD); // charge east into the fence
+
+    expect(r.x).toBeLessThan(4); // stopped short — the step-up physics may NOT silently walk over furniture
   });
 });
 

@@ -33,7 +33,21 @@ export interface Level {
   readonly ammo: readonly (readonly [number, number])[]; // one coordinate per AMMO_BOX_SPECS entry, in order
   // access badges — `[x, y, color]`; each z is resolved from the floor it sits on (e.g. the dais, +1.6).
   readonly keycards: readonly (readonly [number, number, KeycardColor])[];
-  readonly exit: readonly [number, number]; // z resolved from the floor (the atrium, −0.8)
+  // The WIN goal (z resolved from the floor) — reach it → level complete. A level wired into the
+  // open-building graph may keep one alongside its `exits` (both work simultaneously) or omit it.
+  readonly exit?: readonly [number, number];
+  // OPEN-BUILDING graph (see `zone-state.ts`): walk-into transition points to sibling zones (`to` = a
+  // `LEVELS` key, `entry` = a named arrival of the target) + this level's own named arrival points. A
+  // level without `exits` keeps the single legacy `exit` behaviour above.
+  readonly exits?: readonly {
+    readonly x: number;
+    readonly y: number;
+    readonly to: string;
+    readonly entry: string;
+  }[];
+  readonly entries?: Readonly<
+    Record<string, { readonly x: number; readonly y: number; readonly angle: number }>
+  >;
   // animated doors — open on approach (a null `requiresCard` = an automatic/unlocked door; a colour = badge-gated).
   readonly doors: readonly {
     readonly sector: number;

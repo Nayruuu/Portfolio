@@ -1,227 +1,252 @@
 import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC } from './enemies';
-import { MapBuilder } from './level-builder';
+import { RoomBuilder } from './room-builder';
+import type { RoomPoint } from './room-builder';
 import type { MapSource } from '../../core/lib/bsp-engine';
 import type { Level } from './level-accueil';
 
 /**
- * M1 "Lobby / Accueil" — the OPEN SPACE.EXE episode opener: the UAC tower lobby wing, marble grandeur gone
- * WRONG (straight horror), KEYLESS (like DOOM E1M1). Design principle: **tight, DENSE rooms** (interior cover
- * islands + columns + packed fights) — the "big" feeling comes from the NUMBER of connected rooms, never from
- * huge empty ones. Authored via {@link MapBuilder} (world coords); winding rule: a linedef's `front` is the
- * sector to the RIGHT of `v1 → v2` — each room wound so its interior stays on the right. Shared edges ONCE.
+ * M1 "Lobby / Accueil" — the OPEN SPACE.EXE episode opener: the UAC tower's PREMIUM ground-floor lobby,
+ * pristine and bright (the calm before the horror), KEYLESS (like DOOM E1M1). Look: polished marble
+ * (`LOBBY_FLOOR`) + warm WOOD veneer feature walls + luminous white `CEIL_LUX` cornice ceilings +
+ * black-frame glass. Authored via {@link RoomBuilder} (room polygons + declared connections) — winding,
+ * shared-edge splitting, and the solid-vs-opening bookkeeping are the builder's job, not the author's.
  *
- * Built INCREMENTALLY (this is the dense core; more rooms land in later passes):
+ *   STREET (CITY_STREET backdrop, 0.1-deep box — zero gap behind the frontage glass)
+ *     ═glassPane═ PORCH [spawn, glazed entry, ceil 6.4] ══ OUTER sliding glass door ══▶ SAS (glass
+ *     vestibule PROJECTING into the concourse — glassPane sides, one continuous glass axis to the street)
+ *     ══ INNER sliding glass door ══▶ CONCOURSE (z0, chamfered ring ceil 4.4 + raised central ceiling
+ *     FIELD 5.6 with a WOOD cornice fascia + 4 columns): RECEPTION desk (in front of the WOOD feature
+ *     wall, west) ─▶ TURNSTILE row (3 lanes, the badge line) ─▶ 3 dead ELEVATORS (recess in the north
+ *     wall, WOOD piers) — the lifts are DEAD, so:
+ *       ├─ LOUNGE alcove east (glassPane partition + opening; carpet rug + sofa + low table + plants)
+ *       └─ LATERAL STAIRCASE (5 steps, z0 → +2.0) ──▶ THRESHOLD DOOR (unlocked)
+ *          ──▶ RECEPTION HALL (z+2.0, tight octagon: raised DESK island +2.6 + 2 columns)
+ *              ──▶ SEAM STUB north (5 service steps back down to z0) ──▶ LIVE PASSABLE zone portal →
+ *                  hangar (TEMP edge until M2 exists — the techbase is VISIBLE through the seam opening
+ *                  and WALKING through it crosses zones seamlessly)
  *
- *   VESTIBULE [spawn, z0, octagon] ──GRAND STAIRCASE (5 steps, z0 → +2.0)──▶ THRESHOLD DOOR (unlocked)
- *      ──▶ RECEPTION HALL (HUB, z+2.0, tight octagon: raised DESK island +2.6 + 2 columns) [temp exit here]
- *
- * y increases DOWN. Organic geometry throughout (octagons + chamfers + a real stair run); NO boxy rooms.
+ * y increases DOWN (the entrance is at the SOUTH). Organic geometry (chamfers everywhere); NO side
+ * skylines — the ONLY exterior view is the street through the sas glass axis.
  */
 
-/** A straight flight of `n` steps climbing NORTH (−y) in the corridor x∈[xW,xE], from its south edge at
- *  `ySouth` upward, each step `depth` deep and rising `dz` (floor `zBase + (i+1)·dz`) under a flat `ceilZ`.
- *  Emits the inter-step portals + the two side walls per step; the CALLER portals the flight's south end
- *  (to the room below) and north end (to the room above). Returns the step sector indices, south→north. */
-function stairNorth(
-  b: MapBuilder,
-  xW: number,
-  xE: number,
-  ySouth: number,
-  depth: number,
-  n: number,
-  zBase: number,
-  dz: number,
-  ceilZ: number,
-  light: number,
-  wallTex: string,
-): number[] {
-  const secs: number[] = [];
-
-  for (let i = 0; i < n; i++) {
-    const yS = ySouth - i * depth; // this step's south edge
-    const yN = ySouth - (i + 1) * depth; // its north edge
-    const s = b.sector({
-      floorZ: +(zBase + (i + 1) * dz).toFixed(2),
-      ceilZ,
-      floorTex: 'STEP',
-      ceilTex: 'CONCRETE',
-      light,
-    });
-
-    secs.push(s);
-    b.solid(xW, yN, xW, yS, s, wallTex); // west edge (+y): interior east
-    b.solid(xE, yS, xE, yN, s, wallTex); // east edge (−y): interior west
-    if (i > 0) {
-      b.portal(xE, yS, xW, yS, secs[i - 1], s, wallTex); // shared step edge (front = the lower step, to the south)
-    }
+/** Pair a flat coordinate list into a polygon: `poly([x0,y0, x1,y1, …])`. */
+function poly(coords: readonly number[]): readonly RoomPoint[] {
+  if (coords.length % 2 !== 0) {
+    throw new Error('poly: odd coordinate count');
   }
 
-  return secs;
+  return Array.from({ length: coords.length / 2 }, (_, i) => [coords[2 * i], coords[2 * i + 1]]);
 }
 
-/** A floor-to-ceiling COLUMN — a small rectangular solid pillar (a hole in `room`, walls fronting the room
- *  on the OUTSIDE). Cover + sightline-breaker. `(x1,y1)` is the NW corner, `(x2,y2)` the SE. */
-function column(
-  b: MapBuilder,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  room: number,
-  tex: string,
-): void {
-  b.solid(x1, y1, x2, y1, room, tex); // north (room to the north)
-  b.solid(x2, y1, x2, y2, room, tex); // east
-  b.solid(x2, y2, x1, y2, room, tex); // south
-  b.solid(x1, y2, x1, y1, room, tex); // west
-}
+/** The 4-corner polygon of an axis-aligned rectangle, `(x1,y1)` = NW corner, `(x2,y2)` = SE. */
+const rect = (x1: number, y1: number, x2: number, y2: number): readonly RoomPoint[] =>
+  poly([x1, y1, x1, y2, x2, y2, x2, y1]);
+
+/** The two floor looks: LUX = ground-floor marble under the luminous cornice ceiling; UPPER = the
+ *  upstairs marble (z+2.0) under a plain white ceiling. */
+const LUX = { floorZ: 0, floorTex: 'LOBBY_FLOOR', ceilTex: 'CEIL_LUX' };
+const UPPER = { floorZ: 2.0, floorTex: 'LOBBY_FLOOR', ceilTex: 'CEIL' };
 
 function buildMap(): { map: MapSource; doorSector: number } {
-  const b = new MapBuilder();
+  const b = new RoomBuilder();
 
-  // --- sectors ------------------------------------------------------------------------------------
-  const VEST = b.sector({
-    floorZ: 0,
+  // --- CONCOURSE — chamfered marble ring x6..46 y100..128, with the sas notch in its south wall;
+  //     edge 1 (x6, y110..122) is the WOOD veneer feature wall behind the reception desk ------------
+  const CONC = b.room(
+    poly([
+      6, 104, 6, 110, 6, 122, 6, 124, 10, 128, 22, 128, 22, 122, 30, 122, 30, 128, 42, 128, 46, 124,
+      46, 104, 42, 100, 10, 100,
+    ]),
+    { ...LUX, ceilZ: 4.4, light: 238, wallTex: 'LOBBY', walls: { 1: 'WOOD' } },
+  );
+
+  // --- raised central ceiling FIELD (x18..36 y108..120) — flat floor, ceiling 4.4 → 5.6; its portal
+  //     upper bands wear WOOD = the warm cornice fascia — and its 4 corner COLUMNS (cover) ----------
+  const cornice = { ...LUX, ceilZ: 5.6, light: 246, wallTex: 'WOOD' };
+  const FIELD = b.island(CONC, rect(18, 108, 36, 120), cornice);
+
+  b.hole(FIELD, rect(19, 109, 20.5, 110.5), 'PILLAR'); // NW
+  b.hole(FIELD, rect(33.5, 109, 35, 110.5), 'PILLAR'); // NE
+  b.hole(FIELD, rect(19, 117.5, 20.5, 119), 'PILLAR'); // SW
+  b.hole(FIELD, rect(33.5, 117.5, 35, 119), 'PILLAR'); // SE
+
+  // --- ELEVATOR bank — a recess on the concourse's back (north) wall with 3 dead cars (4-wide bays,
+  //     one door copy each) split by WOOD piers -----------------------------------------------------
+  const ELEV = b.room(poly([10, 96, 10, 100, 24, 100, 24, 96, 20, 96, 19, 96, 15, 96, 14, 96]), {
+    ...LUX,
     ceilZ: 3.4,
-    floorTex: 'LOBBY_FLOOR',
-    ceilTex: 'CONCRETE',
-    light: 202,
-  }); // octagon spawn
-  const STEP = stairNorth(b, 20, 28, 100, 6, 5, 0, 0.4, 5.6, 216, 'LOBBY'); // grand staircase z0.4..2.0, y100→70
-  const DOOR = b.sector({
-    floorZ: 2.0,
-    ceilZ: 5.0,
-    floorTex: 'LOBBY_FLOOR',
-    ceilTex: 'CEIL',
-    light: 230,
-  }); // unlocked threshold
-  const HALL = b.sector({
-    floorZ: 2.0,
-    ceilZ: 7,
-    floorTex: 'LOBBY_FLOOR',
-    ceilTex: 'CEIL',
-    light: 244,
-  }); // reception hub (tight octagon)
-  const DESK = b.sector({ floorZ: 2.6, ceilZ: 7, floorTex: 'STEP', ceilTex: 'CEIL', light: 244 }); // raised desk island (mantle cover)
-  const PORCH = b.sector({
-    floorZ: 0,
-    ceilZ: 8,
-    floorTex: 'LOBBY_FLOOR',
-    ceilTex: 'CEIL',
-    light: 236,
-  }); // glass-fronted entry ATRIUM (spawn), 8 tall — matches the exterior so the full city backdrop shows
-  const ENTR = b.sector({
-    floorZ: 0,
-    ceilZ: 4.0,
-    floorTex: 'LOBBY_FLOOR',
-    ceilTex: 'CEIL',
-    light: 236,
-  }); // automatic sliding glass entrance (z0..4) — a normal door height, transom above to the atrium
-  const EXT = b.sector({
+    light: 210,
+    wallTex: 'WOOD',
+    walls: { 3: 'ELEVATOR', 5: 'ELEVATOR', 7: 'ELEVATOR' }, // the car-door bays between the piers
+  });
+
+  b.connect(CONC, ELEV, { tex: 'LOBBY' });
+
+  // --- LATERAL staircase (east) — 5 steps z0.4..2.0 climbing NORTH from the concourse's y100 wall --
+  const run = { depth: 6, count: 5, zBase: 0, dz: 0.4, ceilZ: 5.6, light: 216, wallTex: 'LOBBY' };
+  const STEP = b.stairs([26, 100], [34, 100], run);
+
+  b.connect(CONC, STEP[0], { tex: 'LOBBY' }); // the staircase mouth
+
+  // --- RECEPTION desk (accueil) + TURNSTILE row (portiques) — raised furniture at MANTLE height (1.3:
+  //     too tall to silently step onto at STEP_MAX 1.1, but vaultable with the two-handed climb — hopping
+  //     the turnstile is a deliberate move, and ENEMIES can't mantle so the rails still gate them); the 3
+  //     turnstile lanes are the gaps x17..20 | x22..30 (central, on axis) | x32..35 --------------------
+  const counter = { floorZ: 1.3, ceilZ: 4.4, floorTex: 'STEP', ceilTex: 'CEIL_LUX', light: 238 };
+
+  b.island(CONC, rect(8, 113, 16, 116), { ...counter, wallTex: 'LOBBY' }); // desk, at the WOOD wall
+  b.island(CONC, rect(8, 103, 17, 105), { ...counter, wallTex: 'METAL' }); // west rail
+  b.island(CONC, rect(20, 103, 22, 105), { ...counter, wallTex: 'METAL' }); // gate post (lane 1 | lane 2)
+  b.island(CONC, rect(30, 103, 32, 105), { ...counter, wallTex: 'METAL' }); // gate post (lane 2 | lane 3)
+  b.island(CONC, rect(35, 103, 44, 105), { ...counter, wallTex: 'METAL' }); // east rail
+
+  // --- LOUNGE alcove (x46..56 y108..124, chamfered) — the sofa corner: a glassPane partition + a
+  //     6-wide walk-in opening carved out of the concourse's east wall; WOOD wall behind the sofa ---
+  const LOUNGE = b.room(
+    poly([54, 108, 48, 108, 46, 110, 46, 122, 48, 124, 54, 124, 56, 122, 56, 110]),
+    { ...LUX, ceilZ: 3.6, light: 228, wallTex: 'LOBBY', walls: { 6: 'WOOD' } },
+  );
+
+  b.connect(CONC, LOUNGE, { kind: 'glassPane', at: [46, 122, 46, 119] }); // south glass panel
+  b.connect(CONC, LOUNGE, { at: [46, 119, 46, 113], tex: 'LOBBY' }); // the lounge OPENING
+  b.connect(CONC, LOUNGE, { kind: 'glassPane', at: [46, 113, 46, 110] }); // north glass panel
+
+  // --- lounge furniture: flat carpet RUG inset + sofa plinth (sit-on) + low table on the rug -------
+  const wood = { ceilZ: 3.6, ceilTex: 'CEIL_LUX', light: 228, floorTex: 'STEP', wallTex: 'WOOD' };
+  const carpet = { ...LUX, ceilZ: 3.6, light: 228, floorTex: 'CARPET', wallTex: 'METAL' };
+  const RUG = b.island(LOUNGE, rect(48, 113, 54, 121), carpet); // flat — reads as the rug's border
+
+  b.island(LOUNGE, rect(54.5, 112, 55.7, 120), { ...wood, floorZ: 0.9 }); // sofa plinth (east wall)
+  b.island(RUG, rect(50, 116, 52, 118), { ...wood, floorZ: 0.5 }); // low table, on the rug
+
+  // --- entrance SAS (x22..30 y122..128) — a glass vestibule projecting into the concourse; all four
+  //     edges are connections (two glassPane sides + the two automatic sliding doors) ---------------
+  const glazed = { ...LUX, light: 236 };
+  const SAS = b.room(rect(22, 122, 30, 128), { ...glazed, ceilZ: 4.0, wallTex: 'GLASS_PANE' });
+
+  b.connect(CONC, SAS, { kind: 'glassPane', at: [22, 128, 22, 122] }); // sas WEST side — see-through
+  b.connect(CONC, SAS, { kind: 'slidingDoor', at: [22, 122, 30, 122] }); // INNER sliding door (sas → concourse)
+  b.connect(CONC, SAS, { kind: 'glassPane', at: [30, 122, 30, 128] }); // sas EAST side
+
+  // --- glazed entry PORCH (spawn, x22..30 y128..134) + the 0.1-deep EXTERIOR street box (the street
+  //     backdrop sits IN the glass plane, seen through the frontage pane) ---------------------------
+  const PORCH = b.room(rect(22, 128, 30, 134), { ...glazed, ceilZ: 6.4, wallTex: 'GLASS_INT' });
+
+  b.connect(SAS, PORCH, { kind: 'slidingDoor' }); // OUTER automatic sliding door (porch → sas)
+  const EXT = b.room(rect(22, 134, 30, 134.1), {
     floorZ: 0,
     ceilZ: 8,
     floorTex: 'CONCRETE',
     ceilTex: 'CONCRETE',
     light: 255,
-  }); // shallow exterior box (0..8, aligned to TEX_ANCHOR 64); its far wall carries the CITY backdrop, shown once
+    wallTex: 'GLASS_INT',
+    walls: { 1: 'CITY_STREET' }, // far wall — deserted STREET, ONE clean copy (8 wide)
+  });
 
-  // --- VESTIBULE octagon (interior on the right, clockwise from the west-top vertex) ---------------
-  b.solid(14, 106, 14, 114, VEST, 'LOBBY'); // west
-  b.solid(14, 114, 20, 120, VEST, 'GLASS_INT'); // SW chamfer — window
-  b.portal(20, 120, 28, 120, VEST, ENTR, 'GLASS_INT'); // vestibule ↔ automatic glass entrance door
-  b.solid(28, 120, 34, 114, VEST, 'GLASS_INT'); // SE chamfer — window
-  b.solid(34, 114, 34, 106, VEST, 'LOBBY'); // east
-  b.solid(34, 106, 28, 100, VEST, 'LOBBY'); // NE chamfer
-  b.solid(20, 100, 14, 106, VEST, 'LOBBY'); // NW chamfer
-  b.portal(28, 100, 20, 100, VEST, STEP[0], 'LOBBY'); // vestibule ↔ step 0 (the staircase mouth)
+  b.connect(PORCH, EXT, { kind: 'glassPane' }); // south frontage — SEE-THROUGH pane onto the street
 
-  // --- automatic glass ENTRANCE door (ENTR, x20..28 y120..124) -------------------------------------
-  b.solid(20, 120, 20, 124, ENTR, 'GLASS_INT'); // west
-  b.solid(28, 124, 28, 120, ENTR, 'GLASS_INT'); // east
-  b.slidingDoor(20, 124, 28, 124, ENTR, PORCH, 'DOOR_GLASS'); // automatic SLIDING GLASS entrance (porch → interior)
+  // --- THRESHOLD DOOR slab (x26..34 y68..70) at the flight's top, then the RECEPTION HALL — a tight
+  //     chamfered octagon (x10..42 y34..68): east interior glass, raw BRICK north end ---------------
+  const slab = { ...UPPER, ceilZ: 5.0, light: 230, wallTex: 'GLASS_INT' };
+  const DOOR = b.room(rect(26, 68, 34, 70), slab);
 
-  // --- glass-fronted PORCH octagon (spawn, x16..32 y124..138) — the frontage windows ---------------
-  b.solid(16, 130, 16, 134, PORCH, 'GLASS_INT'); // west window
-  b.solid(16, 134, 20, 138, PORCH, 'GLASS_INT'); // SW window
-  b.glass(20, 138, 28, 138, PORCH, EXT, 'GLASS_INT'); // south — SEE-THROUGH window onto the courtyard
-  b.solid(28, 138, 32, 134, PORCH, 'GLASS_INT'); // SE window
-  b.solid(32, 134, 32, 130, PORCH, 'GLASS_INT'); // east window
-  b.solid(32, 130, 28, 124, PORCH, 'GLASS_INT'); // NE window
-  b.solid(20, 124, 16, 130, PORCH, 'GLASS_INT'); // NW window
+  b.connect(DOOR, STEP[4]); // door ↔ top step
+  const hall = { ...UPPER, ceilZ: 7, light: 244, wallTex: 'LOBBY' };
+  const HALL = b.room(poly([10, 42, 10, 60, 18, 68, 34, 68, 42, 60, 42, 42, 34, 34, 18, 34]), {
+    ...hall,
+    walls: { 4: 'GLASS_INT', 5: 'BRICK', 6: 'BRICK', 7: 'BRICK' },
+  });
 
-  // --- EXTERIOR (EXT) — window-width box (x20..28, y138..142) behind the frontage glass -------------------
-  b.solid(20, 138, 20, 142, EXT, 'GLASS_INT'); // west reveal
-  b.solid(20, 142, 28, 142, EXT, 'CITY'); // FAR WALL — cityscape, ONE clean copy (8 wide × 8 tall, worldSize 8, aligned)
-  b.solid(28, 142, 28, 138, EXT, 'GLASS_INT'); // east reveal
+  b.connect(DOOR, HALL, { tex: 'GLASS_INT' }); // door ↔ hall
 
-  // --- staircase → threshold door (flight north end at y70) ----------------------------------------
-  b.portal(20, 70, 28, 70, DOOR, STEP[4]); // door ↔ top step (front = door, north)
+  // --- SEAM STUB to the hangar (the TEMP M1 ⇄ hangar zone edge, a LIVE + PASSABLE PORTAL): five service
+  //     steps descend north out of the hall (z2.0 → 0) to a 4-wide seam whose opening renders the hangar's
+  //     own seam stub LIVE — and WALKING THROUGH it crosses zones seamlessly (no fade; the walk-into exits
+  //     mechanism stays for non-seam edges). Width/heights match the hangar side exactly (floor 0,
+  //     ceil 4.6, x-span 4); the stub keeps the LOBBY dressing so the palette flips at the seam. The
+  //     translation (dx,dy) = (10, −30) maps the hangar's seam line (14..18, 60) onto ours (24..28, 30).
+  //     TRANSLATION only — both stubs run north–south. ---------------------------------------------------
+  const SEAM = b.stairs([28, 30], [24, 30], {
+    depth: 0.8,
+    count: 5,
+    zBase: -0.4,
+    dz: 0.4,
+    ceilZ: 4.6,
+    light: 224,
+    wallTex: 'LOBBY',
+  });
 
-  // --- THRESHOLD DOOR slab (x20..28, y68..70) -----------------------------------------------------
-  b.solid(20, 68, 20, 70, DOOR, 'GLASS_INT'); // west
-  b.solid(28, 70, 28, 68, DOOR, 'GLASS_INT'); // east
-  b.portal(28, 68, 20, 68, DOOR, HALL, 'GLASS_INT'); // door ↔ hall (front = door, south)
+  b.connect(HALL, SEAM[4], { tex: 'LOBBY' }); // carve the stub mouth out of the hall's north wall
+  b.zonePortal(SEAM[0], [28, 30, 24, 30], { zone: 'hangar', dx: 10, dy: -30, passable: true });
 
-  // --- RECEPTION HALL — tight chamfered octagon (x10..42, y34..68), interior on the right ----------
-  b.solid(10, 42, 10, 60, HALL, 'LOBBY'); // west
-  b.solid(10, 60, 18, 68, HALL, 'LOBBY'); // SW chamfer
-  b.solid(18, 68, 20, 68, HALL, 'LOBBY'); // south-left (to the door mouth)
-  b.solid(28, 68, 34, 68, HALL, 'LOBBY'); // south-right (past the door mouth)
-  b.solid(34, 68, 42, 60, HALL, 'LOBBY'); // SE chamfer
-  b.solid(42, 60, 42, 42, HALL, 'GLASS_INT'); // east — interior glass wall
-  b.solid(42, 42, 34, 34, HALL, 'BRICK'); // NE chamfer
-  b.solid(34, 34, 18, 34, HALL, 'BRICK'); // north
-  b.solid(18, 34, 10, 42, HALL, 'BRICK'); // NW chamfer
+  // --- DESK island (raised +2.6, mantle cover) + 2 COLUMNS + planters and a low seating plinth -----
+  const marble = { ...hall, floorTex: 'STEP' };
 
-  // --- DESK island (raised +2.6, mantle cover) — 4 portal edges to the hall ------------------------
-  b.portal(22, 47, 22, 55, DESK, HALL); // west
-  b.portal(22, 55, 30, 55, DESK, HALL); // south
-  b.portal(30, 55, 30, 47, DESK, HALL); // east
-  b.portal(30, 47, 22, 47, DESK, HALL); // north
+  b.island(HALL, rect(22, 47, 30, 55), { ...marble, floorZ: 2.6, wallTex: 'METAL' }); // the desk island
+  b.hole(HALL, rect(15, 42, 18, 45), 'PILLAR');
+  b.hole(HALL, rect(33, 57, 36, 60), 'PILLAR');
+  b.island(HALL, rect(11, 49, 14, 54), { ...marble, floorZ: 3.0 }); // west planter (waist-high)
+  b.island(HALL, rect(38, 49, 41, 54), { ...marble, floorZ: 3.0 }); // east planter
+  b.island(HALL, rect(11, 56, 15, 59), { ...marble, floorZ: 2.4 }); // SW seating plinth (low, sit-on)
 
-  // --- 2 COLUMNS (cover + sightline-breakers) -----------------------------------------------------
-  column(b, 15, 42, 18, 45, HALL, 'PILLAR');
-  column(b, 33, 57, 36, 60, HALL, 'PILLAR');
-
-  // --- things -------------------------------------------------------------------------------------
-  b.thing(24, 131, Math.PI * 1.5, 'player_start'); // porch, facing north through the glass doors into the lobby
+  // --- things --------------------------------------------------------------------------------------
+  b.thing(26, 131, Math.PI * 1.5, 'player_start'); // porch, facing north through the sas into the lobby
+  b.thing(22, 118, 0, 'barrel'); // concourse — cover by the SW field column
+  b.thing(32, 117, 0, 'barrel'); // concourse — cover by the SE field column
   b.thing(26, 44, 0, 'barrel'); // hall — behind the desk
   b.thing(14, 55, 0, 'barrel'); // hall — west cover
   b.thing(38, 48, 0, 'barrel'); // hall — east cover
+
+  // --- DECOR props (real green-screen art: plant / crashed monitor / directory totem) --------------
+  b.thing(12, 114.5, 0, 'prop'); // plant on the reception counter
+  b.thing(14, 114.5, 0, 'prop_screen'); // crashed check-in monitor beside it (same counter block → z1.1)
+  b.thing(11, 101.5, 0, 'prop_totem'); // directory totem in front of the dead lifts (off the walk axis)
+  b.thing(54.5, 110.5, 0, 'prop'); // plant in the lounge, north of the sofa
+  b.thing(50, 122.5, 0, 'prop'); // plant in the lounge, south side
+  b.thing(12.5, 51, 0, 'prop'); // plant on the west hall planter
+  b.thing(39.5, 51, 0, 'prop'); // plant on the east hall planter
 
   return { map: b.build(), doorSector: DOOR };
 }
 
 const built = buildMap();
 
-/** "M1 — Lobby / Accueil" (episode opener). INCREMENT 1 = a tight, dense vertical spine; more rooms to come. */
+/** "M1 — Lobby / Accueil" (episode opener) — the redesigned PREMIUM ground floor + the upstairs hall. */
 export const M1_LOBBY: Level = {
   map: built.map,
-  spawn: { x: 24, y: 131, angle: Math.PI * 1.5 },
+  spawn: { x: 26, y: 131, angle: Math.PI * 1.5 },
   enemies: [
-    { spec: PINKY_SPEC, x: 24, y: 104 }, // vestibule ambush
+    { spec: PINKY_SPEC, x: 12, y: 111 }, // concourse — the receptionist husk, behind the counter
+    { spec: PINKY_SPEC, x: 33, y: 102 }, // concourse — lurking past the turnstile east lane
+    { spec: SHOTGUNGUY_SPEC, x: 17, y: 98 }, // elevator recess — security guard at the dead lifts, holds the axis
+    { spec: IMP_SPEC, x: 51, y: 114.5 }, // lounge — lobbing over the low table through the glass opening
     { spec: PINKY_SPEC, x: 16, y: 40 }, // hall — west rush
-    { spec: PINKY_SPEC, x: 36, y: 52 }, // hall — east rush
     { spec: IMP_SPEC, x: 26, y: 38 }, // hall — lobbing from behind the desk/north
     { spec: SHOTGUNGUY_SPEC, x: 38, y: 40 }, // hall — holding the NE corner
   ],
   health: [
-    [24, 116, 'small'], // vestibule
+    [26, 118, 'small'], // concourse — on the axis, under the raised ceiling field
     [12, 45], // hall — west
   ],
-  armor: [[40, 58, 'small']], // hall — SE corner
+  armor: [[53, 113, 'small']], // lounge — on the rug, by the sofa
   ammo: [
-    [24, 108], // staples — vestibule
-    [22, 88], // nails — staircase
+    [18, 101], // staples — past the turnstile west lane
+    [30, 86], // nails — on the staircase
     [26, 51], // canisters — on the desk island
     [14, 62], // cells — hall SW
-    [40, 44], // batteries — hall NE
-    [24, 118], // server-cell — vestibule (temp)
+    [50, 120], // batteries — lounge, by the low table
+    [12, 98], // server-cell — elevator recess
   ],
   keycards: [], // keyless floor (like E1M1)
-  exit: [26, 40], // TEMP: north of the desk, until the atrium/elevator exist
+  entries: {
+    main: { x: 26, y: 131, angle: Math.PI * 1.5 }, // the street porch (the level spawn)
+    'from-above': { x: 26, y: 32, angle: Math.PI / 2 }, // on the seam steps, walking down into the hall
+  },
+  // NO graph `exits`: the TEMP M1 ⇄ hangar edge is the PASSABLE live seam in the hall's stub — walking
+  // through the window IS the crossing (seamless, no fade). M2 (the office floor) will take this slot.
+  // (`entries` stay: named arrival points for the fade mechanism / dev loads.)
   doors: [
-    { sector: built.doorSector, triggerX: 24, triggerY: 69, requiresCard: null }, // glass threshold into the hall
-    // (the porch entrance is now an automatic SLIDING GLASS door — proximity-driven, not a doors[] entry)
+    { sector: built.doorSector, triggerX: 30, triggerY: 69, requiresCard: null }, // glass threshold into the hall
+    // (the entrance sas is TWO automatic SLIDING GLASS doors — proximity-driven, not doors[] entries)
   ],
 };

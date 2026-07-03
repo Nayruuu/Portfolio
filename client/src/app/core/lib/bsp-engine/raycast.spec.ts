@@ -58,6 +58,41 @@ describe('castRay', () => {
   it('returns null when the nearest wall is beyond maxDist', () => {
     expect(castRay(MAP, 5, 5, 1, 0, 4)).toBeNull();
   });
+
+  it('treats a LIVE zone-portal seam as a solid wall — shots never cross zones', () => {
+    // The x=7 line, normally a pass-through two-sided portal, becomes a zone-portal seam. Even two-sided
+    // (defensive — the builders author seams one-sided) it must now stop the ray short of the x=10 wall.
+    const seam = { zone: 'next', dx: 0, dy: 0 };
+    const twoSided = buildBsp({
+      ...FIXTURE,
+      linedefs: FIXTURE.linedefs.map((l, i) => (i === 4 ? { ...l, zonePortal: seam } : l)),
+    });
+    const hit = castRay(twoSided, 5, 5, 1, 0, 100);
+
+    expect(hit?.dist).toBeCloseTo(2);
+    expect(hit?.x).toBeCloseTo(7);
+
+    // The authored shape — a ONE-SIDED seam — blocks like any solid edge of the world.
+    const oneSided = buildBsp({
+      ...FIXTURE,
+      linedefs: FIXTURE.linedefs.map((l, i) =>
+        i === 4 ? { ...l, back: null, zonePortal: seam } : l,
+      ),
+    });
+
+    expect(castRay(oneSided, 5, 5, 1, 0, 100)?.x).toBeCloseTo(7);
+
+    // Even a PASSABLE seam (the player walks through it) stops the ray: the crossing is a movement
+    // feature only — cross-zone ballistics stay out of scope.
+    const passable = buildBsp({
+      ...FIXTURE,
+      linedefs: FIXTURE.linedefs.map((l, i) =>
+        i === 4 ? { ...l, back: null, zonePortal: { ...seam, passable: true } } : l,
+      ),
+    });
+
+    expect(castRay(passable, 5, 5, 1, 0, 100)?.x).toBeCloseTo(7);
+  });
 });
 
 describe('castRay — glass stops a projectile but not a sight line', () => {
@@ -114,6 +149,14 @@ describe('nearestTargetHit', () => {
   it('ignores targets behind the shooter or wide of the ray', () => {
     expect(nearestTargetHit(0, 0, 1, 0, 100, [behind])).toBeNull();
     expect(nearestTargetHit(0, 0, 1, 0, 100, [offToTheSide])).toBeNull();
+  });
+
+  it('hits POINT-BLANK: a centre just behind the origin whose body still contains it (a pressed-in rusher)', () => {
+    // A launched shot spawns AHEAD of the camera; a melee rusher pressed into the player can put its centre
+    // just behind that spawn point while its body still surrounds it — that is a hit at distance 0, not a miss.
+    const pressedIn: Target = { x: -0.1, y: 0, radius: 0.4 };
+
+    expect(nearestTargetHit(0, 0, 1, 0, 100, [pressedIn])).toEqual({ index: 0, dist: 0 });
   });
 
   it('ignores a target beyond maxDist (e.g. behind the wall the shot already hit)', () => {

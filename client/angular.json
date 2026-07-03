@@ -90,6 +90,7 @@
               "**/features/bsp-demo/bsp-demo.component.ts",
               "**/features/bsp-demo/bsp-demo.component.html",
               "**/features/bsp-demo/render-pool.ts",
+              "**/features/bsp-demo/gpu-renderer.ts",
               "**/features/bsp-demo/load-textures.ts"
             ],
             "coverageThresholds": {

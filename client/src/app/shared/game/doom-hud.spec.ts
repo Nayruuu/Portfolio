@@ -148,8 +148,10 @@ describe('DoomHud', () => {
   beforeEach(() => {
     FakeImage.instances.length = 0;
     ctx = fakeContext();
+    // The mock's parameter type collapses to getContext's LAST overload — the WebGPU one now that
+    // @webgpu/types is loaded (for gpu-renderer.ts) — so the runtime-irrelevant cast must match it.
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
-      ctx as unknown as CanvasRenderingContext2D,
+      ctx as unknown as GPUCanvasContext,
     );
   });
   afterEach(() => {

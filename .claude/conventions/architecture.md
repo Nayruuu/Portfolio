@@ -110,8 +110,13 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
     (`AIM_CONE`/`AMMO_START`/`MELEE_CONE`/`MELEE_RANGE`/`ARC_DURATION`). It is **re-exported through the
     root barrel** as one line — `export * from './game'` — so consumers import it from `…/core/lib`.
   - `core/lib/bsp-engine/` — the from-scratch DOOM-style **BSP software engine**: the map data model +
-    node builder (the BSP compiler), the front-to-back BSP walk + textured wall/floor/ceiling `renderer`,
-    `camera` projection, hitscan `raycast`, player `physics` (slide + step-up), and procedural `texture`s.
+    node builder (the BSP compiler), the front-to-back BSP walk + textured wall/floor/ceiling `renderer`
+    (incl. the transparent-glass pass — tinted panes, textured windows, double sliding doors — and the
+    live **zone-portal** pass: a seam's opening renders a neighbouring zone's map via a translated
+    depth-1 recursive walk), `frame-commands` (the same walk recording GPU-ready per-column span/glass/
+    sprite command buffers for the WebGPU backend), `camera` projection, hitscan `raycast` (with a
+    glass-blocking mode for projectiles), player `physics` (slide + step-up + auto-mantle + opt-in
+    seamless crossing of passable zone-portal seams), and procedural `texture`s.
     Big and feature-scoped, it is **not** folded into the root barrel; consumers import it directly through
     its own sub-barrel, `…/core/lib/bsp-engine`.
 - **Consumers** import from the folder: `import { parseMarkdown, STORAGE_KEYS } from '…/core/lib';`.
@@ -207,8 +212,8 @@ features/home/
             scenes/  intro-scene/ stack-scene/ projects-scene/ timeline-scene/ outro-scene/
 features/bsp-demo/                                 # the hidden BSP game (OPEN SPACE.EXE) — a top-level lazy feature
   bsp-demo.component.{ts,html,scss}                # sd-bsp-demo — the game shell; served at /bsp AND mounted in the player
-  render.worker.ts  render-pool.ts  load-textures.ts  # browser-only render code (SAB worker pool + WebP/procedural textures)
-  level-accueil.ts  level-hangar.ts  level-demo.ts  demo-map.ts  level-builder.ts  pickups.ts  enemies.ts  # pure/tested worked-example levels + entity helpers
+  render.worker.ts  render-pool.ts  gpu-renderer.ts  load-textures.ts  # browser-only render code (SAB worker pool + the WebGPU compute backend + WebP/procedural textures)
+  level-accueil.ts  level-m1-lobby.ts  level-hangar.ts  level-demo.ts  demo-map.ts  level-builder.ts  room-builder.ts  level-select.ts  zone-state.ts  pickups.ts  enemies.ts  # pure/tested hand-authored levels + the wall/room authoring builders + the level registry (dev URL params) + per-zone world-state persistence + entity helpers
 ```
 
 Features with internal routing keep a `*.routes.ts` at the feature root and a `*-detail/` folder for
@@ -223,8 +228,9 @@ the detail component (`articles/articles.routes.ts` + `article-detail/`; same fo
 `layout/channel-header/`, `layout/tabs-bar/`. Each is a folder holding the component + its
 co-located template/styles/spec. `shared/game/` is the exception — not an `sd-` component but the
 cross-feature **presentational game helpers** (the `DoomHud` / `WeaponView` / `ClimbView` imperative
-helper classes + the `weapons` / `effects` JSON-bridge data + the shared `loaded-image` loader, each with
-its `.spec.ts`), engine-agnostic so any game surface — today `sd-bsp-demo` — can reuse them.
+helper classes + the `weapons` / `effects` JSON-bridge data, each with its `.spec.ts`, plus the small
+`climb-frames` / `loaded-image` support modules), engine-agnostic so any game surface — today
+`sd-bsp-demo` — can reuse them.
 
 ---
 

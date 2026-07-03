@@ -1,4 +1,12 @@
-import type { LineDef, MapSource, Sector, SideDef, Thing, Vertex } from '../../core/lib/bsp-engine';
+import type {
+  LineDef,
+  MapSource,
+  Sector,
+  SideDef,
+  Thing,
+  Vertex,
+  ZonePortalDef,
+} from '../../core/lib/bsp-engine';
 
 /**
  * A coordinate-based authoring builder for BSP {@link MapSource}s. You author in WORLD COORDINATES; it dedups
@@ -62,6 +70,27 @@ export class MapBuilder {
     });
   }
 
+  /** A two-sided FENCE edge `(x1,y1) → (x2,y2)`: renders exactly like a portal (open above the shared band)
+   *  but can NEVER be crossed — the edge of waist-high blocking furniture (a counter, a turnstile rail) that
+   *  the step-up physics would otherwise silently walk onto. */
+  public fence(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    front: number,
+    back: number,
+    tex = 'METAL',
+  ): void {
+    this.lines.push({
+      v1: this.vertex(x1, y1),
+      v2: this.vertex(x2, y2),
+      front: this.side(front, tex),
+      back: this.side(back, tex),
+      fence: true,
+    });
+  }
+
   /** A two-sided GLASS wall `(x1,y1) → (x2,y2)`: see-through (the `back` sector renders through it) but
    *  BLOCKING — a window / interior partition. `front` is the right-hand sector, `back` the left; `tex` is
    *  the translucent glass overlay painted over the opening. */
@@ -83,8 +112,31 @@ export class MapBuilder {
     });
   }
 
-  /** A two-sided SLIDING GLASS door `(x1,y1) → (x2,y2)`: see-through + tinted like glass, but its panel
-   *  retracts toward `v1` as it opens and bars the way until mostly open. Auto-driven by player proximity. */
+  /** A two-sided textured GLASS PANE `(x1,y1) → (x2,y2)`: like {@link glass} (see-through + blocking), but its
+   *  `tex` is a real glass image sampled PER PIXEL over the opening — opaque texels (mullions / reflections) are
+   *  painted, clear texels stay see-through + tinted — the same treatment a sliding door leaf gets. */
+  public glassPane(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    front: number,
+    back: number,
+    tex = 'GLASS_PANE',
+  ): void {
+    this.lines.push({
+      v1: this.vertex(x1, y1),
+      v2: this.vertex(x2, y2),
+      front: this.side(front, tex),
+      back: this.side(back, tex),
+      glass: true,
+      pane: true,
+    });
+  }
+
+  /** A two-sided automatic SLIDING GLASS door `(x1,y1) → (x2,y2)`: a DOUBLE door — two textured leaves that
+   *  meet at the centre and retract toward their ends as it opens — barring the way until mostly open.
+   *  Proximity-driven (auto-opens and auto-closes); NOT a `Level.doors[]` entry. */
   public slidingDoor(
     x1: number,
     y1: number,
@@ -101,6 +153,29 @@ export class MapBuilder {
       back: this.side(back, tex),
       glass: true,
       sliding: true,
+    });
+  }
+
+  /** A LIVE ZONE-PORTAL seam `(x1,y1) → (x2,y2)` fronting `sector` on its RIGHT: a one-sided wall (so it
+   *  stays solid for physics + hitscan) whose middle band renders ANOTHER zone's map — `portal.zone`'s
+   *  world translated by `(dx, dy)` (neighbor point + offset = this map's point; TRANSLATION only, so both
+   *  sides of a seam must be authored with the same orientation). `tex` is the solid fallback painted when
+   *  the renderer is given no map for that zone. */
+  public zonePortal(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    sector: number,
+    portal: ZonePortalDef,
+    tex = 'BRICK',
+  ): void {
+    this.lines.push({
+      v1: this.vertex(x1, y1),
+      v2: this.vertex(x2, y2),
+      front: this.side(sector, tex),
+      back: null,
+      zonePortal: { ...portal },
     });
   }
 

@@ -18,6 +18,10 @@ export interface RayHit {
  * With `blockGlass` (a flying PROJECTILE, not a sight line), a two-sided line also stops the ray when it is
  * solid GLASS — a glass window, or a SLIDING door still shut (`slides[i] < SLIDE_OPEN`; an open door lets it
  * through). Sight lines leave `blockGlass` false so foes can still see (and be seen) through the glass.
+ *
+ * A LIVE ZONE-PORTAL seam (`zonePortal`) always blocks — even a PASSABLE one the player can walk through:
+ * the view (and the player) cross zones, but shots and sight lines do not (cross-zone ballistics are out
+ * of scope).
  */
 export function castRay(
   map: CompiledMap,
@@ -42,7 +46,9 @@ export function castRay(
         line.glass === true &&
         (line.sliding !== true || (slides?.[i] ?? 0) < SLIDE_OPEN);
 
-      if (!solidGlass) {
+      // A LIVE ZONE PORTAL blocks the ray like a solid wall (shots never cross zones — not even through a
+      // PASSABLE seam) — even defensively on a two-sided line (the builders author seams one-sided).
+      if (!solidGlass && line.zonePortal === undefined) {
         continue; // a two-sided portal (or an open glass door / a sight line) does not stop the ray
       }
     }
@@ -114,15 +120,18 @@ export function nearestTargetHit(
 
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
-    const proj = (t.x - ox) * dx + (t.y - oy) * dy; // distance along the ray to the closest approach
+    // Distance along the ray to the closest approach, clamped to the ray START: a centre slightly BEHIND the
+    // origin still hits when the origin is INSIDE the body (a point-blank rusher pressed into the muzzle —
+    // a launched shot spawns ahead of the camera and would otherwise sail straight through it).
+    const proj = Math.max(0, (t.x - ox) * dx + (t.y - oy) * dy);
 
-    if (proj < 0 || proj > best) {
-      continue; // behind the shooter, or farther than the current nearest hit / max range
+    if (proj > best) {
+      continue; // farther than the current nearest hit / max range
     }
     const perp = Math.hypot(t.x - (ox + dx * proj), t.y - (oy + dy * proj));
 
     if (perp > t.radius + proj * spread) {
-      continue; // wide of the target horizontally
+      continue; // wide of the target horizontally (at proj 0: the origin is outside the body — truly behind)
     }
     if (t.zMin !== undefined && t.zMax !== undefined) {
       const aimZ = eyeZ + vSlope * proj; // the aim line's height where it reaches the target

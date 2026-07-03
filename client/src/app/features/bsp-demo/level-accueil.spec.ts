@@ -54,9 +54,11 @@ describe('L1 Accueil', () => {
   });
 
   it('seats the spawn, the badge dais (mantle) and the atrium (sunken) at their intended heights', () => {
+    const [exitX, exitY] = ACCUEIL.exit ?? [Number.NaN, Number.NaN]; // legacy exit — present on this level
+
     expect(floorAt(ACCUEIL.spawn.x, ACCUEIL.spawn.y)).toBe(0); // réception floor
     expect(floorAt(ACCUEIL.keycards[0][0], ACCUEIL.keycards[0][1])).toBe(1.6); // badge dais — a mantle ledge
-    expect(floorAt(ACCUEIL.exit[0], ACCUEIL.exit[1])).toBe(-0.8); // sunken octagonal atrium
+    expect(floorAt(exitX, exitY)).toBe(-0.8); // sunken octagonal atrium
   });
 
   it('places every enemy + pickup on a real, sensible floor (none stranded in the void)', () => {

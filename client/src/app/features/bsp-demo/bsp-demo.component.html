@@ -33,8 +33,10 @@
     }
 
     <output class="bsp-demo__fps">
-      {{ fps() }} FPS · {{ frameMs() }} ms (max {{ frameMaxMs() }}) · {{ threads() }} thread(s) ·
-      textures:
+      {{ fps() }} FPS · {{ frameMs() }} ms (max {{ frameMaxMs() }}) · {{ threads() }}/{{
+        poolSize()
+      }}
+      thread(s) · {{ backend() }} · textures:
       {{ texturesLoaded() ? 'WebP' : 'procédural' }}
     </output>
   </div>

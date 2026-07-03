@@ -6,3 +6,4 @@ export * from './camera';
 export * from './texture';
 export * from './raycast';
 export * from './renderer';
+export * from './frame-commands';

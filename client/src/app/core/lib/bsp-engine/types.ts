@@ -10,7 +10,7 @@
  */
 
 /** A thing = a point of interest stamped on the map (spawn, props; enemies/pickups in SP6). */
-export type ThingType = 'player_start' | 'barrel';
+export type ThingType = 'player_start' | 'barrel' | 'prop' | 'prop_screen' | 'prop_totem';
 
 /** A 2D point on the map plane. */
 export interface Vertex {
@@ -25,6 +25,26 @@ export interface Sector {
   readonly floorTex: string;
   readonly ceilTex: string;
   readonly light: number; // 0..255 sector brightness
+}
+
+/**
+ * A LIVE window into another zone's map: the linedef's opening renders `zone`'s world, translated by
+ * (`dx`, `dy`) — a neighbor point plus the offset lands on this map's point. TRANSLATION ONLY (no
+ * rotation): the two sides of a seam must be authored with matching orientation. Authored on a
+ * ONE-SIDED line (`back === null`), which keeps the seam solid for hitscan (shots never cross zones);
+ * the renderer fills its middle band from the neighbor map when one is provided (solid `middleTex`
+ * fallback).
+ *
+ * `passable` makes the seam a WALKABLE doorway: `movePlayer` (asked to `crossSeams`) lets the CROSSING
+ * body through, and the game swaps zones the instant the player steps over the line — the seamless
+ * counterpart of the walk-into exit fade. The two sides of a passable seam must share their floor
+ * height (there is no cross-zone step check). Default false = stage-2 behaviour, a solid live window.
+ */
+export interface ZonePortalDef {
+  readonly zone: string;
+  readonly dx: number;
+  readonly dy: number;
+  readonly passable?: boolean;
 }
 
 /** One face of a linedef: which sector it fronts, plus the textures painted on its wall bands. */
@@ -50,10 +70,22 @@ export interface LineDef {
   // A see-through GLASS wall: a two-sided line (the back sector renders through it) that STILL blocks the
   // player, with a translucent overlay (its `front.middleTex`) painted over the opening — a window / partition.
   readonly glass?: boolean;
+  // A textured glass PANE: sample the `front.middleTex` over the opening PER PIXEL (opaque texels = mullions /
+  // reflections, clear texels = see-through + tint), exactly like a sliding door leaf — instead of the flat
+  // tint wash a bare `glass` line gets. A static full-width mapping (the pane shows once across the window).
+  readonly pane?: boolean;
   // An automatic SLIDING DOOR: a two-sided line whose panel (its `front.middleTex`) covers the opening when
   // shut and retracts sideways into the wall as it opens. Its openness is supplied per-frame to the renderer
   // (a covered fraction) and gates a dedicated collision; the BSP geometry itself never moves.
   readonly sliding?: boolean;
+  // A FENCE: a two-sided line that renders open (see-over/see-through) but can NEVER be crossed — the edge of
+  // waist-high blocking furniture (a reception counter, a turnstile rail) the step-up physics would otherwise
+  // silently walk onto.
+  readonly fence?: boolean;
+  // A LIVE ZONE PORTAL (see {@link ZonePortalDef}): this line's opening shows another zone's map. Solid for
+  // hitscan always; solid for movement too unless the portal is `passable` (a seamless walk-through crossing —
+  // the walk-into `exits` fade remains the mechanism for non-seam edges).
+  readonly zonePortal?: ZonePortalDef;
 }
 
 /** A point of interest placed on the map (position + facing). */

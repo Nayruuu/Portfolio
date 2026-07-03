@@ -68,3 +68,5 @@ infra/**/terraform.tfvars.json
 /client/wasm-proto/
 # Asset-generation prompts (local working notes)
 /prompts/
+# Transient esbuild bundle the top-down render script emits beside itself
+/client/scripts/.level-bundle.mjs

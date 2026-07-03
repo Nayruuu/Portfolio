@@ -50,6 +50,33 @@ describe('MapBuilder', () => {
     expect(line.front.middleTex).toBe('GLASS'); // the translucent overlay
   });
 
+  it('emits a FENCE as a two-sided line flagged `fence` (renders open, blocks crossing)', () => {
+    const b = new MapBuilder();
+    const a = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+    const c = b.sector({ floorZ: 1.1, ceilZ: 4, floorTex: 'STEP', ceilTex: 'CEIL', light: 200 });
+
+    b.fence(4, 4, 4, 0, c, a, 'LOBBY'); // a reception-counter rim: the raised top is visible, never walkable
+    const line = b.build().linedefs[0];
+
+    expect(line.back).not.toBeNull(); // two-sided → renders like a portal (you see the counter top over it)
+    expect(line.fence).toBe(true); // but flagged fence → the step-up physics may never cross it
+    expect(line.glass).toBeUndefined(); // not glass — no tint pass over the opening
+  });
+
+  it('emits a glass PANE as a two-sided line flagged both `glass` and `pane`, overlay on the middle band', () => {
+    const b = new MapBuilder();
+    const a = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+    const c = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+
+    b.glassPane(4, 4, 4, 0, a, c, 'GLASS_PANE'); // a textured window between the two rooms
+    const line = b.build().linedefs[0];
+
+    expect(line.back).not.toBeNull(); // two-sided → see-through
+    expect(line.glass).toBe(true); // blocks the player like glass
+    expect(line.pane).toBe(true); // and its texture is sampled per pixel (not a flat tint)
+    expect(line.front.middleTex).toBe('GLASS_PANE'); // the glass image sampled over the opening
+  });
+
   it('emits a sliding door as a two-sided line flagged both `glass` and `sliding`', () => {
     const b = new MapBuilder();
     const a = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
@@ -61,6 +88,21 @@ describe('MapBuilder', () => {
     expect(line.back).not.toBeNull(); // two-sided → see-through
     expect(line.glass).toBe(true); // tinted like glass
     expect(line.sliding).toBe(true); // and it slides / is proximity-driven
+  });
+
+  it('emits a zone-portal seam as a ONE-SIDED line carrying its zone + translation', () => {
+    const b = new MapBuilder();
+    const a = b.sector({ floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 200 });
+
+    b.zonePortal(0, 8, 8, 8, a, { zone: 'hangar', dx: 10, dy: -30 }, 'LOBBY');
+    b.zonePortal(0, 0, 8, 0, a, { zone: 'm2', dx: 0, dy: 0 }); // default fallback texture
+    const map = b.build();
+
+    expect(map.linedefs[0].back).toBeNull(); // one-sided → solid for physics + hitscan
+    expect(map.linedefs[0].zonePortal).toEqual({ zone: 'hangar', dx: 10, dy: -30 });
+    expect(map.linedefs[0].front.sector).toBe(a); // fronts the room on the RIGHT of v1 → v2
+    expect(map.linedefs[0].front.middleTex).toBe('LOBBY'); // the solid fallback look
+    expect(map.linedefs[1].front.middleTex).toBe('BRICK'); // the default fallback
   });
 
   it('records things verbatim', () => {
