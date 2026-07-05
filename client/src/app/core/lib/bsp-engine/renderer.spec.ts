@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildBsp } from './node-builder';
-import { renderFrame, type Sprite, type ZoneNeighbor } from './renderer';
+import { mapSprites, renderFrame, type Sprite, type ZoneNeighbor } from './renderer';
 import { barrelTexture, brickTexture, ceilTexture, floorTexture, metalTexture } from './texture';
 import { SAMPLE_MAP } from './sample-map';
 import type { Camera } from './camera';
@@ -1035,6 +1035,54 @@ describe('atlas sprites', () => {
 
     expect(has(flashed, 255, 40, 40)).toBe(true); // red (250,20,20) ×2 → R clips to 255, G/B doubled
     expect(has(flashed, 250, 20, 20)).toBe(false); // not the un-flashed colour (it brightened)
+  });
+
+  describe('mapSprites (directional props)', () => {
+    // The same 10×10 room, dressed: a symmetric plant, a north-facing totem, and one of each new prop.
+    const north = Math.PI * 1.5; // y-down convention — the totem faces the room's top edge
+    const dressed = buildBsp({
+      ...ROOM,
+      things: [
+        { x: 2, y: 2, angle: 0, type: 'prop' },
+        { x: 5, y: 5, angle: north, type: 'prop_totem' },
+        { x: 3, y: 7, angle: 0, type: 'prop_board' },
+        { x: 7, y: 3, angle: Math.PI, type: 'prop_chair' },
+        { x: 8, y: 8, angle: 0, type: 'prop_cooler' },
+        { x: 5, y: 8, angle: 0, type: 'player_start' }, // no sprite def — must not emit
+      ],
+    });
+
+    it('emits rotation-sheet atlas cells for directional props, plain billboards for symmetric ones', () => {
+      const sprites = mapSprites(dressed);
+
+      expect(sprites).toHaveLength(5); // the player_start emits nothing
+      const [plant, totem, board, chair, cooler] = sprites;
+
+      // Symmetric props: whole-texture billboards, no atlas, no rotation metadata.
+      expect(plant).toEqual({ x: 2, y: 2, z: 0, tex: 'PROP', width: 0.8, height: 1.6 });
+      expect(cooler).toEqual({ x: 8, y: 8, z: 0, tex: 'PROP_COOLER', width: 0.6, height: 1.5 });
+      // Directional props: a 1×4 sheet + the authored facing, resting on FRONT without a viewpoint.
+      for (const s of [totem, board, chair]) {
+        expect(s).toMatchObject({ cols: 4, rows: 1, col: 0, row: 0, rotations: 4 });
+      }
+      expect(totem.facing).toBe(north);
+      expect(chair.facing).toBe(Math.PI);
+      expect(board).toMatchObject({ tex: 'PROP_BOARD', width: 1.6, height: 1.7 });
+    });
+
+    it('picks each directional cell from the view point (the no-sprites render fallback)', () => {
+      const cell = (viewX: number, viewY: number): number | undefined =>
+        mapSprites(dressed, { x: viewX, y: viewY }).find((s) => s.tex === 'PROP_TOTEM')?.col;
+
+      expect(cell(5, 1)).toBe(0); // camera north of the north-facing totem → FRONT
+      expect(cell(9, 5)).toBe(1); // camera east → its RIGHT side
+      expect(cell(5, 9)).toBe(2); // camera south → BACK
+      expect(cell(1, 5)).toBe(3); // camera west → LEFT
+
+      const plant = mapSprites(dressed, { x: 9, y: 5 }).find((s) => s.tex === 'PROP');
+
+      expect(plant?.col).toBeUndefined(); // a symmetric prop never grows a cell
+    });
   });
 });
 

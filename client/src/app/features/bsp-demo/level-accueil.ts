@@ -3,6 +3,7 @@ import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC } from './enemies'
 import { MapBuilder } from './level-builder';
 import type { KeycardColor } from '../../core/lib';
 import type { MapSource } from '../../core/lib/bsp-engine';
+import type { WeaponId } from '../../shared/game/weapons';
 
 /**
  * L1 "Accueil" — the first HAND-AUTHORED campaign level (office-satire reception → climax), replacing the
@@ -31,6 +32,10 @@ export interface Level {
   readonly health: readonly (readonly [number, number, ('large' | 'small')?])[];
   readonly armor: readonly (readonly [number, number, ('large' | 'small')?])[];
   readonly ammo: readonly (readonly [number, number])[]; // one coordinate per AMMO_BOX_SPECS entry, in order
+  // WEAPON pickups — `[x, y, weaponId]`: the DOOM progression rewards. The run starts FISTS-ONLY, so every
+  // other weapon (chainsaw included) must be FOUND; collecting one unlocks it for the rest of the run
+  // (ownership is inventory — it travels across zones) and grants one standard ammo box of its type.
+  readonly weapons?: readonly (readonly [number, number, WeaponId])[];
   // access badges — `[x, y, color]`; each z is resolved from the floor it sits on (e.g. the dais, +1.6).
   readonly keycards: readonly (readonly [number, number, KeycardColor])[];
   // The WIN goal (z resolved from the floor) — reach it → level complete. A level wired into the
@@ -157,6 +162,11 @@ export const ACCUEIL: Level = {
     [12, 5], // cells — réception
     [50, 9], // batteries — atrium
     [44, 5], // server cell (BFG) — atrium
+  ],
+  weapons: [
+    // Worked-example level (fists-only start): the base ranged pair in the réception, steps from spawn.
+    [7, 7, 'pistol'],
+    [10, 7, 'shotgun'],
   ],
   keycards: [[25, 27, 'red']], // on the dais top (+1.6)
   exit: [49, 9], // deep in the atrium (−0.8)

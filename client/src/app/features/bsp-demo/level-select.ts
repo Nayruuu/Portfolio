@@ -2,6 +2,7 @@ import { ACCUEIL, type Level } from './level-accueil';
 import { DEMO_LEVEL } from './level-demo';
 import { HANGAR } from './level-hangar';
 import { M1_LOBBY } from './level-m1-lobby';
+import { M2_OPENSPACE } from './level-m2-openspace';
 
 /**
  * Zone registry + dev-time overrides via URL query params — the fast create→test→capture loop for level
@@ -24,6 +25,7 @@ import { M1_LOBBY } from './level-m1-lobby';
 /** The playable levels, by URL key. `m1` (the episode opener) is the default. */
 export const LEVELS: Readonly<Record<string, Level>> = {
   m1: M1_LOBBY,
+  m2: M2_OPENSPACE,
   accueil: ACCUEIL,
   hangar: HANGAR,
   demo: DEMO_LEVEL,

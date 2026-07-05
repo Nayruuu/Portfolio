@@ -1,7 +1,16 @@
 import { focalFor, projectColumn, toCamera, type Camera, type CamPoint } from './camera';
 import { locateSubSector, signedSide } from './node-builder';
+import { orientSprite } from './sprite-rotation';
 import { missingTexture, TEX_WORLD, type Texture, type TextureLibrary } from './texture';
-import type { CompiledMap, NodeChild, Sector, Seg, ThingType, ZonePortalDef } from './types';
+import type {
+  CompiledMap,
+  NodeChild,
+  Sector,
+  Seg,
+  ThingType,
+  Vertex,
+  ZonePortalDef,
+} from './types';
 
 /**
  * The software renderer (SP2–SP5). Walks the BSP front-to-back from the camera and, per column, draws the
@@ -61,17 +70,24 @@ export const TEX_ANCHOR = 64;
  *  compute shader — same parity contract as {@link TEX_ANCHOR}.) */
 export const FLAT_ANCHOR = 1024;
 
-/** How a thing type renders as a billboard sprite: its texture name + world size (none = not a sprite). */
+/** How a thing type renders as a billboard sprite: its texture name + world size (none = not a sprite).
+ *  `rotations` marks a DIRECTIONAL prop: its texture is a 1×`rotations` view-angle sheet (front · right ·
+ *  back · left) and the drawn column follows the thing's authored facing vs the viewer — see
+ *  {@link rotationCell}. Radially-symmetric props (a plant, a cooler) stay single-frame. */
 interface SpriteDef {
   readonly tex: string;
   readonly width: number;
   readonly height: number;
+  readonly rotations?: number;
 }
 const SPRITES: Partial<Record<ThingType, SpriteDef>> = {
   barrel: { tex: 'BARREL', width: 0.8, height: 1.1 },
-  prop: { tex: 'PROP', width: 0.8, height: 1.6 }, // potted lobby plant
-  prop_screen: { tex: 'PROP_SCREEN', width: 0.6, height: 0.6 }, // crashed reception monitor (sits on a counter block)
-  prop_totem: { tex: 'PROP_TOTEM', width: 0.7, height: 2.0 }, // free-standing lobby directory totem
+  prop: { tex: 'PROP', width: 0.8, height: 1.6 }, // potted plant — symmetric, one frame
+  prop_screen: { tex: 'PROP_SCREEN', width: 0.6, height: 0.6, rotations: 4 }, // crashed desk monitor (sits on a counter block)
+  prop_totem: { tex: 'PROP_TOTEM', width: 0.7, height: 2.0, rotations: 4 }, // free-standing directory totem
+  prop_board: { tex: 'PROP_BOARD', width: 1.6, height: 1.7, rotations: 4 }, // whiteboard on casters
+  prop_chair: { tex: 'PROP_CHAIR', width: 0.7, height: 1.1, rotations: 4 }, // office swivel chair
+  prop_cooler: { tex: 'PROP_COOLER', width: 0.6, height: 1.5 }, // water cooler — symmetric, one frame
 };
 
 /**
@@ -93,6 +109,11 @@ export interface Sprite {
   readonly rows?: number;
   readonly col?: number;
   readonly row?: number;
+  // Optional DOOM-style rotation metadata (a directional decor prop): `rotations` says the texture is a
+  // 1×`rotations` view-angle sheet and `facing` is the thing's authored heading — `orientSprite` re-picks
+  // `col` from these for the frame's viewpoint. Omitted → the cell (if any) is view-independent.
+  readonly rotations?: number;
+  readonly facing?: number;
   readonly flash?: number; // 0..1 white hit-flash blend (0 / omitted = normal shading)
 }
 
@@ -106,8 +127,14 @@ export interface ZoneNeighbor {
   readonly sprites?: readonly Sprite[];
 }
 
-/** The static billboards authored into a map: every thing whose type has a sprite def, resting on its floor. */
-export function mapSprites(map: CompiledMap): Sprite[] {
+/**
+ * The static billboards authored into a map: every thing whose type has a sprite def, resting on its
+ * floor. A DIRECTIONAL prop (its def carries `rotations`) is emitted as a 1×`rotations` atlas sprite
+ * with the thing's facing, its cell picked for `view` when given (the camera — both renderers' no-sprites
+ * fallback) or resting on FRONT (column 0) without one; the per-frame game list re-orients via
+ * {@link orientSprite} instead, so a stored sprite follows the player around.
+ */
+export function mapSprites(map: CompiledMap, view?: Vertex): Sprite[] {
   const sprites: Sprite[] = [];
 
   for (const thing of map.source.things) {
@@ -115,15 +142,30 @@ export function mapSprites(map: CompiledMap): Sprite[] {
 
     if (def !== undefined) {
       const z = map.source.sectors[locateSubSector(map.root, thing.x, thing.y).sector].floorZ;
-
-      sprites.push({
+      const base: Sprite = {
         x: thing.x,
         y: thing.y,
         z,
         tex: def.tex,
         width: def.width,
         height: def.height,
-      });
+      };
+
+      if (def.rotations === undefined) {
+        sprites.push(base);
+      } else {
+        const rot: Sprite = {
+          ...base,
+          cols: def.rotations,
+          rows: 1,
+          col: 0,
+          row: 0,
+          rotations: def.rotations,
+          facing: thing.angle,
+        };
+
+        sprites.push(view === undefined ? rot : orientSprite(rot, view.x, view.y));
+      }
     }
   }
 
@@ -1288,7 +1330,7 @@ export function renderFrame(
     buf32,
     zbuf,
     dims,
-    sprites ?? mapSprites(map),
+    sprites ?? mapSprites(map, camera), // fallback decor oriented for the camera (mirrored by the GPU builder)
     map,
     camera,
     focal,

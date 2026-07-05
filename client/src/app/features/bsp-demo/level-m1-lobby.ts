@@ -22,8 +22,8 @@ import type { Level } from './level-accueil';
  *       └─ LATERAL STAIRCASE (5 steps, z0 → +2.0) ──▶ THRESHOLD DOOR (unlocked)
  *          ──▶ RECEPTION HALL (z+2.0, tight octagon: raised DESK island +2.6 + 2 columns)
  *              ──▶ SEAM STUB north (5 service steps back down to z0) ──▶ LIVE PASSABLE zone portal →
- *                  hangar (TEMP edge until M2 exists — the techbase is VISIBLE through the seam opening
- *                  and WALKING through it crosses zones seamlessly)
+ *                  M2 open-space (the cubicle floor is VISIBLE through the seam opening and WALKING
+ *                  through it crosses zones seamlessly)
  *
  * y increases DOWN (the entrance is at the SOUTH). Organic geometry (chamfers everywhere); NO side
  * skylines — the ONLY exterior view is the street through the sas glass axis.
@@ -159,12 +159,12 @@ function buildMap(): { map: MapSource; doorSector: number } {
 
   b.connect(DOOR, HALL, { tex: 'GLASS_INT' }); // door ↔ hall
 
-  // --- SEAM STUB to the hangar (the TEMP M1 ⇄ hangar zone edge, a LIVE + PASSABLE PORTAL): five service
-  //     steps descend north out of the hall (z2.0 → 0) to a 4-wide seam whose opening renders the hangar's
-  //     own seam stub LIVE — and WALKING THROUGH it crosses zones seamlessly (no fade; the walk-into exits
-  //     mechanism stays for non-seam edges). Width/heights match the hangar side exactly (floor 0,
+  // --- SEAM STUB to M2 (the M1 ⇄ M2 open-space zone edge, a LIVE + PASSABLE PORTAL): five service
+  //     steps descend north out of the hall (z2.0 → 0) to a 4-wide seam whose opening renders M2's own
+  //     seam stub LIVE — and WALKING THROUGH it crosses zones seamlessly (no fade; the walk-into exits
+  //     mechanism stays for non-seam edges). Width/heights match the M2 side exactly (floor 0,
   //     ceil 4.6, x-span 4); the stub keeps the LOBBY dressing so the palette flips at the seam. The
-  //     translation (dx,dy) = (10, −30) maps the hangar's seam line (14..18, 60) onto ours (24..28, 30).
+  //     translation (dx,dy) = (0, −100) maps M2's seam line (24..28, 130) onto ours (24..28, 30).
   //     TRANSLATION only — both stubs run north–south. ---------------------------------------------------
   const SEAM = b.stairs([28, 30], [24, 30], {
     depth: 0.8,
@@ -177,7 +177,7 @@ function buildMap(): { map: MapSource; doorSector: number } {
   });
 
   b.connect(HALL, SEAM[4], { tex: 'LOBBY' }); // carve the stub mouth out of the hall's north wall
-  b.zonePortal(SEAM[0], [28, 30, 24, 30], { zone: 'hangar', dx: 10, dy: -30, passable: true });
+  b.zonePortal(SEAM[0], [28, 30, 24, 30], { zone: 'm2', dx: 0, dy: -100, passable: true });
 
   // --- DESK island (raised +2.6, mantle cover) + 2 COLUMNS + planters and a low seating plinth -----
   const marble = { ...hall, floorTex: 'STEP' };
@@ -197,10 +197,15 @@ function buildMap(): { map: MapSource; doorSector: number } {
   b.thing(14, 55, 0, 'barrel'); // hall — west cover
   b.thing(38, 48, 0, 'barrel'); // hall — east cover
 
-  // --- DECOR props (real green-screen art: plant / crashed monitor / directory totem) --------------
+  // --- DECOR props (real green-screen art: plant / crashed monitor / directory totem). Directional
+  //     props (screen / totem / chair) carry a MEANINGFUL facing — their 4-rotation billboards turn
+  //     with the viewer; symmetric plants keep angle 0. ---------------------------------------------
   b.thing(12, 114.5, 0, 'prop'); // plant on the reception counter
-  b.thing(14, 114.5, 0, 'prop_screen'); // crashed check-in monitor beside it (same counter block → z1.1)
-  b.thing(11, 101.5, 0, 'prop_totem'); // directory totem in front of the dead lifts (off the walk axis)
+  b.thing(14, 114.5, 0.9, 'prop_screen'); // crashed check-in monitor beside it, angled at the visitors
+  b.thing(11, 101.5, 1.57, 'prop_totem'); // directory totem before the dead lifts, facing the concourse
+  b.thing(7, 114.5, 0, 'prop_chair'); // the receptionist's chair, behind the counter at the WOOD wall
+  b.thing(49, 119.5, 5.4, 'prop_chair'); // lounge — pulled from the low table, on the rug
+  b.thing(24, 49, 1.26, 'prop_screen'); // dead monitor on the hall's desk island (z2.6)
   b.thing(54.5, 110.5, 0, 'prop'); // plant in the lounge, north of the sofa
   b.thing(50, 122.5, 0, 'prop'); // plant in the lounge, south side
   b.thing(12.5, 51, 0, 'prop'); // plant on the west hall planter
@@ -237,13 +242,21 @@ export const M1_LOBBY: Level = {
     [50, 120], // batteries — lounge, by the low table
     [12, 98], // server-cell — elevator recess
   ],
+  weapons: [
+    // The PISTOL (keyboard) — the episode's first ranged unlock, on the reception approach: the walk axis
+    // from the sas toward the counter, in plain sight BEFORE the receptionist husk behind it.
+    [12, 119, 'pistol'],
+    // The CHAINSAW — the semi-hidden melee bonus: on the lounge rug between the low table and the sofa,
+    // off the critical path and guarded by the lounge imp (a reward for clearing the alcove).
+    [53, 117, 'chainsaw'],
+  ],
   keycards: [], // keyless floor (like E1M1)
   entries: {
     main: { x: 26, y: 131, angle: Math.PI * 1.5 }, // the street porch (the level spawn)
     'from-above': { x: 26, y: 32, angle: Math.PI / 2 }, // on the seam steps, walking down into the hall
   },
-  // NO graph `exits`: the TEMP M1 ⇄ hangar edge is the PASSABLE live seam in the hall's stub — walking
-  // through the window IS the crossing (seamless, no fade). M2 (the office floor) will take this slot.
+  // NO graph `exits`: the M1 ⇄ M2 edge is the PASSABLE live seam in the hall's stub — walking through
+  // the window IS the crossing (seamless, no fade).
   // (`entries` stay: named arrival points for the fade mechanism / dev loads.)
   doors: [
     { sector: built.doorSector, triggerX: 30, triggerY: 69, requiresCard: null }, // glass threshold into the hall

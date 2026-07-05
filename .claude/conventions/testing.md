@@ -100,18 +100,19 @@ in the individual spec's `configureTestingModule`.
 These are enforced by the Vitest runner across the whole project. A run under any threshold fails.
 
 **Excluded from coverage** (`angular.json` `coverageExclude`): the BSP game's browser-only render
-code — `features/bsp-demo/bsp-demo.component.{ts,html}`, `render-pool.ts`, `load-textures.ts`. These
-are the `<canvas>` render loop + `SharedArrayBuffer` worker pool + texture-upload paths
-(`afterNextRender`, `requestAnimationFrame`, `Worker`, raw `CanvasRenderingContext2D`) with no
-meaningful unit surface or DOM-free seam to test. Every other file — including the pure/testable
+code — `features/bsp-demo/bsp-demo.component.{ts,html}`, `render-pool.ts`, `gpu-renderer.ts`,
+`load-textures.ts`. These are the `<canvas>` render loop + `SharedArrayBuffer` worker pool + WebGPU
+device/compute plumbing + texture-upload paths (`afterNextRender`, `requestAnimationFrame`, `Worker`,
+`navigator.gpu`, raw `CanvasRenderingContext2D`) with no meaningful unit surface or DOM-free seam to test. Every other file — including the pure/testable
 bsp-demo helpers (`level-*.ts`, `demo-map.ts`, `pickups.ts`, `enemies.ts`) — still rides the global
 thresholds above.
 
 **The game's *tested* surface** (the counterpart to that exclusion): everything under `core/` rides the
 **100 % guard** below — `core/lib/bsp-engine/*` (the `camera` projection, the `node-builder` BSP
 compiler, `physics` slide + step-up, hitscan `raycast`, the `renderer` wall/floor/ceiling + sprite
-passes against the frozen `sample-map`, and the procedural `texture`s), `core/lib/game/*` (the `arsenal`
-magazine/fire-rate/reload `stepArsenal`, the `combat-constants`, and the combat `types`), and
+passes against the frozen `sample-map`, the `frame-commands` GPU command builder, and the procedural
+`texture`s), `core/lib/game/*` (the `arsenal`
+magazine/fire-rate/reload `stepArsenal`, the `combat-constants`, the `render-governor`, and the combat `types`), and
 `GameService` (`core/services/game/` — `enter`/`exit`/`running` + pause-resume). The **shared
 presentational helpers** in `shared/game/*` (`doom-hud`, `weapon-view`, `climb-view` + the `weapons` /
 `effects` JSON bridges) each carry a `.spec.ts` on the global thresholds. So the game's logic is fully

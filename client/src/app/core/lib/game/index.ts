@@ -5,3 +5,4 @@ export * from './types';
 export * from './arsenal';
 export * from './combat-constants';
 export * from './render-governor';
+export * from './weapon-progression';

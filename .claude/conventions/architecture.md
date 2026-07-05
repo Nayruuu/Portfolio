@@ -337,13 +337,14 @@ would imply the wrong sharing). `sd-bsp-demo` is the reference: it stays a thin 
 engine + combat live in `core/lib/bsp-engine` + `core/lib/game` (100 %-tested, no DOM); the **browser-only
 render code** is co-located in the feature — `render.worker.ts` (a worker painting one band of the frame),
 `render-pool.ts` (`createRenderPool` — the `SharedArrayBuffer` multi-worker pool, with a single-threaded
-main-thread fallback), and `load-textures.ts` (decoding the WebP art over the procedural base). For the
+main-thread fallback), `gpu-renderer.ts` (the WebGPU compute backend — the default execution, consuming
+`frame-commands` buffers), and `load-textures.ts` (decoding the WebP art over the procedural base). For the
 on-screen chrome it instantiates the **shared** presentational helper classes from `shared/game/` with
 `new` — `DoomHud` (the composited image status bar, the burnt-out-developer face one of its zones),
 `WeaponView` (the FPS weapon sprite + fire/reload animation) and `ClimbView` (the two-handed mantle
 overlay) — all built on the shared `loaded-image` loader. One class/module per file, `.spec.ts` alongside
-wherever it is pure or DOM-light (the component + `render-pool` + `load-textures` are coverage-excluded as
-browser-only render code — see `testing.md`).
+wherever it is pure or DOM-light (the component + `render-pool` + `gpu-renderer` + `load-textures` are
+coverage-excluded as browser-only render code — see `testing.md`).
 Splitting a component this way (rather than letting it grow) keeps each unit small and unit-testable in
 isolation.
 

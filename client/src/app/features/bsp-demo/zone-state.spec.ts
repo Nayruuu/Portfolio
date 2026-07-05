@@ -12,6 +12,7 @@ function sample(): ZoneSnapshot {
     vitalsTaken: [true, false],
     ammoTaken: [false, false, true, false, false, false],
     cardsTaken: [true],
+    weaponsTaken: [true, false],
     doors: [1, 0.4],
   };
 }
@@ -63,12 +64,14 @@ describe('ZoneStates', () => {
       vitalsTaken: [false],
       ammoTaken: [false],
       cardsTaken: [false],
+      weaponsTaken: [false],
       doors: [0],
     };
 
     store.snapshot('m1', input);
     (input.enemies[0] as { x: number }).x = 99;
     input.barrels[0] = false;
+    input.weaponsTaken[0] = true;
     input.doors[0] = 1;
     expect(store.restore('m1')).toEqual({
       enemies: [{ x: 1, y: 2, hp: 30, dead: false }],
@@ -76,6 +79,7 @@ describe('ZoneStates', () => {
       vitalsTaken: [false],
       ammoTaken: [false],
       cardsTaken: [false],
+      weaponsTaken: [false],
       doors: [0],
     });
   });
@@ -91,6 +95,7 @@ describe('ZoneStates', () => {
     expect(Object.isFrozen(restored?.enemies)).toBe(true);
     expect(Object.isFrozen(restored?.enemies[0])).toBe(true);
     expect(Object.isFrozen(restored?.barrels)).toBe(true);
+    expect(Object.isFrozen(restored?.weaponsTaken)).toBe(true);
     expect(Object.isFrozen(restored?.doors)).toBe(true);
   });
 

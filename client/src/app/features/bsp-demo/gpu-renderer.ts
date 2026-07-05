@@ -22,7 +22,8 @@ import {
 } from '../../core/lib/bsp-engine';
 
 /**
- * The WEBGPU COMPUTE render backend (stage 2 — dev opt-in via `?renderer=gpu`). The DOOM algorithm stays
+ * The WEBGPU COMPUTE render backend — the DEFAULT when WebGPU is available (`?renderer=cpu` forces the CPU
+ * worker-pool path, which also remains the automatic fallback). The DOOM algorithm stays
  * OURS and stays on the CPU: `buildFrameCommands` walks the BSP (primary + one translated walk per live
  * zone-portal seam), clips, projects the sprites, and emits the per-column span command buffer + the
  * deferred-phase buffer (the smart, cheap part). This module uploads them and runs a WGSL COMPUTE shader —
@@ -85,7 +86,9 @@ function packRgb(c: readonly [number, number, number]): number {
  * Each pixel scans its column's geometry spans nearest-wins (strict `<` + emission-order tie-break — the
  * CPU z-buffer over the same paint order), then replays the deferred phases over its local colour/depth.
  * The sampling math is the CPU renderer's, transcribed: same anchors, same integer truncation, same
- * shade/tint constants — the only divergence is f32 vs f64 rounding (measured in the parity harness).
+ * shade/tint constants — the only divergence is f32 vs f64 rounding (measured 99.4-99.98 % pixel-identical
+ * per scene by a Playwright CPU-vs-GPU diff at integration time; the in-repo contract is the f64 command
+ * EXECUTOR in `frame-commands.spec.ts`, which pins the buffers against `renderFrame`'s output).
  */
 const SHADER = /* wgsl */ `
 struct Uniforms {

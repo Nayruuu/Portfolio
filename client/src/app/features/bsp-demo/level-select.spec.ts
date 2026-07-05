@@ -3,6 +3,7 @@ import { ACCUEIL } from './level-accueil';
 import { DEMO_LEVEL } from './level-demo';
 import { HANGAR } from './level-hangar';
 import { M1_LOBBY } from './level-m1-lobby';
+import { M2_OPENSPACE } from './level-m2-openspace';
 import {
   DEFAULT_LEVEL_KEY,
   LEVELS,
@@ -10,6 +11,7 @@ import {
   resolveZone,
   type LevelParams,
 } from './level-select';
+import { weaponById } from '../../shared/game/weapons';
 
 /** A param-less URL (the plain `/bsp` default) — the baseline for the resolveZone placement tests. */
 const NO_PARAMS: LevelParams = {
@@ -23,7 +25,13 @@ const NO_PARAMS: LevelParams = {
 
 describe('level registry', () => {
   it('maps every URL key to its level module (m1 is the default key)', () => {
-    expect(LEVELS).toEqual({ m1: M1_LOBBY, accueil: ACCUEIL, hangar: HANGAR, demo: DEMO_LEVEL });
+    expect(LEVELS).toEqual({
+      m1: M1_LOBBY,
+      m2: M2_OPENSPACE,
+      accueil: ACCUEIL,
+      hangar: HANGAR,
+      demo: DEMO_LEVEL,
+    });
     expect(DEFAULT_LEVEL_KEY).toBe('m1');
     expect(LEVELS[DEFAULT_LEVEL_KEY]).toBe(M1_LOBBY);
   });
@@ -60,26 +68,59 @@ describe('level registry', () => {
     }
   });
 
-  it('owns the TEMP M1 ↔ hangar edge with the PASSABLE seam alone — no walk-into exits remain there', () => {
+  it('arms the fists-only start: every level with enemies places a RANGED weapon pickup (valid placements everywhere)', () => {
+    for (const [key, level] of Object.entries(LEVELS)) {
+      for (const [x, y, id] of level.weapons ?? []) {
+        expect(Number.isFinite(x), `level "${key}": weapon "${id}" x`).toBe(true);
+        expect(Number.isFinite(y), `level "${key}": weapon "${id}" y`).toBe(true);
+        expect(weaponById(id), `level "${key}": unknown weapon id "${id}"`).toBeDefined();
+      }
+      if (level.enemies.length === 0) {
+        continue; // an enemy-less inspection level owes no armament
+      }
+      // The run starts FISTS-ONLY, so a combat level must offer at least one ranged unlock
+      // (`ammoType !== null`) — melee alone cannot answer its ranged pressure.
+      const ranged = (level.weapons ?? []).some(([, , id]) => weaponById(id)?.ammoType != null);
+
+      expect(
+        ranged,
+        `level "${key}": no ranged weapon pickup for its ${level.enemies.length} foes`,
+      ).toBe(true);
+    }
+  });
+
+  it('stages the episode progression: the pistol + the chainsaw bonus in M1, the shotgun on M2’s print-room approach', () => {
+    expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
+    expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
+  });
+
+  it('owns the M1 ↔ M2 edge with the PASSABLE seam alone — no walk-into exits remain there', () => {
     expect(M1_LOBBY.exits).toBeUndefined(); // the seamless seam crossing replaced the fade exit
-    expect(HANGAR.exits).toBeUndefined();
-    expect(HANGAR.entries?.['from-m1']).toBeDefined(); // named arrivals stay (fade mechanism / dev loads)
+    expect(M2_OPENSPACE.exits).toBeUndefined(); // onward is M2's own TEMP win exit until M3 exists
+    expect(M2_OPENSPACE.entries?.['from-m1']).toBeDefined(); // named arrivals stay (fade mechanism / dev loads)
     expect(M1_LOBBY.entries?.['from-above']).toBeDefined();
   });
 
-  it('makes the TEMP edge a LIVE + PASSABLE window: each side carries the reciprocal zonePortal seam', () => {
-    const m1Seam = M1_LOBBY.map.linedefs.find((l) => l.zonePortal !== undefined);
-    const hangarSeam = HANGAR.map.linedefs.find((l) => l.zonePortal !== undefined);
+  it('keeps the hangar self-contained since M2 took the seam slot (no seam, no graph edges, own exit)', () => {
+    expect(HANGAR.map.linedefs.every((l) => l.zonePortal === undefined)).toBe(true);
+    expect(HANGAR.exits).toBeUndefined();
+    expect(HANGAR.entries).toBeUndefined();
+    expect(HANGAR.exit).toBeDefined();
+  });
 
-    expect(m1Seam?.zonePortal).toEqual({ zone: 'hangar', dx: 10, dy: -30, passable: true });
+  it('makes the M1 ↔ M2 edge a LIVE + PASSABLE window: each side carries the reciprocal zonePortal seam', () => {
+    const m1Seam = M1_LOBBY.map.linedefs.find((l) => l.zonePortal !== undefined);
+    const m2Seam = M2_OPENSPACE.map.linedefs.find((l) => l.zonePortal !== undefined);
+
+    expect(m1Seam?.zonePortal).toEqual({ zone: 'm2', dx: 0, dy: -100, passable: true });
     expect(m1Seam?.back).toBeNull(); // one-sided → solid for hitscan (movement crosses via `passable`)
-    expect(hangarSeam?.zonePortal).toEqual({ zone: 'm1', dx: -10, dy: 30, passable: true });
-    expect(hangarSeam?.back).toBeNull();
-    if (m1Seam === undefined || hangarSeam === undefined) {
+    expect(m2Seam?.zonePortal).toEqual({ zone: 'm1', dx: 0, dy: 100, passable: true });
+    expect(m2Seam?.back).toBeNull();
+    if (m1Seam === undefined || m2Seam === undefined) {
       return; // the expects above already failed
     }
     // The two seam lines are COINCIDENT under the translation (the same 4-wide opening in both maps) — the
-    // property that makes the live view read continuous. Hangar point + (dx, dy) = M1 point; the endpoint
+    // property that makes the live view read continuous. M2 point + (dx, dy) = M1 point; the endpoint
     // order reverses because reciprocal seams front opposite sides.
     const at = (level: typeof M1_LOBBY, line: typeof m1Seam): number[][] => [
       [level.map.vertices[line.v1].x, level.map.vertices[line.v1].y],
@@ -87,7 +128,7 @@ describe('level registry', () => {
     ];
     const { dx, dy } = m1Seam.zonePortal ?? { dx: 0, dy: 0 };
 
-    expect(at(HANGAR, hangarSeam).map(([x, y]) => [x + dx, y + dy])).toEqual(
+    expect(at(M2_OPENSPACE, m2Seam).map(([x, y]) => [x + dx, y + dy])).toEqual(
       at(M1_LOBBY, m1Seam).reverse(),
     );
   });
@@ -196,22 +237,22 @@ describe('resolveZone', () => {
   });
 
   it('places the player at a named entry (a graph arrival)', () => {
-    const zone = resolveZone('hangar', 'from-m1', NO_PARAMS);
+    const zone = resolveZone('m2', 'from-m1', NO_PARAMS);
 
-    expect(zone.at).toEqual(HANGAR.entries?.['from-m1']);
+    expect(zone.at).toEqual(M2_OPENSPACE.entries?.['from-m1']);
   });
 
   it('falls back to the level spawn for an unknown entry name', () => {
-    expect(resolveZone('hangar', 'no-such-door', NO_PARAMS).at).toEqual(HANGAR.spawn);
+    expect(resolveZone('m2', 'no-such-door', NO_PARAMS).at).toEqual(M2_OPENSPACE.spawn);
   });
 
   it("applies the dev spawn override only to the URL's own level, on entry-less loads", () => {
     const spawn = { x: 17, y: 108, angle: 4.71 };
-    const params: LevelParams = { ...NO_PARAMS, levelKey: 'hangar', spawn };
+    const params: LevelParams = { ...NO_PARAMS, levelKey: 'm2', spawn };
 
-    expect(resolveZone('hangar', undefined, params).at).toEqual(spawn); // the URL level itself
+    expect(resolveZone('m2', undefined, params).at).toEqual(spawn); // the URL level itself
     expect(resolveZone('m1', undefined, params).at).toEqual(M1_LOBBY.spawn); // another zone — untouched
-    expect(resolveZone('hangar', 'from-m1', params).at).toEqual(HANGAR.entries?.['from-m1']); // entry wins
+    expect(resolveZone('m2', 'from-m1', params).at).toEqual(M2_OPENSPACE.entries?.['from-m1']); // entry wins
   });
 
   it('empties the enemy roster of EVERY zone with noenemies', () => {

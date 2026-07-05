@@ -4,8 +4,11 @@ import {
   CURRENT_WEAPON,
   RANGE_CELLS,
   RELOAD_VIEW_CONFIG,
+  STARTING_WEAPON_IDS,
   WEAPONS,
+  WEAPON_IDS,
   WEAPON_VIEW_CONFIG,
+  requireWeapon,
   weaponById,
   weaponCombat,
   weaponViewConfig,
@@ -14,6 +17,19 @@ import {
 import { AIM_CONE, MELEE_CONE, MELEE_RANGE } from '../../core/lib';
 
 describe('weapons registry', () => {
+  it('keeps the WEAPON_IDS value set and the JSON registry in lockstep (order included)', () => {
+    expect(WEAPONS.map((weapon) => weapon.id)).toEqual([...WEAPON_IDS]);
+  });
+
+  it('starts the run FISTS-ONLY — every other weapon (chainsaw included) is a level pickup', () => {
+    expect(STARTING_WEAPON_IDS).toEqual(['fist']);
+  });
+
+  it('resolves a required weapon by id, failing loud on an id the registry does not declare', () => {
+    expect(requireWeapon('shotgun').id).toBe('shotgun');
+    expect(() => requireWeapon('bazooka')).toThrowError(/must declare a weapon with id "bazooka"/);
+  });
+
   it('parses the slot-1 mechanical fist with its re-balanced fields', () => {
     expect(CURRENT_WEAPON.slot).toBe(1);
     expect(CURRENT_WEAPON.id).toBe('fist');

@@ -23,13 +23,16 @@ export interface ZoneEnemy {
 
 /** Everything a zone remembers while the player is elsewhere. Every array is INDEX-ALIGNED with the
  *  level's authoring arrays: `enemies` with the roster, `barrels` with the map's barrel sprites,
- *  `vitalsTaken` with `health` then `armor` (spawn order), `ammoTaken`/`cardsTaken`/`doors` with theirs. */
+ *  `vitalsTaken` with `health` then `armor` (spawn order), `ammoTaken`/`cardsTaken`/`weaponsTaken`/`doors`
+ *  with theirs. (A taken WEAPON pickup stays gone like any other pickup — but the weapon itself is
+ *  inventory: ownership travels with the player, never through here.) */
 export interface ZoneSnapshot {
   readonly enemies: readonly ZoneEnemy[];
   readonly barrels: readonly boolean[]; // still standing?
   readonly vitalsTaken: readonly boolean[];
   readonly ammoTaken: readonly boolean[];
   readonly cardsTaken: readonly boolean[];
+  readonly weaponsTaken: readonly boolean[];
   readonly doors: readonly number[]; // per doors[] entry: openness 0 shut … 1 open (an unlock persists)
 }
 
@@ -48,6 +51,7 @@ export class ZoneStates {
         vitalsTaken: Object.freeze([...state.vitalsTaken]),
         ammoTaken: Object.freeze([...state.ammoTaken]),
         cardsTaken: Object.freeze([...state.cardsTaken]),
+        weaponsTaken: Object.freeze([...state.weaponsTaken]),
         doors: Object.freeze([...state.doors]),
       }),
     );

@@ -10,7 +10,15 @@
  */
 
 /** A thing = a point of interest stamped on the map (spawn, props; enemies/pickups in SP6). */
-export type ThingType = 'player_start' | 'barrel' | 'prop' | 'prop_screen' | 'prop_totem';
+export type ThingType =
+  | 'player_start'
+  | 'barrel'
+  | 'prop'
+  | 'prop_screen'
+  | 'prop_totem'
+  | 'prop_board'
+  | 'prop_chair'
+  | 'prop_cooler';
 
 /** A 2D point on the map plane. */
 export interface Vertex {

@@ -404,7 +404,7 @@ export function buildFrameCommands(
     );
   }
   const primaryQuads = projectSprites(
-    sprites ?? mapSprites(map),
+    sprites ?? mapSprites(map, camera), // fallback decor oriented for the camera — the CPU path's twin
     map,
     camera,
     width,

@@ -20,6 +20,7 @@ import {
   mapSprites,
   movePlayer,
   nearestTargetHit,
+  orientSprite,
   renderFrame,
   type Camera,
   type CompiledMap,
@@ -49,10 +50,14 @@ import {
   PICKUP_TEXTURE_JOBS,
   VITAL_MAX,
   vitalSpec,
+  weaponAmmoDose,
+  weaponPickupSpec,
   type AmmoBox,
   type Keycard,
   type MarkerSpec,
   type Vital,
+  type WeaponPickup,
+  type WeaponPickupSpec,
 } from './pickups';
 import { createGpuRenderer, type GpuRenderer } from './gpu-renderer';
 import { createRenderPool, type RenderPool } from './render-pool';
@@ -60,6 +65,8 @@ import { DoomHud, type Gaze } from '../../shared/game/doom-hud';
 import {
   AMMO_MAX,
   ARSENAL,
+  STARTING_WEAPON_IDS,
+  ammoTypeMax,
   reloadViewConfig,
   weaponCombat,
   weaponViewConfig,
@@ -71,6 +78,8 @@ import { IconComponent } from '../../shared/icon/icon.component';
 import {
   ARC_DURATION,
   initialRenderGovernor,
+  nextOwnedIndex,
+  shouldAutoEquip,
   stepArsenal,
   stepRenderGovernor,
   type ChainSpec,
@@ -295,6 +304,7 @@ interface WarmZone {
   vitals: (Vital & { idx: number })[];
   ammoBoxes: (AmmoBox & { idx: number })[];
   keycards: (Keycard & { idx: number })[];
+  weaponPickups: (WeaponPickup & { idx: number })[];
   readonly doors: Door[];
   readonly slides: number[];
   exit: Marker | null;
@@ -361,7 +371,7 @@ export class BspDemoComponent {
   protected readonly texturesLoaded = signal(false); // real WebP environment art swapped in for procedural
   protected readonly threads = signal(1); // ACTIVE render workers (governor-driven; 1 = single-threaded fallback)
   protected readonly poolSize = signal(1); // spawned render workers (the pool never respawns — idle ones wait warm)
-  protected readonly backend = signal<'cpu' | 'gpu'>('cpu'); // active render backend (`?renderer=gpu` + WebGPU OK → 'gpu')
+  protected readonly backend = signal<'cpu' | 'gpu'>('cpu'); // active render backend (GPU is the default when WebGPU inits OK; `?renderer=cpu` forces CPU)
 
   // --- The CURRENT zone. The open building loads one floor at a time: `loadZone` swaps every level-bound
   // structure below (sectors copy, compiled BSP, barrels, enemies, pickups, doors, exits) while the player's
@@ -473,6 +483,7 @@ export class BspDemoComponent {
   private vitals: (Vital & { idx: number })[] = []; // health/armour, collected on proximity
   private ammoBoxes: (AmmoBox & { idx: number })[] = []; // spinning ammo boxes, collected on proximity
   private keycards: (Keycard & { idx: number })[] = []; // spinning access badges, collected on proximity
+  private weaponPickups: (WeaponPickup & { idx: number })[] = []; // weapon unlocks, collected on proximity
   private readonly heldCards = new Set<KeycardColor>(); // badge colours collected → unlock the matching doors
   private exit: Marker | null = null; // the legacy exit sign marker (the win goal; null when `exits` rule)
   private zoneExits: ZoneExit[] = []; // the zone's graph exits (walk-into transition points)
@@ -484,8 +495,9 @@ export class BspDemoComponent {
     swapped: boolean;
   } | null = null; // the in-flight zone swap (fade out → loadZone → fade in)
   private pool: RenderPool | null = null; // the worker render pool (null = single-threaded fallback / pre-init)
-  // The WebGPU compute backend (`?renderer=gpu` — dev opt-in, see gpu-renderer.ts). Null until its async init
-  // lands, and again after any GPU failure: the CPU path (pool or main thread) is ALWAYS the running fallback.
+  // The WebGPU compute backend (the DEFAULT; `?renderer=cpu` forces the CPU path — see gpu-renderer.ts).
+  // Null until its async init lands, and again after any GPU failure: the CPU path (pool or main thread)
+  // is ALWAYS the running fallback.
   private gpu: GpuRenderer | null = null;
   private atlasesReady = false; // enemy/pickup atlases decoded → later zone loads can spawn immediately
   private won = false; // reached the exit → the level-complete wash, frozen until a click restarts
@@ -496,6 +508,10 @@ export class BspDemoComponent {
   private slidingDoors: { readonly line: number; readonly mx: number; readonly my: number }[] = [];
   private prevAngle = 0; // last frame's camera angle → the turn rate that aims the HUD face's gaze
   private turnEMA = 0; // smoothed turn rate → a steady gaze through a turn (no per-frame repaint flicker)
+  // The DOOM weapon PROGRESSION: the ids the player has unlocked. A new game starts FISTS-ONLY
+  // (STARTING_WEAPON_IDS) and every other weapon is a level pickup; ownership is INVENTORY — it travels
+  // across zones/seam swaps untouched and resets only in {@link resetGame}.
+  private readonly ownedWeapons = new Set<string>(STARTING_WEAPON_IDS);
   private weaponIndex = 0;
   private weaponView = new WeaponView(
     ARSENAL[0],
@@ -543,6 +559,9 @@ export class BspDemoComponent {
           n: 0,
         };
         (window as unknown as Record<string, unknown>)['__bspPerfRing'] = this.perfRing;
+        // The scripted-run telemetry seam (same dev flag as the ring): the LIVE camera, so a scripted
+        // perf/playtest run can read the player's position + heading back between moves.
+        (window as unknown as Record<string, unknown>)['__bspCam'] = this.camera;
       }
 
       const canvasEl = this.canvas().nativeElement;
@@ -631,7 +650,9 @@ export class BspDemoComponent {
         const dir = Math.sign(event.deltaY);
 
         if (dir !== 0) {
-          this.selectWeapon((this.weaponIndex + dir + ARSENAL.length) % ARSENAL.length);
+          // Cycle across OWNED weapons only — with the fists-only start the wheel stays put until pickups
+          // light more of the arms row.
+          this.selectWeapon(nextOwnedIndex(this.ownedFlags(), this.weaponIndex, dir));
         }
       };
 
@@ -717,7 +738,7 @@ export class BspDemoComponent {
         const sprites = this.liveSprites(); // alive billboards this frame (a culled barrel drops out)
         // The WARM zone's live billboards, in ITS coordinates — rendered through the seam windows.
         const neighborSprites =
-          this.warm === null ? undefined : new Map([[this.warm.key, this.worldSprites(this.warm)]]);
+          this.warm === null ? undefined : new Map([[this.warm.key, this.warmSprites(this.warm)]]);
         // Capture the current pool + framebuffer: a resolution rebuild only swaps them between frames, so the
         // pair stays consistent for this render (and the locals keep the non-null narrowing in the callback).
         const activePool = pool;
@@ -1140,9 +1161,20 @@ export class BspDemoComponent {
     }
   }
 
-  /** Switch to an arsenal slot (0-based) — rebuilds the viewmodel for the new weapon. */
+  /** Per-arsenal-position owned flags (the 1..8 key row) — the shape the pure cycling/HUD logic reads. */
+  private ownedFlags(): boolean[] {
+    return ARSENAL.map((weapon) => this.ownedWeapons.has(weapon.id));
+  }
+
+  /** Switch to an arsenal slot (0-based) — rebuilds the viewmodel for the new weapon. An UNOWNED slot is
+   *  inert (the DOOM progression: a number key does nothing until its weapon has been picked up). */
   private selectWeapon(index: number): void {
-    if (index < 0 || index >= ARSENAL.length || index === this.weaponIndex) {
+    if (
+      index < 0 ||
+      index >= ARSENAL.length ||
+      index === this.weaponIndex ||
+      !this.ownedWeapons.has(ARSENAL[index].id)
+    ) {
       return;
     }
     this.weaponIndex = index;
@@ -1161,15 +1193,20 @@ export class BspDemoComponent {
   /** The world billboards still alive this frame — the render's per-frame sprite list (culled barrels drop
    *  out). Projectiles are NOT here: they are painted screen-space over the frame by `drawProjectiles`. */
   private liveSprites(): Sprite[] {
-    const sprites = this.worldSprites({
-      targets: this.targets,
-      enemies: this.enemies,
-      enemyShots: this.enemyShots,
-      vitals: this.vitals,
-      ammoBoxes: this.ammoBoxes,
-      keycards: this.keycards,
-      exit: this.exit,
-    });
+    const sprites = this.worldSprites(
+      {
+        targets: this.targets,
+        enemies: this.enemies,
+        enemyShots: this.enemyShots,
+        vitals: this.vitals,
+        ammoBoxes: this.ammoBoxes,
+        keycards: this.keycards,
+        weaponPickups: this.weaponPickups,
+        exit: this.exit,
+      },
+      this.camera.x,
+      this.camera.y,
+    );
 
     if (this.atlasesReady) {
       // Each zone-graph exit shows the same exit sign (its art decodes with the pickup atlases). Active
@@ -1192,15 +1229,40 @@ export class BspDemoComponent {
     return sprites;
   }
 
+  /** The WARM neighbor's billboards for the render's neighbor-sprites channel, in ITS own coordinates —
+   *  directional props oriented for the camera translated through the seam (the same ghost point the warm
+   *  AI tracks in {@link stepWarm}), so a totem seen through the window turns exactly like a local one. */
+  private warmSprites(warm: WarmZone): Sprite[] {
+    const seam = this.seams.find((s) => s.zone === warm.key);
+
+    return this.worldSprites(
+      warm,
+      this.camera.x - (seam?.dx ?? 0),
+      this.camera.y - (seam?.dy ?? 0),
+    );
+  }
+
   /** ONE zone's entity billboards — the active zone's (inside {@link liveSprites}) or the WARM neighbor's,
-   *  whose list feeds the render's neighbor-sprites channel in its own coordinates. */
+   *  whose list feeds the render's neighbor-sprites channel in its own coordinates. (`viewX`,`viewY`) is
+   *  the camera IN THAT ZONE'S coordinates — it picks each directional prop's rotation cell per frame. */
   private worldSprites(
     world: Pick<
       WarmZone,
-      'targets' | 'enemies' | 'enemyShots' | 'vitals' | 'ammoBoxes' | 'keycards' | 'exit'
+      | 'targets'
+      | 'enemies'
+      | 'enemyShots'
+      | 'vitals'
+      | 'ammoBoxes'
+      | 'keycards'
+      | 'weaponPickups'
+      | 'exit'
     >,
+    viewX: number,
+    viewY: number,
   ): Sprite[] {
-    const sprites = world.targets.filter((t) => t.alive).map((t) => t.sprite);
+    const sprites = world.targets
+      .filter((t) => t.alive)
+      .map((t) => orientSprite(t.sprite, viewX, viewY));
 
     for (const e of world.enemies) {
       const s = e.spec;
@@ -1315,6 +1377,24 @@ export class BspDemoComponent {
         row: 0,
       });
     }
+    for (const p of world.weaponPickups) {
+      // A weapon unlock on the floor — the same turntable contract as the ammo boxes (advance the frame
+      // from its age; the v1 single-frame placeholder art always resolves cell 0); drops once collected.
+      const col = Math.floor(p.age / (p.spec.frameMs / 1000)) % p.spec.frames;
+
+      sprites.push({
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        tex: p.spec.texName,
+        width: p.spec.worldHeight * p.spec.aspect,
+        height: p.spec.worldHeight,
+        cols: p.spec.frames,
+        rows: 1,
+        col,
+        row: 0,
+      });
+    }
     if (world.exit !== null) {
       // The legacy exit sign — a grounded single-frame billboard (the level goal).
       sprites.push({
@@ -1391,18 +1471,19 @@ export class BspDemoComponent {
     this.vitals = built.vitals;
     this.ammoBoxes = built.ammoBoxes;
     this.keycards = built.keycards;
+    this.weaponPickups = built.weaponPickups;
     this.exit = built.exit;
   }
 
-  /** Build a zone's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, spinning access
-   *  badges) + the legacy exit marker, each seated on its sector floor. Each pickup carries its spawn index
+  /** Build a zone's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, weapon unlocks,
+   *  spinning access badges) + the legacy exit marker, each seated on its sector floor. Each pickup carries its spawn index
    *  and anything the zone's snapshot flags as TAKEN is skipped — collected items stay gone on return.
    *  Shared by the active spawn and the warm-zone build. */
   private buildPickups(
     level: Level,
     map: CompiledMap,
     snap: ZoneSnapshot | null,
-  ): Pick<WarmZone, 'vitals' | 'ammoBoxes' | 'keycards' | 'exit'> {
+  ): Pick<WarmZone, 'vitals' | 'ammoBoxes' | 'keycards' | 'weaponPickups' | 'exit'> {
     const floor = (x: number, y: number): number => this.floorOn(level, map, x, y);
     const vitals = [
       ...level.health.map(([x, y, size]) => ({ spec: vitalSpec('health', size), x, y })),
@@ -1428,12 +1509,23 @@ export class BspDemoComponent {
         age: 0,
       }))
       .filter((k) => snap?.cardsTaken[k.idx] !== true);
+    const weaponPickups = (level.weapons ?? [])
+      .map(([x, y, id], idx) => ({
+        spec: weaponPickupSpec(id),
+        idx,
+        x,
+        y,
+        z: floor(x, y),
+        age: 0,
+      }))
+      .filter((p) => snap?.weaponsTaken[p.idx] !== true);
     const exit = level.exit;
 
     return {
       vitals,
       ammoBoxes,
       keycards,
+      weaponPickups,
       exit:
         exit === undefined
           ? null
@@ -1442,7 +1534,8 @@ export class BspDemoComponent {
   }
 
   /** Spin the ammo boxes + collect any pickup the player overlaps: coffee/RAM refill health/armour (capped at
-   *  VITAL_MAX), a box tops up its OWN ammo type's reserve (capped, KEPT if the type is already full). */
+   *  VITAL_MAX), a box tops up its OWN ammo type's reserve (capped, KEPT if the type is already full), and a
+   *  weapon pickup unlocks its weapon (see {@link collectWeapon}). */
   private stepPickups(dt: number): void {
     this.vitals = this.vitals.filter((v) => {
       v.age += dt; // advance the turntable spin whether or not it is collected
@@ -1479,7 +1572,39 @@ export class BspDemoComponent {
       return false; // collected — drop it
     });
 
+    this.weaponPickups = this.weaponPickups.filter((p) => {
+      p.age += dt; // advance its (future) turntable spin whether or not it is collected
+      if (Math.hypot(p.x - this.camera.x, p.y - this.camera.y) >= PICKUP_RADIUS) {
+        return true; // out of reach — keep it
+      }
+      this.collectWeapon(p.spec); // always collectible — a repeat pickup is still an ammo top-up
+
+      return false; // collected — drop it
+    });
+
     this.stepObjective(dt);
+  }
+
+  /** Unlock a collected weapon (the DOOM progression): own it for the rest of the run, grant its starter
+   *  ammo dose (ONE standard box of its type — {@link weaponAmmoDose} — capped at the reserve max), and
+   *  AUTO-EQUIP it when it is a FIRST pickup into a strictly better arsenal position (finding a pistol
+   *  while holding the shotgun never downgrades; a repeat pickup only tops the reserve up). */
+  private collectWeapon(spec: WeaponPickupSpec): void {
+    const index = ARSENAL.findIndex((weapon) => weapon.id === spec.id);
+    const alreadyOwned = this.ownedWeapons.has(spec.id);
+
+    this.ownedWeapons.add(spec.id);
+    const dose = weaponAmmoDose(spec.ammoType);
+
+    if (spec.ammoType !== null && dose > 0) {
+      const held = this.reserve.get(spec.ammoType) ?? 0;
+
+      this.reserve.set(spec.ammoType, Math.min(ammoTypeMax(spec.ammoType), held + dose));
+    }
+    if (shouldAutoEquip(alreadyOwned, this.weaponIndex, index)) {
+      this.selectWeapon(index);
+    }
+    this.pickupFx = PICKUP_FX_DURATION;
   }
 
   /** The level objective: spin + collect each access badge on proximity (→ the HUD card bay; each unlocks its
@@ -1727,7 +1852,7 @@ export class BspDemoComponent {
     const doors = this.buildDoors(zone.level, snap);
     const pickups = this.atlasesReady
       ? this.buildPickups(zone.level, map, snap)
-      : { vitals: [], ammoBoxes: [], keycards: [], exit: null };
+      : { vitals: [], ammoBoxes: [], keycards: [], weaponPickups: [], exit: null };
 
     this.applyDoors(doors, sectors); // a remembered-open door is open for the warm sim's foes too
 
@@ -1765,6 +1890,7 @@ export class BspDemoComponent {
       vitals: this.vitals,
       ammoBoxes: this.ammoBoxes,
       keycards: this.keycards,
+      weaponPickups: this.weaponPickups,
       doors: this.doors,
       slides: this.slides,
       exit: this.exit,
@@ -1786,6 +1912,7 @@ export class BspDemoComponent {
     this.vitals = world.vitals;
     this.ammoBoxes = world.ammoBoxes;
     this.keycards = world.keycards;
+    this.weaponPickups = world.weaponPickups;
     this.doors = world.doors;
     this.slides = world.slides;
     this.exit = world.exit;
@@ -1890,6 +2017,7 @@ export class BspDemoComponent {
       ),
       ammoTaken: this.takenFlags(world.level.ammo.length, world.ammoBoxes),
       cardsTaken: this.takenFlags(world.level.keycards.length, world.keycards),
+      weaponsTaken: this.takenFlags(world.level.weapons?.length ?? 0, world.weaponPickups),
       doors: world.doors.map((d) => d.openness),
     };
   }
@@ -2261,6 +2389,12 @@ export class BspDemoComponent {
     this.armor = 0;
     this.hurtFx = 0;
     this.pickupFx = 0;
+    // Back to the FISTS-ONLY loadout: every picked-up weapon is lost with the run (its floor pickups
+    // respawn with the fresh building below). The fist is ARSENAL[0], so the equip below stays owned.
+    this.ownedWeapons.clear();
+    for (const id of STARTING_WEAPON_IDS) {
+      this.ownedWeapons.add(id);
+    }
     this.weaponIndex = 0;
     this.weaponView = new WeaponView(
       ARSENAL[0],
@@ -3203,8 +3337,11 @@ export class BspDemoComponent {
     }
     // Light the arms row by ARSENAL POSITION (1..8 = the number key that selects it), not the DOOM `slot`:
     // the fist + chainsaw share slot 1, so a slot-based row left "8" permanently grey and misaligned the
-    // numbers with the keys (key 2 = chainsaw, not the slot-2 weapon). All eight are always owned in the demo.
-    this.hud.setArms(ARSENAL.map((_, index) => index + 1));
+    // numbers with the keys (key 2 = chainsaw, not the slot-2 weapon). Only OWNED weapons light up — the
+    // run starts fists-only ("1") and each weapon pickup lights its number.
+    this.hud.setArms(
+      ARSENAL.flatMap((weapon, index) => (this.ownedWeapons.has(weapon.id) ? [index + 1] : [])),
+    );
     this.hud.setWeapon(this.weaponView.icon() ?? null);
 
     const turnRate = dt > 0 ? -(this.camera.angle - this.prevAngle) / dt : 0; // + = turning right

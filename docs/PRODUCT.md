@@ -494,14 +494,14 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   keeps the DOOM algorithm (the BSP walk, clipping, per-column span extraction — ~0.5 ms) and emits a compact
   **command buffer**; a hand-written **WGSL compute shader** executes the per-pixel work (texture sampling,
   shading, layered glass, portal phases, sprites) massively parallel — no triangle rasterization anywhere,
-  proven **99.4–99.98 % pixel-identical** to the CPU reference. When WebGPU is unavailable (or via
+  measured **99.4–99.98 % pixel-identical** to the CPU reference per scene at integration time. When WebGPU is unavailable (or via
   `?renderer=cpu`) it falls back to the **multi-threaded software rasteriser**: a **`SharedArrayBuffer`
   worker pool** splits the frame into N horizontal bands painting into one shared framebuffer + z-buffer
   (needs COOP/COEP), governed under CPU contention by a **workers-only ladder** (measured shrink trials with
   audit/revert — the image never blurs: **render resolution never adapts**); and when SAB is unavailable too
   (or during SSR) it falls back to **single-threaded** main-thread rendering, so `/bsp` always works. The
   framebuffer renders **below display resolution** and is upscaled **pixelated** for the authentic software
-  look; on `/bsp` a readout shows **FPS · frame ms · backend · thread count · texture source** (WebP vs
+  look; on `/bsp` a readout shows **FPS · frame ms · thread count · backend · texture source** (WebP vs
   procedural). Textures have a **procedural fallback** baked in code (brick / metal /
   floor / ceiling / …) so the world renders with no assets, and the real **WebP art is decoded and swapped
   in over that base** at runtime; assets **preload** up front so nothing pops in mid-play.

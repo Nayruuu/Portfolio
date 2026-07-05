@@ -107,10 +107,21 @@ const dot = (x, y, r, fill, label, lc = '#0b0f14') =>
     ? `<text x="${px(x)}" y="${py(y) + 3}" font-family="monospace" font-size="9" font-weight="bold" fill="${lc}" text-anchor="middle">${label}</text>`
     : '');
 
-// --- map things (barrels / props) ---
+// --- map things (barrels / decor props) ---
+const PROP_STYLE = {
+  prop: ['#2e8b57', 'P'],
+  prop_screen: ['#7a5cd6', 'm'],
+  prop_totem: ['#7a5cd6', 'T'],
+  prop_board: ['#7a5cd6', 'W'],
+  prop_chair: ['#7a5cd6', 'c'],
+  prop_cooler: ['#7a5cd6', 'o'],
+};
 for (const t of map.things) {
   if (t.type === 'barrel') parts.push(dot(t.x, t.y, 4, '#b5651d', 'b', '#fff'));
-  else if (t.type === 'prop') parts.push(dot(t.x, t.y, 4, '#2e8b57', 'P', '#fff'));
+  else if (PROP_STYLE[t.type]) {
+    const [fill, glyph] = PROP_STYLE[t.type];
+    parts.push(dot(t.x, t.y, 4, fill, glyph, '#fff'));
+  }
 }
 
 // --- Level payload markers ---
@@ -166,6 +177,7 @@ const rows = [
   ['#e8d44d', 'ammo (a)'],
   ['#b5651d', 'barrel (b)'],
   ['#2e8b57', 'prop plant (P)'],
+  ['#7a5cd6', 'decor (m/T/W/c/o)'],
   ['#ff9b21', 'door trigger (D)'],
   ['#ff33cc', 'exit (X) / zone exit (Z)'],
 ];

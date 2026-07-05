@@ -42,6 +42,135 @@ function plantPlaceholder(): Texture {
   return { width: size, height: size, pixels };
 }
 
+/** A placeholder WHITEBOARD on casters — a "bidon" stand-in until real prop art lands. A white panel in a
+ *  grey frame on two legs, with coloured marker scribbles; transparent around. Feature-layer, coverage-exempt. */
+function boardPlaceholder(): Texture {
+  const size = 64;
+  const pixels = new Uint8ClampedArray(size * size * 4); // transparent by default
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+
+      if (y >= 4 && y < 44 && x >= 2 && x < 62) {
+        const onFrame = y < 7 || y >= 41 || x < 5 || x >= 59;
+        const onScribble =
+          (y === 14 && x >= 10 && x < 42) ||
+          (y === 20 && x >= 10 && x < 52) ||
+          (y === 26 && x >= 10 && x < 34) ||
+          (y === 33 && x >= 38 && x < 54);
+
+        pixels[i] = onFrame ? 110 : onScribble ? (x < 34 ? 40 : 190) : 236; // frame · marker · board
+        pixels[i + 1] = onFrame ? 114 : onScribble ? 60 : 238;
+        pixels[i + 2] = onFrame ? 120 : onScribble ? (x < 34 ? 160 : 60) : 240;
+        pixels[i + 3] = 255;
+      } else if (y >= 44 && ((x >= 14 && x < 18) || (x >= 46 && x < 50))) {
+        pixels[i] = 90; // caster legs
+        pixels[i + 1] = 92;
+        pixels[i + 2] = 98;
+        pixels[i + 3] = 255;
+      }
+    }
+  }
+
+  return { width: size, height: size, pixels };
+}
+
+/** A placeholder OFFICE SWIVEL CHAIR — a "bidon" stand-in until real prop art lands. Dark backrest + seat
+ *  over a centre pole and a star base; transparent around. Feature-layer, coverage-exempt. */
+function chairPlaceholder(): Texture {
+  const size = 64;
+  const pixels = new Uint8ClampedArray(size * size * 4); // transparent by default
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const onBack = y >= 6 && y < 34 && x >= 20 && x < 44;
+      const onSeat = y >= 34 && y < 42 && x >= 14 && x < 50;
+      const onPole = y >= 42 && y < 54 && x >= 30 && x < 34;
+      const onBase = y >= 54 && y < 58 && x >= 16 && x < 48;
+
+      if (onBack || onSeat || onPole || onBase) {
+        const k = onBack && x >= 24 && x < 40 && y >= 10 ? 1.25 : 1; // padded centre highlight
+
+        pixels[i] = Math.min(255, 38 * k);
+        pixels[i + 1] = Math.min(255, 40 * k);
+        pixels[i + 2] = Math.min(255, 46 * k);
+        pixels[i + 3] = 255;
+      }
+    }
+  }
+
+  return { width: size, height: size, pixels };
+}
+
+/** A placeholder WATER COOLER — a "bidon" stand-in until real prop art lands. A translucent blue bottle on
+ *  a white column with a drip tray; transparent around. Feature-layer, coverage-exempt. */
+function coolerPlaceholder(): Texture {
+  const size = 64;
+  const pixels = new Uint8ClampedArray(size * size * 4); // transparent by default
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const onBottle = y >= 4 && y < 24 && x >= 22 && x < 42;
+      const onColumn = y >= 24 && y < 58 && x >= 18 && x < 46;
+
+      if (onBottle) {
+        const k = x < 27 ? 1.2 : 1; // a light sheen on the bottle's left edge
+
+        pixels[i] = Math.min(255, 110 * k); // water blue
+        pixels[i + 1] = Math.min(255, 170 * k);
+        pixels[i + 2] = Math.min(255, 210 * k);
+        pixels[i + 3] = 255;
+      } else if (onColumn) {
+        const onTray = y >= 34 && y < 38 && x >= 24 && x < 40;
+
+        pixels[i] = onTray ? 70 : 228; // dark drip tray on the white body
+        pixels[i + 1] = onTray ? 72 : 230;
+        pixels[i + 2] = onTray ? 76 : 232;
+        pixels[i + 3] = 255;
+      }
+    }
+  }
+
+  return { width: size, height: size, pixels };
+}
+
+/**
+ * PLACEHOLDER — synthesize a 1×4 DIRECTIONAL ROTATION SHEET (front · right · back · left) from a single
+ * frame, until the real 1×4 green-screen sheets land: right/left are the frame mirrored with a warm/cool
+ * tint, back is darkened — so walking around a prop VISIBLY cycles its cells in-game. DELETE this (and its
+ * call sites) when the real art arrives: a served 1×4 sheet needs no synthesis.
+ */
+function directionalSheetPlaceholder(base: Texture): Texture {
+  const { width: w, height: h, pixels: src } = base;
+  const out = new Uint8ClampedArray(4 * w * h * 4);
+  // Per-cell (r,g,b) gains + horizontal mirror: front as-is · right warm+mirrored · back dark · left cool+mirrored.
+  const cells: readonly { gain: readonly [number, number, number]; mirror: boolean }[] = [
+    { gain: [1, 1, 1], mirror: false },
+    { gain: [1, 0.8, 0.6], mirror: true },
+    { gain: [0.55, 0.55, 0.55], mirror: false },
+    { gain: [0.6, 0.8, 1], mirror: true },
+  ];
+
+  cells.forEach((cell, c) => {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const s = (y * w + (cell.mirror ? w - 1 - x : x)) * 4;
+        const d = (y * 4 * w + c * w + x) * 4;
+
+        out[d] = src[s] * cell.gain[0];
+        out[d + 1] = src[s + 1] * cell.gain[1];
+        out[d + 2] = src[s + 2] * cell.gain[2];
+        out[d + 3] = src[s + 3];
+      }
+    }
+  });
+
+  return { width: 4 * w, height: h, pixels: out };
+}
+
 /** A placeholder GLASS PANE — a "bidon" stand-in until real glass art lands (see `prompts/glass_pane.md`). Mostly
  *  clear (alpha 0 → see-through + cool tint), with an opaque aluminium mullion frame (border + central cross) and
  *  a couple of diagonal reflection glints. Sampled per pixel like a door leaf; feature-layer, coverage-exempt. */
@@ -90,8 +219,13 @@ export function proceduralTextures(): Map<string, Texture> {
     ['CEIL', ceilTexture()],
     ['BARREL', barrelTexture()],
     ['PROP', plantPlaceholder()], // potted lobby plant — real art in ENV_ASSETS (this is the offline fallback)
-    ['PROP_SCREEN', metalTexture()], // crashed reception monitor — real art in ENV_ASSETS
-    ['PROP_TOTEM', metalTexture()], // lobby directory totem — real art in ENV_ASSETS
+    // Directional (4-rotation) props: their engine defs sample a 1×4 view-angle sheet, so EVERY texture
+    // registered under these names — fallback or served — must be one (see `directionalSheetPlaceholder`).
+    ['PROP_SCREEN', directionalSheetPlaceholder(metalTexture())], // crashed desk monitor — real art in ENV_ASSETS
+    ['PROP_TOTEM', directionalSheetPlaceholder(metalTexture())], // directory totem — real art in ENV_ASSETS
+    ['PROP_BOARD', directionalSheetPlaceholder(boardPlaceholder())], // whiteboard — art pending (ENV url 404s → this shows)
+    ['PROP_CHAIR', directionalSheetPlaceholder(chairPlaceholder())], // office chair — art pending
+    ['PROP_COOLER', coolerPlaceholder()], // water cooler (symmetric, single frame) — art pending
     // Extended palette (WebP swaps in via `loadEnvTextures`; these are the pre-decode / SSR fallbacks).
     ['CUBICLE', brickTexture()],
     ['SCREEN', metalTexture()],
@@ -183,8 +317,11 @@ const ENV_ASSETS: Readonly<Record<string, { url: string; worldSize: number }>> =
   CEIL_LUX: { url: '/game/textures/ceiling_lux_512.webp', worldSize: 4 }, // white luminous cornice ceiling (LED cove grid + spots)
   // Decor prop billboards (green-screen art keyed to alpha offline; worldSize is unused by sprites).
   PROP: { url: '/game/props/prop_plant.webp', worldSize: 4 }, // potted lobby plant
-  PROP_SCREEN: { url: '/game/props/prop_screen.webp', worldSize: 4 }, // crashed reception monitor
-  PROP_TOTEM: { url: '/game/props/prop_totem.webp', worldSize: 4 }, // lobby directory totem
+  PROP_SCREEN: { url: '/game/props/prop_screen.webp', worldSize: 4 }, // crashed desk monitor (single frame TODAY — sheet-synthesized below)
+  PROP_TOTEM: { url: '/game/props/prop_totem.webp', worldSize: 4 }, // directory totem (single frame TODAY — sheet-synthesized below)
+  PROP_BOARD: { url: '/game/props/prop_board.webp', worldSize: 4 }, // whiteboard — future 1×4 rotation sheet (404 → procedural fallback)
+  PROP_CHAIR: { url: '/game/props/prop_chair.webp', worldSize: 4 }, // office chair — future 1×4 rotation sheet
+  PROP_COOLER: { url: '/game/props/prop_cooler.webp', worldSize: 4 }, // water cooler — future single frame
   // Themed walls — per-zone identity for the episode.
   LOBBY: { url: '/game/textures/wall_lobby_512.webp', worldSize: 4 }, // reception (M1)
   KITCHEN: { url: '/game/textures/wall_kitchen_512.webp', worldSize: 4 }, // cafeteria (M5)
@@ -292,6 +429,11 @@ export function projectileWidth(kind: string): number | undefined {
   return PROJECTILE_SCALE * effect.size * (effect.width / effect.height);
 }
 
+/** PLACEHOLDER — the directional props whose SERVED art is still a single frame: their load is wrapped in
+ *  {@link directionalSheetPlaceholder} so the engine's 1×4 sampling stays correct (and the rotation is
+ *  visible in-game). Remove each name here the day its real 1×4 sheet ships. */
+const SINGLE_FRAME_ROTATED = new Set(['PROP_SCREEN', 'PROP_TOTEM']);
+
 /**
  * Load the real environment textures (POT walls/flats), reporting progress. Returns a name → Texture map to
  * MERGE over the procedural library — entries that fail to load are simply absent, leaving their procedural
@@ -313,7 +455,10 @@ export async function loadEnvTextures(
       const texture = await loadImageTexture(asset.url, asset.worldSize);
 
       if (texture !== null) {
-        out.set(asset.name, texture);
+        out.set(
+          asset.name,
+          SINGLE_FRAME_ROTATED.has(asset.name) ? directionalSheetPlaceholder(texture) : texture,
+        );
       }
       loaded += 1;
       onProgress?.(loaded, assets.length);

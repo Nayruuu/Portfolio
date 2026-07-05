@@ -1,5 +1,5 @@
 import type { KeycardColor } from '../../core/lib';
-import { AMMO_MAX } from '../../shared/game/weapons';
+import { AMMO_MAX, WEAPON_IDS, requireWeapon, type WeaponId } from '../../shared/game/weapons';
 
 /**
  * Pickup + objective registry for the BSP demo — VITALS (health / armour), spinning AMMO boxes, the 3-tier
@@ -215,6 +215,76 @@ export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
   ),
 ];
 
+/** A WEAPON pickup's floor billboard + identity — the DOOM progression rewards (`Level.weapons`): the run
+ *  starts fists-only and each of these unlocks its weapon on collect (+ one standard ammo box of its type,
+ *  see {@link weaponAmmoDose}). Shaped like the ammo-box turntable so future rotation art is a drop-in;
+ *  v1 ART PLACEHOLDER: the weapon's HUD bay icon (`weapons.json` `icon`, alpha-cut) as a single-frame
+ *  billboard — replace `url`/`frames`/`aspect` with a real `_rot` strip when each weapon's turntable ships. */
+export interface WeaponPickupSpec {
+  readonly id: WeaponId;
+  readonly texName: string;
+  readonly url: string; // served art (v1: the HUD icon; later a `frames`×1 turntable strip)
+  readonly frames: number; // turntable cells (1 = the static v1 placeholder)
+  readonly frameMs: number; // ms each spin frame holds
+  readonly worldHeight: number; // billboard height in world units
+  readonly aspect: number; // source cell width : height
+  readonly ammoType: string | null; // the reserve the starter dose tops up (null = an ammo-less melee weapon)
+}
+
+/** The v1 icon cells' width:height (measured from the served `icon.webp` files) — dies with the
+ *  placeholder art: a real turntable strip carries its own cell aspect. */
+const WEAPON_ICON_ASPECTS: Readonly<Record<WeaponId, number>> = {
+  fist: 338 / 259,
+  chainsaw: 456 / 134,
+  pistol: 266 / 300,
+  shotgun: 600 / 469,
+  chaingun: 460 / 246,
+  rocket: 360 / 193,
+  plasma: 416 / 223,
+  bfg: 699 / 375,
+};
+
+/** Weapon pickups read bigger than an ammo box, under the vitals — a reward the eye finds across a room. */
+const WEAPON_WORLD_HEIGHT = 0.55;
+
+/** One pickup spec per registry weapon, in arsenal order (`requireWeapon` fails loud on a drifted id). */
+export const WEAPON_PICKUP_SPECS: readonly WeaponPickupSpec[] = WEAPON_IDS.map((id) => {
+  const weapon = requireWeapon(id);
+
+  return {
+    id,
+    texName: `PICKUP_WEAPON_${id.toUpperCase()}`,
+    url: weapon.icon,
+    frames: 1,
+    frameMs: PICKUP_SPIN_MS,
+    worldHeight: WEAPON_WORLD_HEIGHT,
+    aspect: WEAPON_ICON_ASPECTS[id],
+    ammoType: weapon.ammoType,
+  };
+});
+
+/** Resolve the pickup spec for a weapon id — the placement side of `Level.weapons`. */
+export function weaponPickupSpec(id: WeaponId): WeaponPickupSpec {
+  const spec = WEAPON_PICKUP_SPECS.find((candidate) => candidate.id === id);
+
+  if (spec === undefined) {
+    throw new Error(`weapon pickup: no spec for weapon id "${id}"`); // unreachable while WEAPON_IDS covers the registry
+  }
+
+  return spec;
+}
+
+/** The starter ammo DOSE a weapon pickup grants its ammo type: exactly ONE standard ammo box of that type
+ *  (the first {@link AMMO_BOX_SPECS} entry for it — 20 bullets / 5 shells / 40 cells / 2 rockets), so the
+ *  weapon-pickup grant reuses the box economy instead of inventing its own; 0 for an ammo-less melee weapon. */
+export function weaponAmmoDose(ammoType: string | null): number {
+  if (ammoType === null) {
+    return 0;
+  }
+
+  return AMMO_BOX_SPECS.find((box) => box.ammoType === ammoType)?.amount ?? 0;
+}
+
 /** A placed vitals pickup on the floor. */
 export interface Vital {
   x: number;
@@ -231,6 +301,16 @@ export interface AmmoBox {
   z: number;
   age: number;
   spec: AmmoBoxSpec;
+}
+
+/** A placed weapon pickup on the floor (`age` is its spin clock — held at frame 0 while the v1
+ *  single-frame placeholder art stands in for the future turntable strip). */
+export interface WeaponPickup {
+  x: number;
+  y: number;
+  z: number;
+  age: number;
+  spec: WeaponPickupSpec;
 }
 
 /** A placed, spinning access badge on the floor (`age` is its spin clock, like {@link Vital}). */
@@ -317,14 +397,15 @@ export const EXIT_SPEC: MarkerSpec = {
 /** Walk this close to the exit sign to trigger the finish (it sits flush against the hall's far wall). */
 export const EXIT_RADIUS = 1.5;
 
-/** Every pickup/marker texture to decode (vitals + ammo strips + the 3 badge turntables + exit) — each a
- *  single-row sheet. */
+/** Every pickup/marker texture to decode (vitals + ammo strips + weapon pickups + the 3 badge turntables
+ *  + exit) — each a single-row sheet. */
 export const PICKUP_TEXTURE_JOBS: readonly { name: string; url: string }[] = [
   ...[HEALTH_LARGE_SPEC, HEALTH_SMALL_SPEC, MENTAL_LARGE_SPEC, MENTAL_SMALL_SPEC].map((spec) => ({
     name: spec.texName,
     url: spec.url,
   })),
   ...AMMO_BOX_SPECS.map((spec) => ({ name: spec.texName, url: spec.url })),
+  ...WEAPON_PICKUP_SPECS.map((spec) => ({ name: spec.texName, url: spec.url })),
   ...[KEYCARD_EMPLOYEE, KEYCARD_MANAGER, KEYCARD_DIRECTOR].map((spec) => ({
     name: spec.texName,
     url: spec.url,

@@ -42,6 +42,11 @@ export const DEMO_LEVEL: Level = {
     [15, 11.5],
   ],
   // ammo (scattered): [3,11] [7,11] [16,8] [2,3] [13,1] [+1 for server_cell]
+  weapons: [
+    // Engine-showcase level (fists-only start): the base ranged pair near spawn, by the ammo row.
+    [3, 11, 'pistol'],
+    [4.5, 11, 'shotgun'],
+  ],
   keycards: [[17.75, 1.75, 'red']], // on the pedestal (+1.6)
   exit: [40, 7], // in the sunken hall (−2.7)
   doors: [{ sector: 7, triggerX: 19, triggerY: 4.5, requiresCard: 'red' }], // the east-annex corridor

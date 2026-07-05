@@ -361,6 +361,28 @@ export function startingAmmo(): Record<string, number> {
   );
 }
 
+/** Every weapon id the registry declares, in registry (arsenal) order — the DOOM-archetype value set the
+ *  level placements + ownership progression key off (no enum; `WEAPONS` is checked against it below, so
+ *  the union and the JSON can never drift silently). */
+export const WEAPON_IDS = [
+  'fist',
+  'chainsaw',
+  'pistol',
+  'shotgun',
+  'chaingun',
+  'rocket',
+  'plasma',
+  'bfg',
+] as const;
+
+/** One weapon id (derived from the tuple — no enum). */
+export type WeaponId = (typeof WEAPON_IDS)[number];
+
+/** The DOOM progression's starting loadout: FISTS ONLY. Every other weapon — the chainsaw included — is a
+ *  level pickup (`Level.weapons`), unlocked when collected; ownership is player INVENTORY (it travels
+ *  across zones) and resets here on a new game. */
+export const STARTING_WEAPON_IDS: readonly WeaponId[] = ['fist'];
+
 /** The default weapon, active on spawn — slot 1's mechanical fist. Slot 1 also holds its
  *  `chainsaw` alt, so the selection is by id, not slot. */
 export const CURRENT_WEAPON: Weapon = requireWeapon('fist');
@@ -369,9 +391,10 @@ export const CURRENT_WEAPON: Weapon = requireWeapon('fist');
  *  draw first-person — in registry order. The whole roster is now arted: the fist (index 0, the
  *  default), its chainsaw alt, the pistol (the first ranged weapon), the shotgun (the CO2
  *  shotgun), the chaingun (the full-auto chaingun), the lithium launcher (the rocket), the plasma cable (the
- *  chain bolt) and the datacenter BFG (the charged ultimate) — eight weapons, lit HUD 1..8. The `sprite_fps`
- *  filter still guards the cycle so it only ever lands on a weapon that renders. `ARSENAL[0]` is
- *  `CURRENT_WEAPON`. */
+ *  chain bolt) and the datacenter BFG (the charged ultimate) — eight weapons, HUD keys 1..8 (each lights
+ *  once OWNED: the run starts fists-only and the rest are level pickups, see `STARTING_WEAPON_IDS`). The
+ *  `sprite_fps` filter still guards the cycle so it only ever lands on a weapon that renders. `ARSENAL[0]`
+ *  is `CURRENT_WEAPON`. */
 export const ARSENAL: readonly Weapon[] = WEAPONS.filter((weapon) => weapon.sprite_fps !== '');
 
 /** Recover the literal `WeaponType` from a widened JSON `string` via equality — fail loud on an unknown
@@ -414,7 +437,7 @@ function asFireMode(value: string | undefined): FireMode | undefined {
 }
 
 /** Resolve a required weapon by id, failing loud if the registry is missing it (a build/authoring error). */
-function requireWeapon(id: string): Weapon {
+export function requireWeapon(id: string): Weapon {
   const weapon = weaponById(id);
 
   if (!weapon) {
