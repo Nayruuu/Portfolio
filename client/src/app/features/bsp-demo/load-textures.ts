@@ -256,6 +256,7 @@ export function proceduralTextures(): Map<string, Texture> {
     ['LOBBY_FLOOR', floorTexture()],
     ['CITY', brickTexture()],
     ['CITY_STREET', brickTexture()], // entrance frontage — ground-level deserted street backdrop
+    ['CITY_PLAZA', brickTexture()], // M2 break-nook window — the deserted plaza backdrop
     ['DOOR_GLASS', metalTexture()], // sliding glass door leaf (WebP carries alpha: opaque frame + clear glass)
     // Themed walls (per-zone identity for the episode).
     ['LOBBY', brickTexture()],
@@ -310,6 +311,7 @@ const ENV_ASSETS: Readonly<Record<string, { url: string; worldSize: number }>> =
   LOBBY_FLOOR: { url: '/game/textures/floor_lobby_512.webp', worldSize: 4 }, // bright lobby terrazzo
   CITY: { url: '/game/textures/backdrop_city_512.webp', worldSize: 8 }, // exterior cityscape backdrop — worldSize 8 = an 8-tall/8-wide far wall shows exactly ONE copy, aligned to TEX_ANCHOR (64) at z0..z8 (no tiling)
   CITY_STREET: { url: '/game/textures/city_street_512.webp', worldSize: 8 }, // entrance frontage — deserted ground-level street (one clean copy)
+  CITY_PLAZA: { url: '/game/textures/city_plaza_512.webp', worldSize: 8 }, // M2 break-nook window — deserted plaza (bottom band composed for the 8×3.2 opening)
   DOOR_GLASS: { url: '/game/textures/door_glass_512.webp', worldSize: 4 }, // sliding glass door leaf; ALPHA = clear glass, opaque = alu frame + handle (mapped per-panel by the glass pass, not tiled)
   GLASS_PANE: { url: '/game/textures/glass_pane_512.webp', worldSize: 4 }, // curtain-wall window; ALPHA = clear glass, opaque = alu mullions + reflections (mapped once across each window by the glass pass)
   ELEVATOR: { url: '/game/textures/elevator_512.webp', worldSize: 4 }, // dead corporate elevator doors (one door unit per 4-wide car opening)

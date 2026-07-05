@@ -33,6 +33,10 @@ const DRY_FIRE_DURATION_S = 0.18;
 /** Seconds each frame of a LOOPING cold-idle strip holds (the chainsaw's idling-chain shimmer). A gentle
  *  cadence so the at-rest idle reads as alive without distracting; a single-frame idle ignores it. */
 const IDLE_FRAME_DURATION_S = 0.13;
+/** IDLE BREATHING: the weapon rises and falls slowly even standing still (the hands are alive, never a
+ *  freeze-frame) — a full sine of this screen-height fraction per period. Additive with the walk-bob. */
+const WEAPON_BREATH_Y = 0.007; // vertical amplitude (≈5 px at 720p)
+const WEAPON_BREATH_PERIOD_S = 2.2; // one breath cycle — brisk enough to read at a glance
 
 /**
  * `WeaponView` — the first-person weapon viewmodel: owns one weapon's FPS sprite-strip + animation state.
@@ -104,6 +108,7 @@ export class WeaponView {
   private firing = false; // AUTO: the trigger is held → loop the burst frames (false = snap to idle)
   private loopClock = 0; // AUTO: seconds accumulated into the burst loop (resets when released)
   private idleClock = 0; // AUTO: seconds accumulated into the cold-idle loop while NOT firing (resets when firing)
+  private breathClock = 0; // seconds into the idle-breathing sine (advances always — the hands never freeze)
   private chargeActive = false; // CHARGE: currently spinning up (holding the charge frame before the discharge)
   private chargeElapsed = 0; // CHARGE: seconds accumulated into the current spin-up
   private kick = 0; // 0..1 recoil-kick intensity (per shot), decays to 0; added to the drawn `dy`
@@ -188,6 +193,7 @@ export class WeaponView {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.kick = Math.max(0, this.kick - dt / WEAPON_KICK_DECAY_S);
     this.dryClock = Math.max(0, this.dryClock - dt);
+    this.breathClock = (this.breathClock + dt) % WEAPON_BREATH_PERIOD_S; // idle breathing, always alive
     if (this.auto) {
       this.loopClock = this.firing ? this.loopClock + dt : 0;
       this.idleClock = this.firing ? 0 : this.idleClock + dt; // advance the cold-idle loop while at rest
@@ -246,13 +252,19 @@ export class WeaponView {
    *  `y` a downward dip, zero standing still. A weapon whose run cycle bakes the bob into its own frames
    *  reports 0. The shell reads it to launch a projectile from the swaying muzzle, not the screen centre. */
   public bobOffset(screenH: number, bobPhase: number): { readonly x: number; readonly y: number } {
+    // Idle breathing rides EVERY path (even a baked run-cycle): the weapon slowly rises and falls at rest.
+    const breath =
+      WEAPON_BREATH_Y *
+      screenH *
+      Math.sin((this.breathClock / WEAPON_BREATH_PERIOD_S) * 2 * Math.PI);
+
     if (this.runSheet?.ready()) {
-      return { x: 0, y: 0 };
+      return { x: 0, y: breath };
     }
 
     return {
       x: WEAPON_BOB_X * screenH * Math.sin(bobPhase),
-      y: WEAPON_BOB_Y * screenH * Math.abs(Math.sin(bobPhase)),
+      y: WEAPON_BOB_Y * screenH * Math.abs(Math.sin(bobPhase)) + breath,
     };
   }
 

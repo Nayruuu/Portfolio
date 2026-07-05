@@ -102,6 +102,35 @@ describe('WeaponView', () => {
     });
   });
 
+  describe('idle breathing (the hands are never a freeze-frame)', () => {
+    it('the weapon rises and falls at REST: bobOffset.y oscillates over time with bobPhase 0', () => {
+      vi.stubGlobal('Image', FakeImage);
+      const view = new WeaponView(CURRENT_WEAPON, CONFIG);
+
+      const atRest0 = view.bobOffset(600, 0).y; // breathClock 0 → sin(0) = 0
+
+      view.tick(0.55); // a quarter of the 2.2s breath period → sin(π/2) = 1 → the peak
+
+      const atRestPeak = view.bobOffset(600, 0).y;
+
+      expect(atRest0).toBeCloseTo(0, 5);
+      expect(atRestPeak).toBeGreaterThan(2); // ≈ 0.007 × 600 ≈ 4.2 px — visibly alive, subtly so
+      view.tick(0.55); // half period → sin(π) = 0 again
+
+      expect(view.bobOffset(600, 0).y).toBeCloseTo(0, 5);
+    });
+
+    it('breathing is ADDITIVE with the walk-bob (moving keeps both)', () => {
+      vi.stubGlobal('Image', FakeImage);
+      const view = new WeaponView(CURRENT_WEAPON, CONFIG);
+
+      view.tick(0.55); // breath at its peak
+      const moving = view.bobOffset(600, Math.PI / 2); // full walk dip too
+
+      expect(moving.y).toBeGreaterThan(view.bobOffset(600, 0).y); // walk dip stacks on top of the breath
+    });
+  });
+
   describe('rendering', () => {
     it('is SSR-safe: with no Image it draws nothing, exposes no icon, and the logic still runs', () => {
       vi.stubGlobal('Image', undefined);
@@ -547,7 +576,10 @@ describe('WeaponView', () => {
 
       view.tick(0.08); // the kick fades over ~0.08 s
       view.draw(ctx as unknown as CanvasRenderingContext2D, 800, 600);
-      expect(ctx.drawImage.mock.calls.at(-1)?.[6] as number).toBeCloseTo(restingDy, 1); // back to rest
+      // Back to rest — modulo the idle BREATHING the tick also advanced (subtract its current offset).
+      const settledDy = (ctx.drawImage.mock.calls.at(-1)?.[6] as number) - view.bobOffset(600, 0).y;
+
+      expect(settledDy).toBeCloseTo(restingDy, 1);
     });
 
     it('never reports a strike edge from `tick` (the core auto-fires off the held intent, not the animation)', () => {

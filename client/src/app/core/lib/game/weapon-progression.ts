@@ -28,14 +28,10 @@ export function nextOwnedIndex(owned: readonly boolean[], from: number, dir: num
 }
 
 /**
- * The DOOM auto-equip rule: a weapon pickup switches to the new weapon ONLY on its FIRST collection
- * (`alreadyOwned` false — a repeat pickup is just an ammo top-up) and only into a strictly BETTER arsenal
- * position than the one in hand — finding a pistol while holding the shotgun never downgrades.
+ * The auto-equip rule: a weapon pickup switches to the new weapon on its FIRST collection — ALWAYS,
+ * whatever its arsenal position (vanilla DOOM's behaviour, and the user's explicit call: the new tool in
+ * hand IS the reward). A repeat pickup is just an ammo top-up and never re-switches.
  */
-export function shouldAutoEquip(
-  alreadyOwned: boolean,
-  currentIndex: number,
-  pickedIndex: number,
-): boolean {
-  return !alreadyOwned && pickedIndex > currentIndex;
+export function shouldAutoEquip(alreadyOwned: boolean): boolean {
+  return !alreadyOwned;
 }

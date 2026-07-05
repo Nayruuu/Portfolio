@@ -249,6 +249,20 @@ function buildMap(): { map: MapSource; gateSector: number; secretSector: number 
 
   b.connect(LANDE, NOOK, { at: [69, 58, 73, 58], tex: 'KITCHEN' });
 
+  // --- break-nook WINDOW onto the dead PLAZA — the release beat's vista: a glassPane on the nook's north
+  //     wall (8 wide → ONE clean CITY_PLAZA copy) with the proven 0.1-deep backdrop box, no visible gap ---
+  const PLAZA = b.room(rect(62, 43.9, 70, 44), {
+    floorZ: 0,
+    ceilZ: 8, // worldSize-8 v-anchor (z0..8) — the 0..3.2 opening shows the texture's composed bottom band
+    floorTex: 'CONCRETE',
+    ceilTex: 'CONCRETE',
+    light: 255,
+    wallTex: 'GLASS_INT',
+    walls: { 3: 'CITY_PLAZA' }, // the far (north) wall carries the plaza backdrop
+  });
+
+  b.connect(NOOK, PLAZA, { kind: 'glassPane', at: [62, 44, 70, 44] });
+
   // --- PRINT ROOM (L-shaped, SCREEN + METAL + TECHNICAL, the darkest room) — the first consultant
   //     husk; a copier block as cover; the S1 SUPPLY CLOSET hides behind an unmarked METAL door in
   //     the north machine wall (tell: a glowing floor sliver + a barrel stack pointing at it) -------

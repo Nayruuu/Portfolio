@@ -1601,7 +1601,7 @@ export class BspDemoComponent {
 
       this.reserve.set(spec.ammoType, Math.min(ammoTypeMax(spec.ammoType), held + dose));
     }
-    if (shouldAutoEquip(alreadyOwned, this.weaponIndex, index)) {
+    if (shouldAutoEquip(alreadyOwned)) {
       this.selectWeapon(index);
     }
     this.pickupFx = PICKUP_FX_DURATION;

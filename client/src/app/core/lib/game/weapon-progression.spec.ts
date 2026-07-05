@@ -41,19 +41,11 @@ describe('nextOwnedIndex', () => {
 });
 
 describe('shouldAutoEquip', () => {
-  it('auto-equips a FIRST pickup into a strictly better arsenal position (the DOOM upgrade moment)', () => {
-    expect(shouldAutoEquip(false, 0, 2)).toBe(true); // fist → pistol
-    expect(shouldAutoEquip(false, 0, 1)).toBe(true); // fist → chainsaw (slot-1 alt, still a step up the row)
-    expect(shouldAutoEquip(false, 2, 3)).toBe(true); // pistol → shotgun
+  it('ALWAYS auto-equips a first pickup — the new tool in hand is the reward, whatever its slot', () => {
+    expect(shouldAutoEquip(false)).toBe(true); // fist → pistol, shotgun → pistol, anything → anything new
   });
 
   it('never auto-equips a repeat pickup (an ammo top-up, not an upgrade)', () => {
-    expect(shouldAutoEquip(true, 0, 2)).toBe(false);
-    expect(shouldAutoEquip(true, 2, 7)).toBe(false);
-  });
-
-  it('never downgrades: a pickup at or below the current position stays holstered', () => {
-    expect(shouldAutoEquip(false, 3, 2)).toBe(false); // shotgun in hand, pistol found
-    expect(shouldAutoEquip(false, 3, 3)).toBe(false); // same position (degenerate)
+    expect(shouldAutoEquip(true)).toBe(false);
   });
 });
