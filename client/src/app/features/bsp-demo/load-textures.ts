@@ -223,8 +223,8 @@ export function proceduralTextures(): Map<string, Texture> {
     // registered under these names — fallback or served — must be one (see `directionalSheetPlaceholder`).
     ['PROP_SCREEN', directionalSheetPlaceholder(metalTexture())], // crashed desk monitor — real art in ENV_ASSETS
     ['PROP_TOTEM', directionalSheetPlaceholder(metalTexture())], // directory totem — real art in ENV_ASSETS
-    ['PROP_BOARD', directionalSheetPlaceholder(boardPlaceholder())], // whiteboard — art pending (ENV url 404s → this shows)
-    ['PROP_CHAIR', directionalSheetPlaceholder(chairPlaceholder())], // office chair — art pending
+    ['PROP_BOARD', directionalSheetPlaceholder(boardPlaceholder())], // whiteboard — real art in ENV_ASSETS
+    ['PROP_CHAIR', directionalSheetPlaceholder(chairPlaceholder())], // office chair — real art in ENV_ASSETS
     ['PROP_COOLER', coolerPlaceholder()], // water cooler (symmetric, single frame) — art pending
     // Extended palette (WebP swaps in via `loadEnvTextures`; these are the pre-decode / SSR fallbacks).
     ['CUBICLE', brickTexture()],
@@ -237,6 +237,10 @@ export function proceduralTextures(): Map<string, Texture> {
     ['GLASS_PANE', glassPaneTexture()], // textured see-through pane (mullions + reflections + clear), sampled like a door leaf
     ['ELEVATOR', metalTexture()], // closed corporate elevator doors (dead) — real art in ENV_ASSETS
     ['WOOD', brickTexture()], // warm wood veneer accent wall (premium lobby) — real art in ENV_ASSETS
+    ['RECEPTION', brickTexture()], // reception-desk front panel (marble lip + wood band + alu kick) — real art in ENV_ASSETS
+    ['COUNTER_TOP', ceilTexture()], // counter/turnstile top surface (marble + alu strips) — real art in ENV_ASSETS
+    ['PILLAR_LOBBY', brickTexture()], // marble-clad lobby column with alu reveals — real art in ENV_ASSETS
+    ['TURNSTILE', metalTexture()], // turnstile rail/post flanks (brushed steel + badge reader) — real art in ENV_ASSETS
     ['CEIL_LUX', ceilTexture()], // white luminous cornice ceiling (premium lobby) — real art in ENV_ASSETS
     ['CONCRETE', ceilTexture()],
     ['TECHNICAL', ceilTexture()],
@@ -316,13 +320,17 @@ const ENV_ASSETS: Readonly<Record<string, { url: string; worldSize: number }>> =
   GLASS_PANE: { url: '/game/textures/glass_pane_512.webp', worldSize: 4 }, // curtain-wall window; ALPHA = clear glass, opaque = alu mullions + reflections (mapped once across each window by the glass pass)
   ELEVATOR: { url: '/game/textures/elevator_512.webp', worldSize: 4 }, // dead corporate elevator doors (one door unit per 4-wide car opening)
   WOOD: { url: '/game/textures/wall_wood_512.webp', worldSize: 4 }, // warm wood veneer accent panels (reception / lounge / elevator surrounds)
+  RECEPTION: { url: '/game/textures/counter_reception_512.webp', worldSize: 1.28 }, // desk front panel — sized so the full design (marble lip → wood → kick) fits the 1.3-high counter face (64/1.28 keeps the z0 anchor)
+  COUNTER_TOP: { url: '/game/textures/counter_top_512.webp', worldSize: 2 }, // counter/turnstile top — marble slab + alu strips, tight motif for narrow tops
+  PILLAR_LOBBY: { url: '/game/textures/pillar_lobby_512.webp', worldSize: 4 }, // marble column cladding + alu reveals (M1 field/hall columns; deep floors keep techbase PILLAR)
+  TURNSTILE: { url: '/game/textures/turnstile_512.webp', worldSize: 2 }, // turnstile flanks — brushed steel + badge-reader pictogram (unlit), one reader per leaf
   CEIL_LUX: { url: '/game/textures/ceiling_lux_512.webp', worldSize: 4 }, // white luminous cornice ceiling (LED cove grid + spots)
   // Decor prop billboards (green-screen art keyed to alpha offline; worldSize is unused by sprites).
   PROP: { url: '/game/props/prop_plant.webp', worldSize: 4 }, // potted lobby plant
-  PROP_SCREEN: { url: '/game/props/prop_screen.webp', worldSize: 4 }, // crashed desk monitor (single frame TODAY — sheet-synthesized below)
-  PROP_TOTEM: { url: '/game/props/prop_totem.webp', worldSize: 4 }, // directory totem (single frame TODAY — sheet-synthesized below)
-  PROP_BOARD: { url: '/game/props/prop_board.webp', worldSize: 4 }, // whiteboard — future 1×4 rotation sheet (404 → procedural fallback)
-  PROP_CHAIR: { url: '/game/props/prop_chair.webp', worldSize: 4 }, // office chair — future 1×4 rotation sheet
+  PROP_SCREEN: { url: '/game/props/prop_screen.webp', worldSize: 4 }, // crashed desk monitor — REAL 1×4 rotation sheet (front/right/back/left)
+  PROP_TOTEM: { url: '/game/props/prop_totem.webp', worldSize: 4 }, // directory totem — REAL 1×4 rotation sheet (front/right/back/left)
+  PROP_BOARD: { url: '/game/props/prop_board.webp', worldSize: 4 }, // whiteboard — REAL 1×4 rotation sheet (front/right/back/left)
+  PROP_CHAIR: { url: '/game/props/prop_chair.webp', worldSize: 4 }, // office chair — REAL 1×4 rotation sheet (front/right/back/left)
   PROP_COOLER: { url: '/game/props/prop_cooler.webp', worldSize: 4 }, // water cooler — future single frame
   // Themed walls — per-zone identity for the episode.
   LOBBY: { url: '/game/textures/wall_lobby_512.webp', worldSize: 4 }, // reception (M1)
@@ -431,11 +439,6 @@ export function projectileWidth(kind: string): number | undefined {
   return PROJECTILE_SCALE * effect.size * (effect.width / effect.height);
 }
 
-/** PLACEHOLDER — the directional props whose SERVED art is still a single frame: their load is wrapped in
- *  {@link directionalSheetPlaceholder} so the engine's 1×4 sampling stays correct (and the rotation is
- *  visible in-game). Remove each name here the day its real 1×4 sheet ships. */
-const SINGLE_FRAME_ROTATED = new Set(['PROP_SCREEN', 'PROP_TOTEM']);
-
 /**
  * Load the real environment textures (POT walls/flats), reporting progress. Returns a name → Texture map to
  * MERGE over the procedural library — entries that fail to load are simply absent, leaving their procedural
@@ -457,10 +460,7 @@ export async function loadEnvTextures(
       const texture = await loadImageTexture(asset.url, asset.worldSize);
 
       if (texture !== null) {
-        out.set(
-          asset.name,
-          SINGLE_FRAME_ROTATED.has(asset.name) ? directionalSheetPlaceholder(texture) : texture,
-        );
+        out.set(asset.name, texture);
       }
       loaded += 1;
       onProgress?.(loaded, assets.length);

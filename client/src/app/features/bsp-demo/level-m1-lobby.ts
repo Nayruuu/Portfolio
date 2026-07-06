@@ -65,10 +65,10 @@ function buildMap(): { map: MapSource; doorSector: number } {
   const cornice = { ...LUX, ceilZ: 5.6, light: 246, wallTex: 'WOOD' };
   const FIELD = b.island(CONC, rect(18, 108, 36, 120), cornice);
 
-  b.hole(FIELD, rect(19, 109, 20.5, 110.5), 'PILLAR'); // NW
-  b.hole(FIELD, rect(33.5, 109, 35, 110.5), 'PILLAR'); // NE
-  b.hole(FIELD, rect(19, 117.5, 20.5, 119), 'PILLAR'); // SW
-  b.hole(FIELD, rect(33.5, 117.5, 35, 119), 'PILLAR'); // SE
+  b.hole(FIELD, rect(19, 109, 20.5, 110.5), 'PILLAR_LOBBY'); // NW
+  b.hole(FIELD, rect(33.5, 109, 35, 110.5), 'PILLAR_LOBBY'); // NE
+  b.hole(FIELD, rect(19, 117.5, 20.5, 119), 'PILLAR_LOBBY'); // SW
+  b.hole(FIELD, rect(33.5, 117.5, 35, 119), 'PILLAR_LOBBY'); // SE
 
   // --- ELEVATOR bank — a recess on the concourse's back (north) wall with 3 dead cars (4-wide bays,
   //     one door copy each) split by WOOD piers -----------------------------------------------------
@@ -92,13 +92,19 @@ function buildMap(): { map: MapSource; doorSector: number } {
   //     too tall to silently step onto at STEP_MAX 1.1, but vaultable with the two-handed climb — hopping
   //     the turnstile is a deliberate move, and ENEMIES can't mantle so the rails still gate them); the 3
   //     turnstile lanes are the gaps x17..20 | x22..30 (central, on axis) | x32..35 --------------------
-  const counter = { floorZ: 1.3, ceilZ: 4.4, floorTex: 'STEP', ceilTex: 'CEIL_LUX', light: 238 };
+  const counter = {
+    floorZ: 1.3,
+    ceilZ: 4.4,
+    floorTex: 'COUNTER_TOP',
+    ceilTex: 'CEIL_LUX',
+    light: 238,
+  };
 
-  b.island(CONC, rect(8, 113, 16, 116), { ...counter, wallTex: 'LOBBY' }); // desk, at the WOOD wall
-  b.island(CONC, rect(8, 103, 17, 105), { ...counter, wallTex: 'METAL' }); // west rail
-  b.island(CONC, rect(20, 103, 22, 105), { ...counter, wallTex: 'METAL' }); // gate post (lane 1 | lane 2)
-  b.island(CONC, rect(30, 103, 32, 105), { ...counter, wallTex: 'METAL' }); // gate post (lane 2 | lane 3)
-  b.island(CONC, rect(35, 103, 44, 105), { ...counter, wallTex: 'METAL' }); // east rail
+  b.island(CONC, rect(8, 113, 16, 116), { ...counter, wallTex: 'RECEPTION' }); // desk, at the WOOD wall
+  b.island(CONC, rect(8, 103, 17, 105), { ...counter, wallTex: 'TURNSTILE' }); // west rail
+  b.island(CONC, rect(20, 103, 22, 105), { ...counter, wallTex: 'TURNSTILE' }); // gate post (lane 1 | lane 2)
+  b.island(CONC, rect(30, 103, 32, 105), { ...counter, wallTex: 'TURNSTILE' }); // gate post (lane 2 | lane 3)
+  b.island(CONC, rect(35, 103, 44, 105), { ...counter, wallTex: 'TURNSTILE' }); // east rail
 
   // --- LOUNGE alcove (x46..56 y108..124, chamfered) — the sofa corner: a glassPane partition + a
   //     6-wide walk-in opening carved out of the concourse's east wall; WOOD wall behind the sofa ---
@@ -183,8 +189,8 @@ function buildMap(): { map: MapSource; doorSector: number } {
   const marble = { ...hall, floorTex: 'STEP' };
 
   b.island(HALL, rect(22, 47, 30, 55), { ...marble, floorZ: 2.6, wallTex: 'METAL' }); // the desk island
-  b.hole(HALL, rect(15, 42, 18, 45), 'PILLAR');
-  b.hole(HALL, rect(33, 57, 36, 60), 'PILLAR');
+  b.hole(HALL, rect(15, 42, 18, 45), 'PILLAR_LOBBY');
+  b.hole(HALL, rect(33, 57, 36, 60), 'PILLAR_LOBBY');
   b.island(HALL, rect(11, 49, 14, 54), { ...marble, floorZ: 3.0 }); // west planter (waist-high)
   b.island(HALL, rect(38, 49, 41, 54), { ...marble, floorZ: 3.0 }); // east planter
   b.island(HALL, rect(11, 56, 15, 59), { ...marble, floorZ: 2.4 }); // SW seating plinth (low, sit-on)

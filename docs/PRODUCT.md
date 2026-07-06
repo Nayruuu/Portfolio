@@ -482,10 +482,15 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   compiled by a **node builder** into a **BSP tree of convex subsectors**; the renderer walks the tree
   **front-to-back** and, per screen column, paints the near sector's **textured ceiling**, the **wall** (a
   one-sided solid, or a two-sided portal's upper/lower bands), and the **textured floor** — each
-  distance-shaded through a per-column occlusion window — then draws **billboard sprites** (enemies,
-  pickups, projectiles) depth-tested per pixel against the wall z-buffer. Because every **sector carries
-  its own floor and ceiling height**, the world has real **steps, raised daises, sunken pits and
-  variable-height rooms**, and walls sit at **any free angle** (no grid); the camera also supports
+  distance-shaded through a per-column occlusion window — then draws **sprites** depth-tested per pixel
+  against the wall z-buffer: camera-facing **billboards** (enemies, pickups, projectiles; directional
+  decor carries a 1×4 **rotation sheet** whose cell follows the view angle vs the prop's authored
+  facing). The engine also has a Build-engine-style **wall-sprite block** mode (a prop's cells mounted
+  on two crossed, world-anchored quads with per-column depth) — kept per-def opt-in but unused today:
+  crossed quads read as cardboard on thin silhouettes, so all shipped props are billboards. Because
+  every **sector carries its own floor and ceiling height**, the world has real **steps, raised daises,
+  sunken pits and variable-height rooms**, and walls sit at **any free angle** (no grid); the camera
+  also supports
   **pitch** (look up/down via a horizon shear). **Physics** slides the player along solid walls and
   **steps up** through a climbable portal; a too-tall-but-still-climbable ledge **auto-mantles** — the
   two-handed pull `ClimbView` overlay plays over the vault.
@@ -507,21 +512,25 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   in over that base** at runtime; assets **preload** up front so nothing pops in mid-play.
 
   Systems already built: a **per-zone texture palette** (walls BRICK / METAL / RACKS / CUBICLE / SCREEN /
-  PILLAR / DAMAGED / GLASS / GLASS_INT / LOBBY / WOOD / ELEVATOR / KITCHEN / EXEC; floors FLOOR / CARPET /
-  TILE / MARBLE / LOBBY_FLOOR / GRATING / SLAB; ceilings CEIL / CEIL_LUX / CONCRETE / TECHNICAL / NEON;
-  doors DOOR_RED / DOOR_BLUE / DOOR_YELLOW / DOOR_GLASS; exterior backdrops CITY / CITY_STREET), so each floor reads as its
+  PILLAR / PILLAR_LOBBY / DAMAGED / GLASS / GLASS_INT / LOBBY / WOOD / RECEPTION / TURNSTILE / ELEVATOR /
+  KITCHEN / EXEC; floors FLOOR / STEP / CARPET / TILE / MARBLE / LOBBY_FLOOR / COUNTER_TOP / GRATING /
+  SLAB; ceilings CEIL / CEIL_LUX / CONCRETE / TECHNICAL / NEON / CEIL_DAMAGED; doors DOOR_RED / DOOR_BLUE /
+  DOOR_YELLOW / DOOR_GLASS; exterior backdrops CITY / CITY_STREET / CITY_PLAZA), so each floor reads as its
   own office district; **transparent glass** — tinted see-through panes, textured curtain-wall windows
   (`glassPane`, mullions opaque / glass clear onto a painted exterior view) and automatic **double sliding
   glass doors** (two leaves parting from the centre, proximity-driven, auto-closing), all blocking movement
   and projectiles while enemies still see through; a **3-tier keycard/badge** access system (employee =
   blue, manager = yellow, director = red) gating colour-matched doors, with a **HUD card bay**; rotating
-  **turntable pickups** — health (medkit / plant) and mental (figurine / card) **vitals** plus **ammo
-  boxes** (each box's cap read from `weapons.json`); a **data-driven arsenal** of eight DOOM-archetype
+  **turntable pickups** — health (medkit / plant) and mental (figurine / card) **vitals**, **ammo
+  boxes** (each box's cap read from `weapons.json`) and **weapon pickups** (the run starts FISTS-ONLY;
+  every other weapon is found in a level, unlocks for the whole run — ownership travels zones — grants one
+  ammo box and auto-equips on first collection); a **data-driven arsenal** of eight DOOM-archetype
   weapons (fist / pistol / shotgun / chaingun / plasma / rocket / bfg / chainsaw) with per-weapon
   **magazine + reload** (`stepArsenal`), a shared FPS **`WeaponView`** sprite/animation, **weapon
-  switching** (1–8 / mouse wheel) and **reload** (R / right-click); an **office bestiary** of enemies;
-  **decor prop billboards** (potted plant, crashed reception monitor, directory totem — green-screen art
-  under `public/game/props/`); **animated doors** (keycard doors open in place); and the **open-building
+  switching** (1–8 / mouse wheel, unowned slots skipped) and **reload** (R / right-click); an **office bestiary** of enemies;
+  **decor props** (the potted plant, water cooler and explosive barrel as plain billboards; the crashed
+  reception monitor, directory totem, whiteboard and office chair as view-angle billboards wearing
+  1×4 **rotation sheets** — green-screen art under `public/game/props/`); **animated doors** (keycard doors open in place); and the **open-building
   zone system** — the tower is a graph of per-floor maps (`exits` walk-into transitions → named `entries`,
   short fade) with **per-zone world-state persistence** (kills, taken pickups and opened doors survive a
   round trip; the player's inventory travels), so badges collected on one floor open doors on another and
@@ -547,10 +556,12 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   **Built vs planned.** Built today: the BSP engine + the systems above, **`level-m1-lobby`** (the episode
   opener — a premium corporate ground floor: two-door glass entrance sas onto a street view, marble-inlay
   concourse under a luminous cornice ceiling, reception → turnstiles → dead elevator bank, wood-panelled
-  lounge, lateral staircase to the upper reception hall), and the earlier **worked-example levels** —
+  lounge, lateral staircase to the upper reception hall), **`level-m2-openspace`** (the employee floor
+  above it, reached through the LIVE M1 ⇄ M2 passable seam — cubicle farm, sunken collab pit, mezzanine
+  with glass offices, the episode's first badge gate), and the earlier **worked-example levels** —
   `level-accueil` (a hand-authored reception→climax techbase), **`level-hangar`** (a large original
   techbase showcasing a spiral staircase + verticality) and the engine-showcase `demo-map`.
-  Planned: the rest of the **9-level episode** (M2 Open-space → … → M9 Archives), plus the **two bosses**,
+  Planned: the rest of the **9-level episode** (M3 RH → … → M9 Archives), plus the **two bosses**,
   **audio** (music + SFX), and the **menu / intertitle screens**. The per-level canon (the 9-floor table,
   palettes, badges, beats AND each level's built/planned status) lives in the `level-designer` agent —
   this doc doesn't duplicate it.

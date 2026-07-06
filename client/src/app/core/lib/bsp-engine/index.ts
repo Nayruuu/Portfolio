@@ -6,5 +6,6 @@ export * from './camera';
 export * from './texture';
 export * from './raycast';
 export * from './renderer';
+export * from './sprite-block';
 export * from './sprite-rotation';
 export * from './frame-commands';

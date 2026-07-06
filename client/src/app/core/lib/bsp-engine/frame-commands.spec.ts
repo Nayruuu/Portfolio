@@ -8,6 +8,8 @@ import {
   SPAN_SKY,
   SPAN_STRIDE,
   SPAN_WALL,
+  SPRITE_BILLBOARD,
+  SPRITE_BLOCK_FACE,
   SPRITE_STRIDE,
   type FrameCommands,
 } from './frame-commands';
@@ -250,11 +252,21 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
       const cellH = cmds.auxWords[sb + 8];
       const forward = cmds.auxFloats[sb + 9];
       const shade = cmds.auxFloats[sb + 10];
+      const blockFace = cmds.auxWords[sb + 11] === SPRITE_BLOCK_FACE;
       const { width: tw, pixels: px } = tex;
       const colSpan = right - left + 1;
       const rowSpan = yBottom - yTop + 1;
       const yLo = Math.max(0, yTop);
       const yHi = Math.min(height - 1, yBottom);
+      // The block-face tail (drawBlockFace's per-column projection inputs) — zeroed on a billboard.
+      const xa = cmds.auxFloats[sb + 12];
+      const xb = cmds.auxFloats[sb + 13];
+      const invFa = cmds.auxFloats[sb + 14];
+      const invFb = cmds.auxFloats[sb + 15];
+      const uOverZa = cmds.auxFloats[sb + 16];
+      const uOverZb = cmds.auxFloats[sb + 17];
+      const zBottom = cmds.auxFloats[sb + 18];
+      const zTop = cmds.auxFloats[sb + 19];
 
       for (let x = Math.max(0, left); x <= Math.min(width - 1, right); x++) {
         let colLo = yLo;
@@ -269,18 +281,42 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
           colLo = Math.max(colLo, cmds.columns[wb + 1] | 0);
           colHi = Math.min(colHi, cmds.columns[wb + 2] | 0);
         }
-        const texCol = u0 + ((((x - left) / colSpan) * cellW) | 0);
+        // A BLOCK FACE re-derives depth / vertical span / texture u per column (drawBlockFace's math);
+        // a billboard keeps its record's constants.
+        let colForward = forward;
+        let colTop = yTop;
+        let colSpanRows = rowSpan;
+        let texCol = u0 + ((((x - left) / colSpan) * cellW) | 0);
+
+        if (blockFace) {
+          const t = (x - xa) / (xb - xa);
+          const invF = invFa + t * (invFb - invFa);
+
+          colForward = 1 / invF;
+          colTop = Math.round(horizon - (zTop - camZ) * focal * invF);
+          const colBottom = Math.round(horizon - (zBottom - camZ) * focal * invF);
+
+          colSpanRows = colBottom - colTop + 1;
+          const uFrac = Math.min(1, Math.max(0, (uOverZa + t * (uOverZb - uOverZa)) * colForward));
+
+          texCol = u0 + Math.min(cellW - 1, (uFrac * cellW) | 0);
+          colLo = Math.max(colLo, colTop);
+          colHi = Math.min(colHi, colBottom);
+        }
         let i = colLo * width + x;
 
         for (let y = colLo; y <= colHi; y++) {
-          const ti = ((v0 + ((((y - yTop) / rowSpan) * cellH) | 0)) * tw + texCol) << 2;
+          const ti = ((v0 + ((((y - colTop) / colSpanRows) * cellH) | 0)) * tw + texCol) << 2;
 
-          if (forward < zbuf[i] && px[ti + 3] !== 0) {
+          if (colForward < zbuf[i] && px[ti + 3] !== 0) {
             buf32[i] =
               0xff000000 |
               (Math.min(255, (px[ti + 2] * shade) | 0) << 16) |
               (Math.min(255, (px[ti + 1] * shade) | 0) << 8) |
               Math.min(255, (px[ti] * shade) | 0);
+            if (blockFace) {
+              zbuf[i] = colForward; // faces write depth — the renderer's per-pixel ordering rule
+            }
             if (glassSet >= 0) {
               const table = 5 * width + 2 * (glassSet * width + x);
               const goff = cmds.columns[table];
@@ -289,7 +325,7 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
               for (let k = 0; k < gcount; k++) {
                 const g = goff + k * GLASS_STRIDE;
 
-                if (forward <= cmds.auxFloats[g + 6]) {
+                if (colForward <= cmds.auxFloats[g + 6]) {
                   break;
                 }
                 if (y >= (cmds.auxWords[g] | 0) && y <= (cmds.auxWords[g + 1] | 0)) {
@@ -872,6 +908,87 @@ describe('buildFrameCommands — sprites', () => {
     ];
 
     expectQuantized(roundTrip(MAP, CAM, lib, sprites).pixels, reference(MAP, CAM, lib, sprites));
+  });
+
+  it('reproduces BLOCK props (per-column depth faces) within the f32 bound, head-on and at 45°', () => {
+    const lib = new Map([...TEX, ['SHEET', nonPotSprite()]]);
+    const block: Sprite = {
+      x: 8,
+      y: 6,
+      z: 0,
+      tex: 'SHEET',
+      width: 1.2,
+      height: 1.8,
+      cols: 2,
+      rows: 1,
+      col: 0,
+      row: 0,
+      rotations: 2,
+      facing: 0.4,
+      block: true,
+    };
+
+    // Oblique (two faces, interpolated depths) and near-frontal viewpoints, plus a pitched camera.
+    for (const camera of [
+      CAM,
+      { x: 6.5, y: 4.2, angle: 0.9, z: 1.6 },
+      { x: 7, y: 5, angle: 0.6, z: 2.2, pitch: -0.3 },
+    ]) {
+      expectQuantized(
+        roundTrip(MAP, camera, lib, [block]).pixels,
+        reference(MAP, camera, lib, [block]),
+      );
+    }
+  });
+
+  it('serializes a block face record (kind + endpoint tail) and zeroes the tail on billboards', () => {
+    const lib = new Map([...TEX, ['SHEET', nonPotSprite()]]);
+    const sprites: Sprite[] = [
+      { x: 6, y: 5, z: 0, tex: 'BARREL', width: 0.8, height: 1.1 },
+      {
+        x: 8,
+        y: 6,
+        z: 0,
+        tex: 'SHEET',
+        width: 1.2,
+        height: 1.8,
+        cols: 2,
+        rows: 1,
+        col: 0,
+        row: 0,
+        rotations: 2,
+        facing: 0.4,
+        block: true,
+      },
+    ];
+    const { cmds } = roundTrip(MAP, CAM, new Map([...lib, ['BARREL', metalTexture()]]), sprites);
+    const pb = (cmds.phaseCount - 1) * PHASE_STRIDE;
+    const base = cmds.auxWords[pb + 1];
+    const count = cmds.auxWords[pb + 2];
+    const kinds: number[] = [];
+
+    for (let s = 0; s < count; s++) {
+      const sb = base + s * SPRITE_STRIDE;
+      const kind = cmds.auxWords[sb + 11];
+
+      kinds.push(kind);
+      if (kind === SPRITE_BLOCK_FACE) {
+        const xa = cmds.auxFloats[sb + 12];
+        const xb = cmds.auxFloats[sb + 13];
+
+        expect(xb).toBeGreaterThan(xa); // strictly ordered endpoints (edge-on faces are culled)
+        expect(cmds.auxFloats[sb + 14]).toBeGreaterThan(0); // 1/forward at each endpoint
+        expect(cmds.auxFloats[sb + 15]).toBeGreaterThan(0);
+        expect(cmds.auxFloats[sb + 19]).toBeCloseTo(1.8, 5); // zTop = floor + height
+      } else {
+        // A billboard's block-face tail is zeroed (the aux buffer is reused across frames).
+        for (let w = 12; w < SPRITE_STRIDE; w++) {
+          expect(cmds.auxWords[sb + w]).toBe(0);
+        }
+      }
+    }
+    expect(kinds).toContain(SPRITE_BLOCK_FACE);
+    expect(kinds).toContain(SPRITE_BILLBOARD);
   });
 
   it('records sprites far-to-near (the CPU overdraw order) in the primary phase', () => {

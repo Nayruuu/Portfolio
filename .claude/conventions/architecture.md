@@ -106,7 +106,10 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
   multi-file engine may live in a **sub-folder with its own sub-barrel**. The BSP game uses two:
   - `core/lib/game/` — the pure combat subset both the standalone demo and the in-player game reuse: the
     combat types (`KeycardColor`/`KEYCARD_COLORS`, `WeaponCombat`, `ProjectileSpec`, `ChainSpec`), the
-    magazine / fire-rate / reload subsystem (`stepArsenal`), and the shared combat-tuning constants
+    magazine / fire-rate / reload subsystem (`stepArsenal`), the weapon-ownership progression rules
+    (`weapon-progression` — fists-only start, unowned-slot wheel skipping, first-pickup auto-equip), the
+    workers-only render governor (`render-governor` — measured trial/audit/revert; resolution never
+    adapts), and the shared combat-tuning constants
     (`AIM_CONE`/`AMMO_START`/`MELEE_CONE`/`MELEE_RANGE`/`ARC_DURATION`). It is **re-exported through the
     root barrel** as one line — `export * from './game'` — so consumers import it from `…/core/lib`.
   - `core/lib/bsp-engine/` — the from-scratch DOOM-style **BSP software engine**: the map data model +
@@ -116,7 +119,8 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
     depth-1 recursive walk), `frame-commands` (the same walk recording GPU-ready per-column span/glass/
     sprite command buffers for the WebGPU backend), `camera` projection, hitscan `raycast` (with a
     glass-blocking mode for projectiles), player `physics` (slide + step-up + auto-mantle + opt-in
-    seamless crossing of passable zone-portal seams), and procedural `texture`s.
+    seamless crossing of passable zone-portal seams), the directional-sprite math (`sprite-rotation`
+    view-angle cells, `sprite-block` crossed-quad faces + back-face cull), and procedural `texture`s.
     Big and feature-scoped, it is **not** folded into the root barrel; consumers import it directly through
     its own sub-barrel, `…/core/lib/bsp-engine`.
 - **Consumers** import from the folder: `import { parseMarkdown, STORAGE_KEYS } from '…/core/lib';`.

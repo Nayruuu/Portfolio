@@ -51,8 +51,13 @@ export const SPAN_SKY = 2;
 
 /** 32-bit words per GLASS-LAYER record in the aux buffer. */
 export const GLASS_STRIDE = 8;
-/** 32-bit words per SPRITE record in the aux buffer. */
-export const SPRITE_STRIDE = 12;
+/** 32-bit words per SPRITE record in the aux buffer (billboards and block faces share the stride —
+ *  words 12+ are the block-face tail, zeroed on a billboard). */
+export const SPRITE_STRIDE = 20;
+/** SPRITE record kinds (word 11): a camera-facing billboard, or one block face (a mini-wall whose
+ *  depth/span/u re-derive per column — see {@link BlockFaceQuad}). */
+export const SPRITE_BILLBOARD = 0;
+export const SPRITE_BLOCK_FACE = 1;
 /** 32-bit words per PHASE record in the aux buffer. */
 export const PHASE_STRIDE = 4;
 
@@ -101,7 +106,12 @@ export const PHASE_STRIDE = 4;
  * | 4          | tu (f32, −1 = plain window)| 4–8 | texId, u0, v0, cellW, cellH (u32) |
  * | 5          | shade (f32)        | 9           | forward (f32) |
  * | 6          | depth (f32)        | 10          | shade (f32) |
- * | 7          | texId (u32)        | 11          | 0 (reserved) |
+ * | 7          | texId (u32)        | 11          | kind (u32 — `SPRITE_BILLBOARD` / `SPRITE_BLOCK_FACE`) |
+ * |            |                    | 12–19       | block face only (else 0): xa, xb, invFa, invFb, uOverZa, uOverZb, zBottom, zTop (f32) |
+ *
+ * A BLOCK-FACE record's `yTop`/`yBottom` are the face's screen ENVELOPE (early reject); the shader
+ * re-projects the exact span per column off words 12–19 (see {@link BlockFaceQuad}) and — unlike a
+ * billboard — writes its per-column depth into the pixel's depth register at opaque texels.
  *
  * Glass layers are stored nearest-first per column (the walk's front-to-back order): the shader blends
  * them in REVERSE (farthest-first) and scans them forward for the sprite tint — the CPU's exact orders.
@@ -404,7 +414,7 @@ export function buildFrameCommands(
     );
   }
   const primaryQuads = projectSprites(
-    sprites ?? mapSprites(map, camera), // fallback decor oriented for the camera — the CPU path's twin
+    sprites ?? mapSprites(map), // fallback: the map's static decor — the CPU path's twin
     map,
     camera,
     width,
@@ -521,7 +531,20 @@ export function buildFrameCommands(
       cmds.auxWords[w + 8] = q.cellH;
       cmds.auxFloats[w + 9] = q.forward;
       cmds.auxFloats[w + 10] = q.shade;
-      cmds.auxWords[w + 11] = 0;
+      if (q.face === undefined) {
+        // The block-face tail is zeroed explicitly — `cmds` buffers are REUSED across frames.
+        cmds.auxWords.fill(0, w + 11, w + SPRITE_STRIDE);
+      } else {
+        cmds.auxWords[w + 11] = SPRITE_BLOCK_FACE;
+        cmds.auxFloats[w + 12] = q.face.xa;
+        cmds.auxFloats[w + 13] = q.face.xb;
+        cmds.auxFloats[w + 14] = q.face.invFa;
+        cmds.auxFloats[w + 15] = q.face.invFb;
+        cmds.auxFloats[w + 16] = q.face.uOverZa;
+        cmds.auxFloats[w + 17] = q.face.uOverZb;
+        cmds.auxFloats[w + 18] = q.face.zBottom;
+        cmds.auxFloats[w + 19] = q.face.zTop;
+      }
       w += SPRITE_STRIDE;
     }
   };

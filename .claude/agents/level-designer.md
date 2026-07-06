@@ -69,13 +69,22 @@ low-level linedefs. You never hand-wind a wall.
 - `b.hole(host, polygon, tex)` — a solid COLUMN/pillar inside a room (cover + sightline breaker).
 - `b.stairs(from, to, spec)` → step sector indices — a straight flight climbing on the RIGHT of the edge
   `from → to` (steps chained by portals; caller connects the two ends to the rooms below/above).
-- `b.thing(x,y, angle, type)` — `type` ∈ `'player_start' | 'barrel' | 'prop'` (potted plant) `| 'prop_screen'`
-  (crashed monitor — place it INSIDE a counter island's footprint so it sits on top) `| 'prop_totem'`
-  (directory totem). Decor billboards; use them to dress rooms.
+- `b.thing(x,y, angle, type)` — `type` ∈ `'player_start' | 'barrel' | 'prop'` (potted plant)
+  `| 'prop_screen'` (crashed monitor — place it INSIDE a counter island's footprint so it sits on top)
+  `| 'prop_totem'` (directory totem) `| 'prop_board'` (whiteboard on casters) `| 'prop_chair'` (office
+  swivel chair) `| 'prop_cooler'` (water cooler). Decor props; use them to dress rooms. Symmetric props
+  (plant, barrel, cooler) render as plain billboards; the 4-rotation directional props (screen, totem,
+  board, chair) are view-angle billboards — the drawn cell (front/right/back/left) follows the viewer
+  vs the authored `angle`, so aim it deliberately.
 - `b.build()` → `MapSource`. Then export a `Level` (mirror `level-m1-lobby.ts`'s `M1_LOBBY`) —
-  `{ map, spawn, enemies, health, armor, ammo, keycards, exits, entries, doors }`, where:
+  `{ map, spawn, enemies, health, armor, ammo, weapons, keycards, exits, entries, doors }`, where:
   - `health` / `armor`: `[x, y]` (large) or `[x, y, 'small']` for the small variant.
   - `ammo`: one `[x, y]` per `AMMO_BOX_SPECS` entry, IN ORDER.
+  - `weapons`: `readonly [x, y, WeaponId][]` — the run starts FISTS-ONLY, so every other weapon must be
+    FOUND in a level; collecting one unlocks it for the whole run (ownership travels zones), grants one
+    standard ammo box of its type and auto-equips on first collection. Routing weapons is a level-design
+    beat: place each where its unlock lands on the difficulty curve (M1 seeds pistol + chainsaw; M2 the
+    shotgun). A repeat pickup is an ammo top-up only.
   - `keycards`: `readonly [x, y, color][]` — `color` ∈ `'blue' | 'yellow' | 'red'` (import `type KeycardColor`
     from `'../../core/lib'`). See **Access badges** below.
   - `doors`: an ARRAY of `{ sector, triggerX, triggerY, requiresCard }` (vertical animated doors;
@@ -122,18 +131,22 @@ was explicitly rejected). Ground floors get street-level views only — NO later
   (ambushes at chokes, each badge guarded, etc.).
 - **Texture palette** (walls via `spec.wallTex`/`walls`/`connect`'s `tex`; floors/ceils via the room spec) — ALL wired:
   - Walls: `BRICK` (techbase), `METAL`/`RACKS` (server racks), `CUBICLE` (open-space partitions), `SCREEN`
-    (monitor walls), `PILLAR` (plain panels/pillars), `DAMAGED` (derelict), `GLASS`/`GLASS_INT` (glass),
-    `LOBBY` (marble), `WOOD` (warm veneer feature panels — premium accents), `ELEVATOR` (closed dead lift
+    (monitor walls), `PILLAR` (plain panels/pillars), `PILLAR_LOBBY` (marble-clad premium columns),
+    `DAMAGED` (derelict), `GLASS`/`GLASS_INT` (glass), `LOBBY` (marble), `WOOD` (warm veneer feature
+    panels — premium accents), `RECEPTION` (reception-desk front panel — counter islands),
+    `TURNSTILE` (turnstile rail/post flanks — brushed steel + badge reader), `ELEVATOR` (closed dead lift
     doors, one per 4-wide bay), `KITCHEN` (cafeteria tiles), `EXEC` (wood+metal C-suite).
-  - Backdrops (exterior-view far walls ONLY): `CITY_STREET` (ground-level street), `CITY` (distant skyline).
+  - Backdrops (exterior-view far walls ONLY): `CITY_STREET` (ground-level street), `CITY` (distant
+    skyline), `CITY_PLAZA` (the deserted plaza — break-room windows).
   - Floors: `FLOOR` (techbase), `STEP` (raised tops), `CARPET` (offices/rugs), `TILE` (cafeteria),
-    `MARBLE` (C-suite), `LOBBY_FLOOR` (premium inlay marble — the M1 lobby), `GRATING` (servers/datacenter),
-    `SLAB` (basement concrete).
+    `MARBLE` (C-suite), `LOBBY_FLOOR` (premium inlay marble — the M1 lobby), `COUNTER_TOP` (marble+alu
+    counter/turnstile tops), `GRATING` (servers/datacenter), `SLAB` (basement concrete).
   - Ceilings: `CEIL` (techbase), `CEIL_LUX` (white luminous LED-cove — premium floors), `CONCRETE`,
     `TECHNICAL`, `NEON` (broken-neon accent), `CEIL_DAMAGED`.
   - Doors: on a locked door's wall, use `DOOR_RED` / `DOOR_BLUE` / `DOOR_YELLOW` matching its badge colour;
     `DOOR_GLASS` is the sliding-glass leaf.
-  - Props: `BARREL` + the decor billboards (`prop` plant / `prop_screen` monitor / `prop_totem` totem).
+  - Props: `BARREL` + the decor props (`prop` plant / `prop_screen` monitor / `prop_totem` totem /
+    `prop_board` whiteboard / `prop_chair` office chair / `prop_cooler` water cooler).
     **Vary the palette per ZONE** — each floor gets its own wall+ceiling+floor identity (server room =
     RACKS+TECHNICAL+GRATING, cafeteria = KITCHEN+TILE, derelict = DAMAGED+NEON…) + its own `light`.
 
@@ -200,8 +213,10 @@ A big bare room is the cheap-looking trap — AND a handful of rooms is too smal
   M3 must additionally hide its M9 exit behind a secret.
 - **Pickup economy is CAPPED by the contract** (6 ammo boxes — one per `AMMO_BOX_SPECS` entry — plus a couple
   of health/armor). Route them ON the critical path (pre-spike, post-climax, one risk/reward dip à la
-  hangar's slime armor); size the floor's total enemy HP to what that fixed arsenal supports. If an approved
-  scope needs more, FLAG it in the plan (a contract change is the controller's call, not yours).
+  hangar's slime armor); size the floor's total enemy HP to what the arsenal the player has PLAUSIBLY
+  UNLOCKED by this floor supports (fists-only start — a fresh M2 run has fists + whatever M1/M2 seed:
+  pistol, chainsaw, shotgun). If an approved scope needs more, FLAG it in the plan (a contract change is
+  the controller's call, not yours).
 - Prefer a TIGHTER, denser, interconnected layout over a sprawling empty one.
 
 ## Design doctrine — how a floor is AUTHORED (not just built)
@@ -258,7 +273,7 @@ datacenter — a Spider-Mastermind homage built of server racks + ethernet, the 
 | Mn | Location | Walls / Ceiling / Floor | Badge door | Beat |
 |----|----------|-------------------------|-----------|------|
 | M1 | Lobby / Accueil (**BUILT** — `level-m1-lobby.ts`, the premium reference) | `LOBBY`+`WOOD` / `CEIL_LUX` / `LOBBY_FLOOR` | — | arrival, things are wrong, first minions |
-| M2 | Open-space (cubicles) | `CUBICLE` / `CONCRETE` / `CARPET` | employee (blue) | the cubicle farm, find the badge |
+| M2 | Open-space (cubicles) (**BUILT** — `level-m2-openspace.ts`, live M1 ⇄ M2 seam) | `CUBICLE` / `CONCRETE` / `CARPET` | employee (blue) | the cubicle farm, find the badge |
 | M3 | RH / Human Resources | `CUBICLE`+`SCREEN` / `TECHNICAL` / `CARPET` | employee (blue) | HR floor — holds the **secret exit → M9** |
 | M4 | Meeting rooms | `SCREEN` / `TECHNICAL` / `CARPET` | manager (yellow) | meeting hell — **MID-BOSS: Middle-Manager** |
 | M5 | Cafétéria / kitchen | `KITCHEN`+`DAMAGED` / `CONCRETE` / `TILE` | manager (yellow) | grimy breather |

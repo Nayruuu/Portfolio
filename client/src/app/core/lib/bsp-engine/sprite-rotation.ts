@@ -45,14 +45,15 @@ export function rotationCell(
 }
 
 /**
- * Re-pick a sprite's rotation cell for the current viewpoint: a directional sprite (one carrying
- * `rotations` + `facing` — see {@link mapSprites}) returns a copy with `col` set from
- * {@link rotationCell}; a view-independent sprite returns UNCHANGED (same reference — no per-frame
+ * Re-pick a sprite's rotation cell for the current viewpoint: a directional BILLBOARD sprite (one
+ * carrying `rotations` + `facing`) returns a copy with `col` set from {@link rotationCell}; a
+ * view-independent sprite — no `rotations`, or a `block` prop whose cells are bound to its world
+ * faces at projection time (see `sprite-block.ts`) — returns UNCHANGED (same reference — no per-frame
  * garbage for the common case). Pure — called where a frame's sprite list is assembled, so the CPU
  * painter and the GPU command builder consume the exact same cell through `projectSprites`.
  */
 export function orientSprite(sprite: Sprite, viewX: number, viewY: number): Sprite {
-  if (sprite.rotations === undefined) {
+  if (sprite.rotations === undefined || sprite.block === true) {
     return sprite;
   }
 

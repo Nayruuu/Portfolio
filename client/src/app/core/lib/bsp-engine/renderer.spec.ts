@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { buildBsp } from './node-builder';
-import { mapSprites, renderFrame, type Sprite, type ZoneNeighbor } from './renderer';
+import {
+  mapSprites,
+  projectSprites,
+  renderFrame,
+  type Sprite,
+  type ZoneNeighbor,
+} from './renderer';
 import { barrelTexture, brickTexture, ceilTexture, floorTexture, metalTexture } from './texture';
 import { SAMPLE_MAP } from './sample-map';
-import type { Camera } from './camera';
+import { focalFor, type Camera } from './camera';
 import type { CompiledMap, MapSource, SideDef } from './types';
 
 const MAP = buildBsp(SAMPLE_MAP);
@@ -1052,7 +1058,7 @@ describe('atlas sprites', () => {
       ],
     });
 
-    it('emits rotation-sheet atlas cells for directional props, plain billboards for symmetric ones', () => {
+    it('emits rotation-sheet BILLBOARDS for directional props, plain billboards for symmetric ones', () => {
       const sprites = mapSprites(dressed);
 
       expect(sprites).toHaveLength(5); // the player_start emits nothing
@@ -1061,28 +1067,260 @@ describe('atlas sprites', () => {
       // Symmetric props: whole-texture billboards, no atlas, no rotation metadata.
       expect(plant).toEqual({ x: 2, y: 2, z: 0, tex: 'PROP', width: 0.8, height: 1.6 });
       expect(cooler).toEqual({ x: 8, y: 8, z: 0, tex: 'PROP_COOLER', width: 0.6, height: 1.5 });
-      // Directional props: a 1×4 sheet + the authored facing, resting on FRONT without a viewpoint.
+      // Directional props: a 1×4 sheet + the authored facing, as view-angle BILLBOARDS (orientSprite
+      // re-picks the cell per frame) — the crossed-quad block mode read as "cardboard" on thin
+      // silhouettes (user call), so no def opts into `block` today; the path stays for boxy props.
       for (const s of [totem, board, chair]) {
         expect(s).toMatchObject({ cols: 4, rows: 1, col: 0, row: 0, rotations: 4 });
+        expect(s.block).toBeUndefined();
       }
       expect(totem.facing).toBe(north);
       expect(chair.facing).toBe(Math.PI);
       expect(board).toMatchObject({ tex: 'PROP_BOARD', width: 1.6, height: 1.7 });
     });
+  });
+});
 
-    it('picks each directional cell from the view point (the no-sprites render fallback)', () => {
-      const cell = (viewX: number, viewY: number): number | undefined =>
-        mapSprites(dressed, { x: viewX, y: viewY }).find((s) => s.tex === 'PROP_TOTEM')?.col;
+describe('block props (wall-sprite blocks)', () => {
+  // A 12×12 open room. The block's 1×4 sheet has one SOLID COLOUR per cell — red front · green right ·
+  // blue back · yellow left — so "which face is on screen" reads directly off the framebuffer.
+  const SIDE: SideDef = {
+    sector: 0,
+    xOffset: 0,
+    yOffset: 0,
+    upperTex: 'BRICK',
+    lowerTex: 'BRICK',
+    middleTex: 'BRICK',
+  };
+  const ROOM: MapSource = {
+    vertices: [
+      { x: 0, y: 0 },
+      { x: 0, y: 12 },
+      { x: 12, y: 12 },
+      { x: 12, y: 0 },
+    ],
+    sectors: [{ floorZ: 0, ceilZ: 5, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 255 }],
+    linedefs: [
+      { v1: 0, v2: 1, front: SIDE, back: null },
+      { v1: 1, v2: 2, front: SIDE, back: null },
+      { v1: 2, v2: 3, front: SIDE, back: null },
+      { v1: 3, v2: 0, front: SIDE, back: null },
+    ],
+    things: [],
+  };
+  const room = buildBsp(ROOM);
+  const CELL_COLOURS: readonly [number, number, number][] = [
+    [250, 20, 20], // cell 0 FRONT — red
+    [20, 250, 20], // cell 1 RIGHT — green
+    [20, 20, 250], // cell 2 BACK — blue
+    [250, 250, 20], // cell 3 LEFT — yellow
+  ];
+  const sheet = {
+    width: 8,
+    height: 2,
+    pixels: new Uint8ClampedArray(
+      Array.from({ length: 8 * 2 }, (_, i) => [...CELL_COLOURS[(i % 8) >> 1], 255]).flat(),
+    ),
+  };
+  const magenta = {
+    width: 2,
+    height: 2,
+    pixels: new Uint8ClampedArray(Array.from({ length: 4 }, () => [230, 20, 230, 255]).flat()),
+  };
+  const tex = new Map([...TEX, ['SHEET', sheet], ['MAG', magenta]]);
+  const block: Sprite = {
+    x: 8,
+    y: 6,
+    z: 0,
+    tex: 'SHEET',
+    width: 1.4,
+    height: 2,
+    cols: 4,
+    rows: 1,
+    col: 0,
+    row: 0,
+    rotations: 4,
+    facing: 0,
+    block: true,
+  };
 
-      expect(cell(5, 1)).toBe(0); // camera north of the north-facing totem → FRONT
-      expect(cell(9, 5)).toBe(1); // camera east → its RIGHT side
-      expect(cell(5, 9)).toBe(2); // camera south → BACK
-      expect(cell(1, 5)).toBe(3); // camera west → LEFT
+  /** Which of the four cell colours appear in the frame? */
+  function cellsShown(buf: Uint8ClampedArray): number[] {
+    const shown: number[] = [];
 
-      const plant = mapSprites(dressed, { x: 9, y: 5 }).find((s) => s.tex === 'PROP');
+    for (let cell = 0; cell < 4; cell++) {
+      const [r, g, b] = CELL_COLOURS[cell];
 
-      expect(plant?.col).toBeUndefined(); // a symmetric prop never grows a cell
+      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+        // Full-light sector + near distance → shade 1 for most face pixels: exact colour match.
+        if (buf[p * 4] === r && buf[p * 4 + 1] === g && buf[p * 4 + 2] === b) {
+          shown.push(cell);
+          break;
+        }
+      }
+    }
+
+    return shown;
+  }
+
+  function render(
+    camera: Camera,
+    sprites: readonly Sprite[],
+    zbuf?: Float32Array,
+  ): Uint8ClampedArray {
+    return renderFrame(room, camera, CONFIG, tex, undefined, zbuf, undefined, undefined, sprites);
+  }
+
+  it('shows ONE face head-on and TWO adjacent faces from a diagonal viewpoint', () => {
+    // Head-on in front (facing 0 → the front face points +x): the side faces are edge-on (culled).
+    expect(cellsShown(render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [block]))).toEqual([0]);
+    // From the front-right diagonal (y-down: +y is the prop's right): front AND right, in perspective.
+    expect(
+      cellsShown(render({ x: 10.5, y: 8.5, angle: -Math.PI * 0.75, z: 1.6 }, [block])),
+    ).toEqual([0, 1]);
+    // From behind: the back face only.
+    expect(cellsShown(render({ x: 5, y: 6, angle: 0, z: 1.6 }, [block]))).toEqual([2]);
+  });
+
+  it('keeps the SAME faces across the billboard mode’s snap boundary (no cell switch at ±45°)', () => {
+    // A cell-switched billboard flips front→right crossing the 45° bearing; the block just turns.
+    const bearing = (deg: number): Camera => {
+      const a = (deg * Math.PI) / 180;
+
+      return { x: 8 + 3 * Math.cos(a), y: 6 + 3 * Math.sin(a), angle: a + Math.PI, z: 1.6 };
+    };
+
+    expect(cellsShown(render(bearing(40), [block]))).toEqual([0, 1]);
+    expect(cellsShown(render(bearing(50), [block]))).toEqual([0, 1]); // same two faces — no snap
+  });
+
+  it('interpolates depth PER COLUMN — the z-buffer slopes along a face (a billboard is constant)', () => {
+    // Cross-on view (block rotated 45°, camera due west): the RIGHT and BACK quads cross at the
+    // prop's axis (screen centre, depth ~6.0) and each recedes NEARER toward its own screen edge.
+    const corner: Sprite = { ...block, facing: Math.PI / 4 };
+    const zbuf = new Float32Array(CONFIG.width * CONFIG.height);
+    const buf = render({ x: 2, y: 6, angle: 0, z: 1.6 }, [corner], zbuf);
+    const row = 45; // inside the face's vertical span across the sampled columns
+    const depths: number[] = [];
+
+    for (let x = 61; x <= 64; x++) {
+      const [r, g, b] = pixel(buf, x, row);
+
+      expect(g).toBeGreaterThan(r + 100); // the RIGHT face (green) is the nearer quad right of centre
+      expect(g).toBeGreaterThan(b + 100);
+      depths.push(zbuf[row * CONFIG.width + x]);
+    }
+    for (let i = 1; i < depths.length; i++) {
+      expect(depths[i]).toBeLessThan(depths[i - 1]); // strictly nearer away from the crossing column
+    }
+    expect(Math.min(...depths)).toBeGreaterThan(5.4); // the quad's near end sits ~5.5 units out
+    expect(Math.max(...depths)).toBeLessThan(6.1); // the crossing sits ~6.0 units out
+  });
+
+  it('WRITES its depth: a nearer-sorted billboard behind the face plane cannot paint through it', () => {
+    // Both crossed faces sort at their shared centre depth (6.0); the billboard's centre (5.8) is
+    // nearer, so it paints AFTER them — but the visible surface at its columns is nearer still
+    // (~5.6): only the faces' per-pixel depth WRITE rejects it. Without the write, the billboard
+    // tests against the far wall and bleeds through.
+    const corner: Sprite = { ...block, facing: Math.PI / 4 };
+    const behind: Sprite = { x: 7.8, y: 6.3867, z: 0.5, tex: 'MAG', width: 0.2, height: 0.8 };
+    const cam: Camera = { x: 2, y: 6, angle: 0, z: 1.6 };
+
+    /** Is the billboard's magenta anywhere in the frame? */
+    const magentaIn = (buf: Uint8ClampedArray): boolean => {
+      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+        if (buf[p * 4] === 230 && buf[p * 4 + 1] === 20 && buf[p * 4 + 2] === 230) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    expect(magentaIn(render(cam, [behind]))).toBe(true); // sanity: visible without the block
+    expect(magentaIn(render(cam, [corner, behind]))).toBe(false); // fully hidden behind the face
+  });
+
+  it('tints a face behind glass ONLY inside the pane span, and stops at layers behind the face', () => {
+    // A SKY courtyard (camera) | glass | room B | glass | room C. The block FLOATS in B, straddling the
+    // pane's top edge (z 2.5..5 vs an opening up to z 4): its lower rows tint through the near pane, its
+    // upper rows poke into the open sky ABOVE the pane's span (no tint), and the second pane sits BEHIND
+    // the face (the layer scan must stop there, not double-tint).
+    const glassSide = (sector: number): SideDef => ({ ...SIDE, sector });
+    const scene = (glass: boolean): MapSource => ({
+      sectors: [
+        { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'SKY', light: 255 }, // courtyard — open sky
+        { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'SKY', light: 255 }, // B
+        { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'SKY', light: 255 }, // C
+      ],
+      things: [],
+      vertices: [
+        { x: 0, y: 0 },
+        { x: 8, y: 0 },
+        { x: 0, y: 6 },
+        { x: 8, y: 6 },
+        { x: 0, y: 12 },
+        { x: 8, y: 12 },
+        { x: 0, y: 18 },
+        { x: 8, y: 18 },
+      ],
+      linedefs: [
+        { v1: 0, v2: 2, front: glassSide(0), back: null },
+        { v1: 2, v2: 3, front: glassSide(0), back: glassSide(1), glass },
+        { v1: 3, v2: 1, front: glassSide(0), back: null },
+        { v1: 1, v2: 0, front: glassSide(0), back: null },
+        { v1: 2, v2: 4, front: glassSide(1), back: null },
+        { v1: 4, v2: 5, front: glassSide(1), back: glassSide(2), glass },
+        { v1: 5, v2: 3, front: glassSide(1), back: null },
+        { v1: 4, v2: 6, front: glassSide(2), back: null },
+        { v1: 6, v2: 7, front: glassSide(2), back: null },
+        { v1: 7, v2: 5, front: glassSide(2), back: null },
+      ],
     });
+    const cam: Camera = { x: 4, y: 2, angle: Math.PI / 2, z: 1.6 };
+    // Front cell (red) toward the camera (facing −y), floating HIGH: the pane's recorded span tops out
+    // at the ceiling seen at the WALL's depth (screen row ~4 here), so the face needs z beyond ~5.8 for
+    // its upper rows to clear it against the open sky.
+    const floating: Sprite = { ...block, x: 4, y: 9, z: 4.2, facing: -Math.PI / 2 };
+    const glazed = renderFrame(buildBsp(scene(true)), cam, CONFIG, tex, undefined, undefined, undefined, undefined, [floating]); // prettier-ignore
+    const plain = renderFrame(buildBsp(scene(false)), cam, CONFIG, tex, undefined, undefined, undefined, undefined, [floating]); // prettier-ignore
+    let tinted = 0;
+    let untouched = 0;
+
+    for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+      const i = p * 4;
+
+      if (plain[i] > 190 && plain[i + 1] < 50 && plain[i + 2] < 50) {
+        // A red face pixel: through the pane it washes cooler (blue up, red down) ONCE; above the
+        // pane's span it stays byte-identical.
+        if (glazed[i] === plain[i] && glazed[i + 2] === plain[i + 2]) {
+          untouched++;
+        } else if (glazed[i + 2] > plain[i + 2] + 30 && glazed[i] < plain[i]) {
+          tinted++;
+        }
+      }
+    }
+    expect(tinted).toBeGreaterThan(20); // rows inside the pane span, washed exactly once
+    expect(untouched).toBeGreaterThan(20); // rows above the pane span, not washed
+  });
+
+  it('projects NO quad for a face between two column centres, or one fully behind the camera', () => {
+    const focal = focalFor(CONFIG.width, CONFIG.fov);
+    const project = (sprites: readonly Sprite[], camera: Camera) =>
+      projectSprites(sprites, room, camera, CONFIG.width, focal, CONFIG.height >> 1, tex);
+
+    // From 300 units away and slightly below, both visible faces span < 0.3 px and straddle no column
+    // centre — a sub-pixel sliver, skipped (its record would divide by a near-zero span).
+    expect(project([block], { x: 308.5, y: 5, angle: Math.PI, z: 1.6 })).toEqual([]);
+    // Camera a hair PAST the front face, looking away: the face is visible (normal side) but entirely
+    // behind the near plane — clipped out.
+    expect(project([block], { x: 8.75, y: 6, angle: 0, z: 1.6 })).toEqual([]);
+    // A block sprite without an authored facing defaults to facing 0.
+    const cam: Camera = { x: 11, y: 8, angle: Math.PI * 0.9, z: 1.6 };
+
+    expect(project([{ ...block, facing: undefined }], cam)).toEqual(
+      project([{ ...block, facing: 0 }], cam),
+    );
   });
 });
 
@@ -1243,6 +1481,41 @@ describe('zone portals', () => {
     // And neighbors on a map WITHOUT portal seams change nothing (no recording is even allocated).
     expect(Array.from(renderFrame(MAP, CAM, CONFIG, TEXP, undefined, undefined, 0, CONFIG.height, undefined, undefined, new Map([['nb', zone(neighbor())]])))) // prettier-ignore
       .toEqual(Array.from(renderFrame(MAP, CAM, CONFIG, TEXP)));
+  });
+
+  it('rasterises a warm neighbor BLOCK prop through the seam, clipped to its recorded windows', () => {
+    // An all-red 1×4 rotation sheet: whichever faces show, their pixels read saturated red.
+    const redSheet = {
+      width: 8,
+      height: 2,
+      pixels: new Uint8ClampedArray(Array.from({ length: 16 }, () => [250, 20, 20, 255]).flat()),
+    };
+    const lib = new Map([...TEXP, ['REDSHEET', redSheet]]);
+    const blockSpr: Sprite = {
+      x: 105, // local x = 5: the face straddles the pillar's screen shadow — some columns are
+      y: 10, // seam windows (painted), some are the pillar's (the face must not leak there)
+      z: 0,
+      tex: 'REDSHEET',
+      width: 1.2,
+      height: 2,
+      cols: 4,
+      rows: 1,
+      col: 0,
+      row: 0,
+      rotations: 4,
+      facing: -Math.PI / 2,
+      block: true,
+    };
+    const nbs = new Map([['nb', zone(neighbor(), [blockSpr])]]);
+    const isRed = (r: number, g: number, b: number): boolean => r > 150 && g < 60 && b < 60;
+    const draw = (map: CompiledMap): Uint8ClampedArray =>
+      renderFrame(map, CAM, CONFIG, lib, undefined, undefined, 0, CONFIG.height, undefined, undefined, nbs); // prettier-ignore
+    const open = countWhere(draw(local()), isRed);
+    const blocked = countWhere(draw(local({ pillar: true })), isRed);
+
+    expect(open).toBeGreaterThan(30); // the face shows through the un-occluded seam…
+    expect(blocked).toBeGreaterThan(0); // …still peeks past the pillar's edge…
+    expect(blocked).toBeLessThan(open); // …but the pillar's columns clip it (no leak outside the windows)
   });
 
   it('reuses its per-context scratch without leaking state: interleaved heterogeneous renders stay byte-identical', () => {

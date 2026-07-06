@@ -11,6 +11,7 @@ import {
   SPAN_FLAT,
   SPAN_STRIDE,
   SPAN_WALL,
+  SPRITE_BLOCK_FACE,
   SPRITE_STRIDE,
   TEX_ANCHOR,
   type Camera,
@@ -287,6 +288,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     // SPRITES: the phase's records are already far-to-near; z-tested and alpha-tested per pixel,
     // window-clipped on a seam phase, tinted once per glass layer of THIS phase's set in front of them.
+    // A record is a camera-facing BILLBOARD (constant depth/span) or one BLOCK FACE — a mini-wall whose
+    // depth, vertical span and texture u re-derive PER COLUMN from its projected endpoints (words 12+),
+    // and which WRITES its depth at opaque texels (the CPU z-buffer rule for faces).
     for (var s = 0u; s < spriteCount; s = s + 1u) {
       let sb = spriteBase + s * ${SPRITE_STRIDE}u;
       let left = bitcast<i32>(aux[sb]);
@@ -307,16 +311,49 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
           continue;
         }
       }
-      let forward = bitcast<f32>(aux[sb + 9u]);
+      let blockFace = aux[sb + 11u] == ${SPRITE_BLOCK_FACE}u;
+      var forward = bitcast<f32>(aux[sb + 9u]);
+      var texCol: u32;
+      var vTop = yTop;
+      var vSpan = yBottom - yTop + 1;
+
+      if (blockFace) {
+        let xa = bitcast<f32>(aux[sb + 12u]);
+        let xb = bitcast<f32>(aux[sb + 13u]);
+        let invFa = bitcast<f32>(aux[sb + 14u]);
+        let invFb = bitcast<f32>(aux[sb + 15u]);
+        let t = (f32(xi) - xa) / (xb - xa);
+        let invF = invFa + t * (invFb - invFa);
+
+        forward = 1.0 / invF;
+        // This column's exact vertical span (the record's yTop/yBottom are only the face's envelope).
+        vTop = i32(floor(f32(uni.horizon) - (bitcast<f32>(aux[sb + 19u]) - uni.camZ) * uni.focal * invF + 0.5));
+        let vBottom = i32(floor(f32(uni.horizon) - (bitcast<f32>(aux[sb + 18u]) - uni.camZ) * uni.focal * invF + 0.5));
+
+        if (yi < vTop || yi > vBottom) {
+          continue;
+        }
+        vSpan = vBottom - vTop + 1;
+        // Perspective-correct u along the face (u/z screen-linear — the walls' rule), clamped into the cell.
+        let uzA = bitcast<f32>(aux[sb + 16u]);
+        let uzB = bitcast<f32>(aux[sb + 17u]);
+        let uFrac = clamp((uzA + t * (uzB - uzA)) * forward, 0.0, 1.0);
+
+        texCol = aux[sb + 5u] + min(aux[sb + 7u] - 1u, u32(uFrac * f32(aux[sb + 7u])));
+      } else {
+        // Division-based atlas-cell sampling (non-POT art — no &-wrap): the cell coordinates stay inside
+        // [u0, u0+cellW) × [v0, v0+cellH) by construction, the CPU's exact truncations.
+        texCol = aux[sb + 5u] + u32((f32(xi - left) / f32(right - left + 1)) * f32(aux[sb + 7u]));
+      }
       let t = texInfo[aux[sb + 4u]];
-      // Division-based atlas-cell sampling (non-POT art — no &-wrap): the cell coordinates stay inside
-      // [u0, u0+cellW) × [v0, v0+cellH) by construction, the CPU's exact truncations.
-      let texCol = aux[sb + 5u] + u32((f32(xi - left) / f32(right - left + 1)) * f32(aux[sb + 7u]));
-      let v = aux[sb + 6u] + u32((f32(yi - yTop) / f32(yBottom - yTop + 1)) * f32(aux[sb + 8u]));
+      let v = aux[sb + 6u] + u32((f32(yi - vTop) / f32(vSpan)) * f32(aux[sb + 8u]));
       let texel = texels[t.offset + v * t.width + texCol];
 
       if (forward < best && (texel >> 24u) != 0u) {
         color = shadePackClamp(texel, bitcast<f32>(aux[sb + 10u]));
+        if (blockFace) {
+          best = forward; // faces write depth — a later surface behind this pixel stays occluded
+        }
         // Seen THROUGH glass: one tint per layer of this phase's set in front of the sprite (layers are
         // nearest-first → stop at the first layer at/beyond the sprite's own depth).
         for (var k = 0u; k < gcount; k = k + 1u) {

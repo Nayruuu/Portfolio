@@ -1,22 +1,16 @@
 import { focalFor, projectColumn, toCamera, type Camera, type CamPoint } from './camera';
 import { locateSubSector, signedSide } from './node-builder';
-import { orientSprite } from './sprite-rotation';
+import { visibleBlockFaces } from './sprite-block';
 import { missingTexture, TEX_WORLD, type Texture, type TextureLibrary } from './texture';
-import type {
-  CompiledMap,
-  NodeChild,
-  Sector,
-  Seg,
-  ThingType,
-  Vertex,
-  ZonePortalDef,
-} from './types';
+import type { CompiledMap, NodeChild, Sector, Seg, ThingType, ZonePortalDef } from './types';
 
 /**
  * The software renderer (SP2–SP5). Walks the BSP front-to-back from the camera and, per column, draws the
  * near sector's textured CEILING (above), the wall (solid, or a portal's upper/lower bands), and the
  * textured FLOOR (below) — each sampled + distance-shaded, with a per-column occlusion window. It then
- * draws billboard SPRITES (things), depth-tested per pixel against the wall z-buffer, with alpha.
+ * draws SPRITES (things), depth-tested per pixel against the wall z-buffer, with alpha: camera-facing
+ * billboards, and — for `block` props — world-anchored BLOCK FACES rasterised as mini-walls with
+ * per-column depth (Build-engine wall sprites; see `sprite-block.ts`).
  *
  * Walls texture by U along the wall (perspective-correct) and V by world height. Floors/ceilings are cast
  * per pixel: a precomputed per-row distance table gives the world point under each screen pixel, which
@@ -70,21 +64,24 @@ export const TEX_ANCHOR = 64;
  *  compute shader — same parity contract as {@link TEX_ANCHOR}.) */
 export const FLAT_ANCHOR = 1024;
 
-/** How a thing type renders as a billboard sprite: its texture name + world size (none = not a sprite).
+/** How a thing type renders as a sprite: its texture name + world size (none = not a sprite).
  *  `rotations` marks a DIRECTIONAL prop: its texture is a 1×`rotations` view-angle sheet (front · right ·
- *  back · left) and the drawn column follows the thing's authored facing vs the viewer — see
- *  {@link rotationCell}. Radially-symmetric props (a plant, a cooler) stay single-frame. */
+ *  back · left). `block` makes the directional prop a WALL-SPRITE BLOCK: the sheet's cells mount on two
+ *  crossed quads anchored in the world (see `sprite-block.ts`) — true perspective, two faces at 45°
+ *  meeting at the prop's axis, no cell snap — instead of a cell-switched camera-facing billboard.
+ *  Radially-symmetric props (a plant, a cooler) stay single-frame billboards. */
 interface SpriteDef {
   readonly tex: string;
   readonly width: number;
   readonly height: number;
   readonly rotations?: number;
+  readonly block?: true;
 }
 const SPRITES: Partial<Record<ThingType, SpriteDef>> = {
   barrel: { tex: 'BARREL', width: 0.8, height: 1.1 },
   prop: { tex: 'PROP', width: 0.8, height: 1.6 }, // potted plant — symmetric, one frame
-  prop_screen: { tex: 'PROP_SCREEN', width: 0.6, height: 0.6, rotations: 4 }, // crashed desk monitor (sits on a counter block)
-  prop_totem: { tex: 'PROP_TOTEM', width: 0.7, height: 2.0, rotations: 4 }, // free-standing directory totem
+  prop_screen: { tex: 'PROP_SCREEN', width: 0.7, height: 0.6, rotations: 4 }, // crashed desk monitor (sits on a counter block; w/h = the sheet's trimmed cell aspect)
+  prop_totem: { tex: 'PROP_TOTEM', width: 1.25, height: 2.0, rotations: 4 }, // free-standing directory totem (wide plinth — w/h = the sheet's trimmed cell aspect)
   prop_board: { tex: 'PROP_BOARD', width: 1.6, height: 1.7, rotations: 4 }, // whiteboard on casters
   prop_chair: { tex: 'PROP_CHAIR', width: 0.7, height: 1.1, rotations: 4 }, // office swivel chair
   prop_cooler: { tex: 'PROP_COOLER', width: 0.6, height: 1.5 }, // water cooler — symmetric, one frame
@@ -114,6 +111,10 @@ export interface Sprite {
   // `col` from these for the frame's viewpoint. Omitted → the cell (if any) is view-independent.
   readonly rotations?: number;
   readonly facing?: number;
+  // A WALL-SPRITE BLOCK (see `sprite-block.ts`): the rotation sheet's cells mount on two `width`-long
+  // crossed quads anchored at (x,y)/`facing`, rasterised as mini-walls with per-column depth —
+  // `col` is ignored (each face carries its own cell) and `orientSprite` leaves the sprite untouched.
+  readonly block?: boolean;
   readonly flash?: number; // 0..1 white hit-flash blend (0 / omitted = normal shading)
 }
 
@@ -128,13 +129,13 @@ export interface ZoneNeighbor {
 }
 
 /**
- * The static billboards authored into a map: every thing whose type has a sprite def, resting on its
+ * The static decor sprites authored into a map: every thing whose type has a sprite def, resting on its
  * floor. A DIRECTIONAL prop (its def carries `rotations`) is emitted as a 1×`rotations` atlas sprite
- * with the thing's facing, its cell picked for `view` when given (the camera — both renderers' no-sprites
- * fallback) or resting on FRONT (column 0) without one; the per-frame game list re-orients via
- * {@link orientSprite} instead, so a stored sprite follows the player around.
+ * carrying the thing's authored facing, resting on FRONT (column 0) — the game's per-frame list re-picks
+ * the cell for the viewpoint via `orientSprite`. A BLOCK prop (def opts into `block` — no shipped def
+ * does today) instead binds its cells to its world faces at projection time, view-independent.
  */
-export function mapSprites(map: CompiledMap, view?: Vertex): Sprite[] {
+export function mapSprites(map: CompiledMap): Sprite[] {
   const sprites: Sprite[] = [];
 
   for (const thing of map.source.things) {
@@ -154,7 +155,7 @@ export function mapSprites(map: CompiledMap, view?: Vertex): Sprite[] {
       if (def.rotations === undefined) {
         sprites.push(base);
       } else {
-        const rot: Sprite = {
+        sprites.push({
           ...base,
           cols: def.rotations,
           rows: 1,
@@ -162,9 +163,8 @@ export function mapSprites(map: CompiledMap, view?: Vertex): Sprite[] {
           row: 0,
           rotations: def.rotations,
           facing: thing.angle,
-        };
-
-        sprites.push(view === undefined ? rot : orientSprite(rot, view.x, view.y));
+          block: def.block,
+        });
       }
     }
   }
@@ -636,16 +636,38 @@ interface SpriteWindow {
 }
 
 /**
- * A billboard PROJECTED for one frame: the screen-space quad + the sampling/shading parameters the paint
+ * The extra projection a BLOCK FACE carries on its {@link SpriteQuad}: the face is rasterised as a
+ * mini-wall, so — unlike a billboard's constant depth and fixed quad — its depth, vertical span and
+ * texture u are re-derived PER COLUMN from the two projected endpoints. `1/forward` and `u/forward`
+ * are screen-linear (the walls' perspective-correct rule), so a column at fraction `t` of [xa, xb]
+ * interpolates both and divides back. `xa < xb` strictly: an edge-on face (the only way the endpoints
+ * could project to one column) is already culled by `visibleBlockFaces`.
+ */
+export interface BlockFaceQuad {
+  readonly xa: number; // the projected endpoint columns (float, unclamped), xa < xb
+  readonly xb: number;
+  readonly invFa: number; // 1/forward at each endpoint
+  readonly invFb: number;
+  readonly uOverZa: number; // (cell-fraction u) / forward at each endpoint — u = 0 at xa's endpoint
+  readonly uOverZb: number;
+  readonly zBottom: number; // the face's world-vertical extent (sector floor … floor + height)
+  readonly zTop: number;
+}
+
+/**
+ * A sprite PROJECTED for one frame: the screen-space quad + the sampling/shading parameters the paint
  * loop needs — everything {@link drawSprites} derives per sprite before its pixel loops. Exported as the
  * seam between the projection (the smart, cheap part — shared) and the per-pixel work: the CPU paints the
  * quads immediately; the GPU command builder serializes the SAME quads into sprite records a compute
- * shader executes (the WalkSink split, for sprites).
+ * shader executes (the WalkSink split, for sprites). A quad is either a camera-facing BILLBOARD
+ * (`face` absent — constant depth, fixed vertical span) or one visible BLOCK FACE (`face` present —
+ * per-column depth/span/u, see {@link BlockFaceQuad}); `yTop`/`yBottom` are then the face's screen
+ * ENVELOPE (the union of both endpoints' extents) used for early rejection, not the painted span.
  */
 export interface SpriteQuad {
   readonly tex: Texture;
   readonly name: string; // the texture's library name (the command builder keys GPU ids off it)
-  readonly forward: number; // the sprite's camera depth — z-tested per pixel
+  readonly forward: number; // the sprite's camera depth (a face: its visible centre) — the sort key
   readonly left: number; // screen quad, inclusive (may run off-screen — painters clamp)
   readonly right: number;
   readonly yTop: number;
@@ -655,12 +677,28 @@ export interface SpriteQuad {
   readonly cellW: number;
   readonly cellH: number;
   readonly shade: number; // sector light × distance falloff × (1 + hit-flash) — channels clamp at 255
+  readonly face?: BlockFaceQuad;
 }
 
+/** One sprite surface awaiting projection: a billboard's camera-space centre, or one visible block
+ *  face's near-clipped endpoints (`u` = the cell fraction) + the cell that face wears. `depth` is the
+ *  far-to-near sort key — the billboard's centre depth, or the visible face segment's centre depth
+ *  (forward is linear along the segment, so the endpoint mean IS the centre). */
+type SpriteSurface = {
+  readonly spr: Sprite;
+  readonly depth: number;
+  readonly cell: number;
+} & (
+  | { readonly kind: 'billboard'; readonly cam: CamPoint }
+  | { readonly kind: 'face'; readonly clip: readonly [WallVert, WallVert] }
+);
+
 /**
- * Project a frame's billboards to screen-space {@link SpriteQuad}s: cull behind the near plane, sort
- * far-to-near (nearer sprites overdraw), and resolve each sprite's texture/cell/shade. Pure — shared by
- * the CPU painter ({@link drawSprites}) and the GPU command builder, so both derive identical quads.
+ * Project a frame's sprites to screen-space {@link SpriteQuad}s: cull behind the near plane (a BLOCK
+ * sprite first expands into its ≤ 2 visible faces — back-face culled, near-clipped like walls), sort
+ * far-to-near (nearer surfaces overdraw; the two faces of one block order farther-first by their own
+ * centre depths), and resolve each surface's texture/cell/shade. Pure — shared by the CPU painter
+ * ({@link drawSprites}) and the GPU command builder, so both derive identical quads.
  */
 export function projectSprites(
   sprites: readonly Sprite[],
@@ -671,25 +709,43 @@ export function projectSprites(
   horizon: number,
   textures: TextureLibrary,
 ): SpriteQuad[] {
-  const visible: { spr: Sprite; cam: CamPoint }[] = [];
+  const visible: SpriteSurface[] = [];
 
   for (const spr of sprites) {
-    const cam = toCamera(camera, spr);
+    if (spr.block === true) {
+      for (const face of visibleBlockFaces(
+        spr.x,
+        spr.y,
+        spr.facing ?? 0,
+        spr.width,
+        camera.x,
+        camera.y,
+      )) {
+        const clip = clipNear(
+          { ...toCamera(camera, { x: face.x1, y: face.y1 }), u: 0 },
+          { ...toCamera(camera, { x: face.x2, y: face.y2 }), u: 1 },
+        );
 
-    if (cam.forward <= NEAR) {
+        if (clip !== null) {
+          const depth = (clip[0].forward + clip[1].forward) / 2;
+
+          visible.push({ spr, depth, kind: 'face', clip, cell: face.cell });
+        }
+      }
       continue;
     }
-    visible.push({ spr, cam });
-  }
-  visible.sort((a, b) => b.cam.forward - a.cam.forward); // far first → nearer sprites overdraw
+    const cam = toCamera(camera, spr);
 
-  return visible.map((s) => {
-    const invF = 1 / s.cam.forward;
-    const centerX = projectColumn(s.cam, width, focal);
+    if (cam.forward > NEAR) {
+      visible.push({ spr, depth: cam.forward, kind: 'billboard', cam, cell: spr.col ?? 0 });
+    }
+  }
+  visible.sort((a, b) => b.depth - a.depth); // far first → nearer surfaces overdraw
+
+  const quads: SpriteQuad[] = [];
+
+  for (const s of visible) {
     const sector = map.source.sectors[locateSubSector(map.root, s.spr.x, s.spr.y).sector];
-    const yBottom = Math.round(horizon - (s.spr.z - camera.z) * focal * invF);
-    const yTop = Math.round(horizon - (s.spr.z + s.spr.height - camera.z) * focal * invF);
-    const halfW = s.spr.width * 0.5 * focal * invF;
     const tex = resolve(textures, s.spr.tex);
     // The cell to sample: a whole-texture billboard (cols=rows=1) or one cell of a `cols`×`rows` atlas.
     const cellW = (tex.width / (s.spr.cols ?? 1)) | 0;
@@ -697,29 +753,169 @@ export function projectSprites(
     // Additive hit-flash: brighten the sprite's OWN colours toward white (×(1+flash), clipped per channel) —
     // mirrors the grid's `lighter` re-blit, not a flat white wash.
     const flash = Math.max(0, Math.min(1, s.spr.flash ?? 0));
-
-    return {
+    const shade = (sector.light / 255) * Math.max(0.25, Math.min(1, 6 / s.depth)) * (1 + flash);
+    const common = {
       tex,
       name: s.spr.tex,
-      forward: s.cam.forward,
-      left: Math.round(centerX - halfW),
-      right: Math.round(centerX + halfW),
-      yTop,
-      yBottom,
-      u0: (s.spr.col ?? 0) * cellW,
+      forward: s.depth,
+      u0: s.cell * cellW,
       v0: (s.spr.row ?? 0) * cellH,
       cellW,
       cellH,
-      shade: (sector.light / 255) * Math.max(0.25, Math.min(1, 6 / s.cam.forward)) * (1 + flash),
+      shade,
     };
-  });
+
+    if (s.kind === 'face') {
+      // A BLOCK FACE — a mini-wall: project both endpoints and keep the per-endpoint 1/z + u/z so the
+      // painter re-derives depth/span/u per column, perspective-correct. `xa < xb` needs no reorder:
+      // back-face culling keeps the camera strictly on the face's normal side, where the P1→P2 screen
+      // orientation is preserved (the u=0 endpoint was CHOSEN to project screen-left — see blockFaces)
+      // and the endpoints cannot share a column (that camera would be edge-on, already culled).
+      const [pa, pb] = s.clip;
+      const xa = projectColumn(pa, width, focal);
+      const xb = projectColumn(pb, width, focal);
+      const left = Math.ceil(xa);
+      const right = Math.floor(xb);
+
+      if (right < left) {
+        continue; // a sub-pixel sliver (grazing view) — no column centre falls inside it
+      }
+      const invFa = 1 / pa.forward;
+      const invFb = 1 / pb.forward;
+      const zBottom = s.spr.z;
+      const zTop = s.spr.z + s.spr.height;
+      // The screen ENVELOPE — the union of both endpoints' extents (y is linear in 1/forward, so every
+      // column's span lies between the endpoints') — used for early rejection; columns re-project exactly.
+      const yTopA = Math.round(horizon - (zTop - camera.z) * focal * invFa);
+      const yTopB = Math.round(horizon - (zTop - camera.z) * focal * invFb);
+      const yBottomA = Math.round(horizon - (zBottom - camera.z) * focal * invFa);
+      const yBottomB = Math.round(horizon - (zBottom - camera.z) * focal * invFb);
+
+      quads.push({
+        ...common,
+        left,
+        right,
+        yTop: Math.min(yTopA, yTopB),
+        yBottom: Math.max(yBottomA, yBottomB),
+        face: {
+          xa,
+          xb,
+          invFa,
+          invFb,
+          uOverZa: pa.u * invFa,
+          uOverZb: pb.u * invFb,
+          zBottom,
+          zTop,
+        },
+      });
+      continue;
+    }
+    const invF = 1 / s.cam.forward;
+    const centerX = projectColumn(s.cam, width, focal);
+    const halfW = s.spr.width * 0.5 * focal * invF;
+
+    quads.push({
+      ...common,
+      left: Math.round(centerX - halfW),
+      right: Math.round(centerX + halfW),
+      yTop: Math.round(horizon - (s.spr.z + s.spr.height - camera.z) * focal * invF),
+      yBottom: Math.round(horizon - (s.spr.z - camera.z) * focal * invF),
+    });
+  }
+
+  return quads;
 }
 
 /**
- * Draw billboard sprites (things) after the walls: face-camera quads (via {@link projectSprites} — sorted
- * far-to-near), depth-tested PER PIXEL against the wall z-buffer (so steps/canopies occlude correctly),
- * with per-texel alpha. A NEIGHBOR pass passes its seam's {@link SpriteWindow} so its sprites stay inside
- * the portal opening.
+ * Rasterise one BLOCK FACE quad as a mini alpha-tested wall: per column, interpolate `1/forward`
+ * between the projected endpoints (depth is NOT constant — the billboard's one novelty), re-project the
+ * vertical span off the face's world extent, and derive the texture u perspective-correct (u/z linear
+ * in screen space, the walls' rule). Pixels z-test against `zbuf` AND — unlike billboards — WRITE their
+ * depth at opaque texels: sprite surfaces only sort by centre depth, so the block's own two CROSSED
+ * faces (equal centres — they intersect at the prop's axis) and a nearer-sorted billboard a face
+ * actually crosses resolve per pixel instead of by paint order. Alpha and glass-tint behaviour mirror
+ * the billboard painter (the atlases ship alpha-hardened to 0/255, so `!== 0` equals a 128 threshold).
+ */
+function drawBlockFace(
+  buf32: Uint32Array,
+  zbuf: Float32Array,
+  dims: Dims,
+  q: SpriteQuad,
+  face: BlockFaceQuad,
+  camZ: number,
+  focal: number,
+  horizon: number,
+  glass: GlassPanes | null,
+  window: SpriteWindow | null,
+): void {
+  const { width } = dims;
+  const { tex, u0, v0, cellW, cellH, shade } = q;
+  const tw = tex.width;
+  const px = tex.pixels;
+  const span = face.xb - face.xa;
+
+  for (let x = Math.max(0, q.left); x <= Math.min(width - 1, q.right); x++) {
+    let winTop = dims.rowStart;
+    let winBot = dims.rowEnd - 1;
+
+    if (window !== null) {
+      if (window.seam[x] !== window.index) {
+        continue; // this column shows no opening of the seam — the face must not leak past it
+      }
+      winTop = Math.max(winTop, window.top[x]);
+      winBot = Math.min(winBot, window.bot[x]);
+    }
+    const t = (x - face.xa) / span;
+    const invF = face.invFa + t * (face.invFb - face.invFa);
+    const forward = 1 / invF;
+    // This column's vertical extent — re-projected, so the far edge of the face draws shorter.
+    const yTop = Math.round(horizon - (face.zTop - camZ) * focal * invF);
+    const yBottom = Math.round(horizon - (face.zBottom - camZ) * focal * invF);
+    const rowSpan = yBottom - yTop + 1;
+    const uFrac = Math.min(
+      1,
+      Math.max(0, (face.uOverZa + t * (face.uOverZb - face.uOverZa)) * forward),
+    );
+    const texCol = u0 + Math.min(cellW - 1, (uFrac * cellW) | 0);
+    const colLo = Math.max(winTop, yTop);
+    const colHi = Math.min(winBot, yBottom);
+    let i = colLo * width + x;
+
+    for (let y = colLo; y <= colHi; y++) {
+      const ti = ((v0 + ((((y - yTop) / rowSpan) * cellH) | 0)) * tw + texCol) << 2;
+
+      if (forward < zbuf[i] && px[ti + 3] !== 0) {
+        buf32[i] =
+          0xff000000 |
+          (Math.min(255, (px[ti + 2] * shade) | 0) << 16) |
+          (Math.min(255, (px[ti + 1] * shade) | 0) << 8) |
+          Math.min(255, (px[ti] * shade) | 0);
+        zbuf[i] = forward; // faces write depth — see the JSDoc's per-pixel ordering rationale
+
+        // Seen THROUGH glass: same wash as billboards, with this COLUMN's depth (layers nearest-first).
+        if (glass !== null) {
+          for (let k = 0; k < glass.count[x]; k++) {
+            const l = x * GLASS_LAYERS + k;
+
+            if (forward <= glass.depth[l]) {
+              break; // this layer (and all farther ones) sits behind the face
+            }
+            if (y >= glass.top[l] && y <= glass.bot[l]) {
+              buf32[i] = coolGlassTint(buf32[i]);
+            }
+          }
+        }
+      }
+      i += width;
+    }
+  }
+}
+
+/**
+ * Draw sprites (things) after the walls: camera-facing billboard quads and block-face quads (via
+ * {@link projectSprites} — sorted far-to-near), depth-tested PER PIXEL against the wall z-buffer (so
+ * steps/canopies occlude correctly), with per-texel alpha. A NEIGHBOR pass passes its seam's
+ * {@link SpriteWindow} so its sprites stay inside the portal opening.
  */
 function drawSprites(
   buf32: Uint32Array,
@@ -737,6 +933,10 @@ function drawSprites(
   const { width } = dims;
 
   for (const q of projectSprites(sprites, map, camera, width, focal, horizon, textures)) {
+    if (q.face !== undefined) {
+      drawBlockFace(buf32, zbuf, dims, q, q.face, camera.z, focal, horizon, glass, window);
+      continue;
+    }
     const { tex, forward, left, right, yTop, yBottom, u0, v0, cellW, cellH, shade } = q;
     const tw = tex.width;
     const px = tex.pixels;
@@ -1330,7 +1530,7 @@ export function renderFrame(
     buf32,
     zbuf,
     dims,
-    sprites ?? mapSprites(map, camera), // fallback decor oriented for the camera (mirrored by the GPU builder)
+    sprites ?? mapSprites(map), // fallback: the map's static decor (mirrored by the GPU builder)
     map,
     camera,
     focal,
