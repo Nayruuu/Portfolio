@@ -9,7 +9,7 @@ import {
   SPAN_STRIDE,
   SPAN_WALL,
   SPRITE_BILLBOARD,
-  SPRITE_BLOCK_FACE,
+  SPRITE_VOXEL,
   SPRITE_STRIDE,
   type FrameCommands,
 } from './frame-commands';
@@ -19,8 +19,10 @@ import {
   BG_FLOOR,
   coolGlassTint,
   FLAT_ANCHOR,
+  NEAR,
   renderFrame,
   TEX_ANCHOR,
+  VOXEL_SHADE,
   type Sprite,
   type ZoneNeighbor,
 } from './renderer';
@@ -252,21 +254,169 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
       const cellH = cmds.auxWords[sb + 8];
       const forward = cmds.auxFloats[sb + 9];
       const shade = cmds.auxFloats[sb + 10];
-      const blockFace = cmds.auxWords[sb + 11] === SPRITE_BLOCK_FACE;
       const { width: tw, pixels: px } = tex;
       const colSpan = right - left + 1;
       const rowSpan = yBottom - yTop + 1;
       const yLo = Math.max(0, yTop);
       const yHi = Math.min(height - 1, yBottom);
-      // The block-face tail (drawBlockFace's per-column projection inputs) — zeroed on a billboard.
-      const xa = cmds.auxFloats[sb + 12];
-      const xb = cmds.auxFloats[sb + 13];
-      const invFa = cmds.auxFloats[sb + 14];
-      const invFb = cmds.auxFloats[sb + 15];
-      const uOverZa = cmds.auxFloats[sb + 16];
-      const uOverZb = cmds.auxFloats[sb + 17];
-      const zBottom = cmds.auxFloats[sb + 18];
-      const zTop = cmds.auxFloats[sb + 19];
+
+      /** One glass-tint pass over pixel (x, y) painted at `depth` — the phase-set scan both kinds share. */
+      const tintThroughGlass = (x: number, y: number, i: number, depth: number): void => {
+        if (glassSet >= 0) {
+          const table = 5 * width + 2 * (glassSet * width + x);
+          const goff = cmds.columns[table];
+          const gcount = cmds.columns[table + 1];
+
+          for (let k = 0; k < gcount; k++) {
+            const g = goff + k * GLASS_STRIDE;
+
+            if (depth <= cmds.auxFloats[g + 6]) {
+              break;
+            }
+            if (y >= (cmds.auxWords[g] | 0) && y <= (cmds.auxWords[g + 1] | 0)) {
+              buf32[i] = coolGlassTint(buf32[i]);
+            }
+          }
+        }
+      };
+
+      if (cmds.auxWords[sb + 11] === SPRITE_VOXEL) {
+        // A VOXEL record — drawVoxel's math in f64, off the f32-stored tail: the pixel's grid-space
+        // ray, a slab window over the grid box, then an exact 3D DDA to the first solid cell.
+        const n = cmds.auxWords[sb + 5];
+        const nyG = cmds.auxWords[sb + 6];
+        const nzG = cmds.auxWords[sb + 7];
+        const camGX = cmds.auxFloats[sb + 12];
+        const camGY = cmds.auxFloats[sb + 13];
+        const camGZ = cmds.auxFloats[sb + 14];
+        const fwdGX = cmds.auxFloats[sb + 15];
+        const fwdGY = cmds.auxFloats[sb + 16];
+        const rightGX = cmds.auxFloats[sb + 17];
+        const rightGY = cmds.auxFloats[sb + 18];
+        const zScale = cmds.auxFloats[sb + 19];
+        // Per-axis march state — drawVoxel's exact shape (0 = lateral, 1 = depth, 2 = up).
+        const origin3 = [camGX, camGY, camGZ] as const;
+        const size3 = [n, nyG, nzG] as const;
+        const dir3 = new Float64Array(3);
+        const cell = new Int32Array(3);
+        const stepDir = new Int32Array(3);
+        const tDelta = new Float64Array(3);
+        const tMax = new Float64Array(3);
+
+        for (let x = Math.max(0, left); x <= Math.min(width - 1, right); x++) {
+          let colLo = yLo;
+          let colHi = yHi;
+
+          if (windowSeam >= 0) {
+            const wb = 2 * width + 3 * x;
+
+            if ((cmds.columns[wb] | 0) !== windowSeam) {
+              continue;
+            }
+            colLo = Math.max(colLo, cmds.columns[wb + 1] | 0);
+            colHi = Math.min(colHi, cmds.columns[wb + 2] | 0);
+          }
+          const offset = (width / 2 - x) / focal;
+
+          dir3[0] = fwdGX + offset * rightGX;
+          dir3[1] = fwdGY + offset * rightGY;
+          let planEnter = NEAR;
+          let planExit = Infinity;
+          let planAxis = 1;
+          let planMiss = false;
+
+          for (let a = 0; a < 2; a++) {
+            const dir = dir3[a];
+
+            if (dir !== 0) {
+              const t0 = (0 - origin3[a]) / dir;
+              const t1 = (size3[a] - origin3[a]) / dir;
+
+              if (Math.min(t0, t1) > planEnter) {
+                planEnter = Math.min(t0, t1);
+                planAxis = a;
+              }
+              planExit = Math.min(planExit, Math.max(t0, t1));
+            } else if (origin3[a] < 0 || origin3[a] >= size3[a]) {
+              planMiss = true;
+            }
+          }
+          if (planMiss || planEnter >= planExit) {
+            continue;
+          }
+          for (let y = colLo, i = colLo * width + x; y <= colHi; y++, i += width) {
+            const dz = ((horizon - y) / focal) * zScale;
+            let tEnter = planEnter;
+            let tExit = planExit;
+            let axis = planAxis;
+
+            dir3[2] = dz;
+            if (dz !== 0) {
+              const tz0 = (0 - camGZ) / dz;
+              const tz1 = (nzG - camGZ) / dz;
+
+              if (Math.min(tz0, tz1) > tEnter) {
+                tEnter = Math.min(tz0, tz1);
+                axis = 2;
+              }
+              tExit = Math.min(tExit, Math.max(tz0, tz1));
+            } else if (camGZ < 0 || camGZ >= nzG) {
+              continue;
+            }
+            if (tEnter >= tExit || tEnter >= zbuf[i]) {
+              continue;
+            }
+            let t = tEnter;
+
+            for (let a = 0; a < 3; a++) {
+              const dir = dir3[a];
+
+              cell[a] = Math.min(size3[a] - 1, Math.max(0, Math.floor(origin3[a] + t * dir)));
+              stepDir[a] = dir > 0 ? 1 : -1;
+              tDelta[a] = dir !== 0 ? Math.abs(1 / dir) : Infinity;
+              tMax[a] = dir !== 0 ? (cell[a] + (dir > 0 ? 1 : 0) - origin3[a]) / dir : Infinity;
+            }
+            for (;;) {
+              if (t >= zbuf[i]) {
+                break;
+              }
+              const ti = ((cell[2] * nyG + cell[1]) * n + cell[0]) << 2;
+
+              if (px[ti + 3] !== 0) {
+                const face =
+                  axis === 2
+                    ? dz < 0
+                      ? VOXEL_SHADE.top
+                      : VOXEL_SHADE.bottom
+                    : axis === 0
+                      ? VOXEL_SHADE.sideX
+                      : VOXEL_SHADE.sideY;
+                const lit = shade * face;
+
+                buf32[i] =
+                  0xff000000 |
+                  (Math.min(255, (px[ti + 2] * lit) | 0) << 16) |
+                  (Math.min(255, (px[ti + 1] * lit) | 0) << 8) |
+                  Math.min(255, (px[ti] * lit) | 0);
+                zbuf[i] = t;
+                tintThroughGlass(x, y, i, t);
+                break;
+              }
+              const axisNext =
+                tMax[0] <= tMax[1] && tMax[0] <= tMax[2] ? 0 : tMax[1] <= tMax[2] ? 1 : 2;
+
+              t = tMax[axisNext];
+              tMax[axisNext] += tDelta[axisNext];
+              cell[axisNext] += stepDir[axisNext];
+              axis = axisNext;
+              if (cell[axisNext] < 0 || cell[axisNext] >= size3[axisNext]) {
+                break;
+              }
+            }
+          }
+        }
+        continue;
+      }
 
       for (let x = Math.max(0, left); x <= Math.min(width - 1, right); x++) {
         let colLo = yLo;
@@ -281,58 +431,19 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
           colLo = Math.max(colLo, cmds.columns[wb + 1] | 0);
           colHi = Math.min(colHi, cmds.columns[wb + 2] | 0);
         }
-        // A BLOCK FACE re-derives depth / vertical span / texture u per column (drawBlockFace's math);
-        // a billboard keeps its record's constants.
-        let colForward = forward;
-        let colTop = yTop;
-        let colSpanRows = rowSpan;
-        let texCol = u0 + ((((x - left) / colSpan) * cellW) | 0);
-
-        if (blockFace) {
-          const t = (x - xa) / (xb - xa);
-          const invF = invFa + t * (invFb - invFa);
-
-          colForward = 1 / invF;
-          colTop = Math.round(horizon - (zTop - camZ) * focal * invF);
-          const colBottom = Math.round(horizon - (zBottom - camZ) * focal * invF);
-
-          colSpanRows = colBottom - colTop + 1;
-          const uFrac = Math.min(1, Math.max(0, (uOverZa + t * (uOverZb - uOverZa)) * colForward));
-
-          texCol = u0 + Math.min(cellW - 1, (uFrac * cellW) | 0);
-          colLo = Math.max(colLo, colTop);
-          colHi = Math.min(colHi, colBottom);
-        }
+        const texCol = u0 + ((((x - left) / colSpan) * cellW) | 0);
         let i = colLo * width + x;
 
         for (let y = colLo; y <= colHi; y++) {
-          const ti = ((v0 + ((((y - colTop) / colSpanRows) * cellH) | 0)) * tw + texCol) << 2;
+          const ti = ((v0 + ((((y - yTop) / rowSpan) * cellH) | 0)) * tw + texCol) << 2;
 
-          if (colForward < zbuf[i] && px[ti + 3] !== 0) {
+          if (forward < zbuf[i] && px[ti + 3] !== 0) {
             buf32[i] =
               0xff000000 |
               (Math.min(255, (px[ti + 2] * shade) | 0) << 16) |
               (Math.min(255, (px[ti + 1] * shade) | 0) << 8) |
               Math.min(255, (px[ti] * shade) | 0);
-            if (blockFace) {
-              zbuf[i] = colForward; // faces write depth — the renderer's per-pixel ordering rule
-            }
-            if (glassSet >= 0) {
-              const table = 5 * width + 2 * (glassSet * width + x);
-              const goff = cmds.columns[table];
-              const gcount = cmds.columns[table + 1];
-
-              for (let k = 0; k < gcount; k++) {
-                const g = goff + k * GLASS_STRIDE;
-
-                if (colForward <= cmds.auxFloats[g + 6]) {
-                  break;
-                }
-                if (y >= (cmds.auxWords[g] | 0) && y <= (cmds.auxWords[g + 1] | 0)) {
-                  buf32[i] = coolGlassTint(buf32[i]);
-                }
-              }
-            }
+            tintThroughGlass(x, y, i, forward);
           }
           i += width;
         }
@@ -910,58 +1021,75 @@ describe('buildFrameCommands — sprites', () => {
     expectQuantized(roundTrip(MAP, CAM, lib, sprites).pixels, reference(MAP, CAM, lib, sprites));
   });
 
-  it('reproduces BLOCK props (per-column depth faces) within the f32 bound, head-on and at 45°', () => {
-    const lib = new Map([...TEX, ['SHEET', nonPotSprite()]]);
-    const block: Sprite = {
+  it('reproduces VOXEL props (per-pixel DDA volumes) within the f32 bound, head-on and oblique', () => {
+    // A uniform-colour 4×4×4 grid: an f32-vs-f64 cell flip at a voxel boundary lands on the same
+    // colour, so the bound stays the format's ±1 quantization (face-axis ties are measure-zero at
+    // these generic angles).
+    const grid: Texture = {
+      width: 4,
+      height: 16,
+      pixels: new Uint8ClampedArray(
+        Array.from({ length: 4 * 16 }, () => [200, 90, 40, 255]).flat(),
+      ),
+      voxelDepth: 4,
+    };
+    const lib = new Map([...TEX, ['VOXGRID', grid]]);
+    const vox: Sprite = {
       x: 8,
       y: 6,
       z: 0,
-      tex: 'SHEET',
+      tex: 'VOXGRID',
       width: 1.2,
       height: 1.8,
-      cols: 2,
+      cols: 4,
       rows: 1,
       col: 0,
       row: 0,
-      rotations: 2,
+      rotations: 4,
       facing: 0.4,
-      block: true,
+      voxel: true,
     };
 
-    // Oblique (two faces, interpolated depths) and near-frontal viewpoints, plus a pitched camera.
+    // Oblique (two faces, per-pixel depths) and near-frontal viewpoints, plus a pitched camera.
     for (const camera of [
       CAM,
       { x: 6.5, y: 4.2, angle: 0.9, z: 1.6 },
       { x: 7, y: 5, angle: 0.6, z: 2.2, pitch: -0.3 },
     ]) {
       expectQuantized(
-        roundTrip(MAP, camera, lib, [block]).pixels,
-        reference(MAP, camera, lib, [block]),
+        roundTrip(MAP, camera, lib, [vox]).pixels,
+        reference(MAP, camera, lib, [vox]),
       );
     }
   });
 
-  it('serializes a block face record (kind + endpoint tail) and zeroes the tail on billboards', () => {
-    const lib = new Map([...TEX, ['SHEET', nonPotSprite()]]);
+  it('serializes a voxel record (kind + grid dims + grid-space tail) and zeroes it on billboards', () => {
+    const grid: Texture = {
+      width: 2,
+      height: 6,
+      pixels: new Uint8ClampedArray(Array.from({ length: 2 * 6 }, () => [200, 90, 40, 255]).flat()),
+      voxelDepth: 2,
+    };
     const sprites: Sprite[] = [
       { x: 6, y: 5, z: 0, tex: 'BARREL', width: 0.8, height: 1.1 },
       {
         x: 8,
         y: 6,
         z: 0,
-        tex: 'SHEET',
+        tex: 'VOXGRID',
         width: 1.2,
         height: 1.8,
-        cols: 2,
+        cols: 4,
         rows: 1,
         col: 0,
         row: 0,
-        rotations: 2,
+        rotations: 4,
         facing: 0.4,
-        block: true,
+        voxel: true,
       },
     ];
-    const { cmds } = roundTrip(MAP, CAM, new Map([...lib, ['BARREL', metalTexture()]]), sprites);
+    const lib = new Map([...TEX, ['VOXGRID', grid], ['BARREL', metalTexture()]]); // prettier-ignore
+    const { cmds } = roundTrip(MAP, CAM, lib, sprites);
     const pb = (cmds.phaseCount - 1) * PHASE_STRIDE;
     const base = cmds.auxWords[pb + 1];
     const count = cmds.auxWords[pb + 2];
@@ -972,22 +1100,23 @@ describe('buildFrameCommands — sprites', () => {
       const kind = cmds.auxWords[sb + 11];
 
       kinds.push(kind);
-      if (kind === SPRITE_BLOCK_FACE) {
-        const xa = cmds.auxFloats[sb + 12];
-        const xb = cmds.auxFloats[sb + 13];
-
-        expect(xb).toBeGreaterThan(xa); // strictly ordered endpoints (edge-on faces are culled)
-        expect(cmds.auxFloats[sb + 14]).toBeGreaterThan(0); // 1/forward at each endpoint
-        expect(cmds.auxFloats[sb + 15]).toBeGreaterThan(0);
-        expect(cmds.auxFloats[sb + 19]).toBeCloseTo(1.8, 5); // zTop = floor + height
+      if (kind === SPRITE_VOXEL) {
+        // The atlas-cell words are repurposed as the grid dimensions…
+        expect(cmds.auxWords[sb + 5]).toBe(2); // n
+        expect(cmds.auxWords[sb + 6]).toBe(2); // ny (voxelDepth)
+        expect(cmds.auxWords[sb + 7]).toBe(3); // nz = height / ny
+        expect(cmds.auxWords[sb + 8]).toBe(0);
+        // …and the tail carries the grid-space camera + ray axes (zScale = nz / height).
+        expect(cmds.auxFloats[sb + 14]).toBeCloseTo(1.6 * (3 / 1.8), 5); // camGZ
+        expect(cmds.auxFloats[sb + 19]).toBeCloseTo(3 / 1.8, 5); // zScale
       } else {
-        // A billboard's block-face tail is zeroed (the aux buffer is reused across frames).
+        // A billboard's voxel tail is zeroed (the aux buffer is reused across frames).
         for (let w = 12; w < SPRITE_STRIDE; w++) {
           expect(cmds.auxWords[sb + w]).toBe(0);
         }
       }
     }
-    expect(kinds).toContain(SPRITE_BLOCK_FACE);
+    expect(kinds).toContain(SPRITE_VOXEL);
     expect(kinds).toContain(SPRITE_BILLBOARD);
   });
 

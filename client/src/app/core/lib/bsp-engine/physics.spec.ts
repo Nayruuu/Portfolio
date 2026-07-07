@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildBsp } from './node-builder';
-import { castFloorCeil, climbTarget, movePlayer } from './physics';
+import { castFloorCeil, climbTarget, mapObstacles, movePlayer } from './physics';
 import { SAMPLE_MAP } from './sample-map';
 import type { MapSource, SideDef } from './types';
 
@@ -50,6 +50,81 @@ describe('movePlayer', () => {
     const r = movePlayer(MAP, 8, 5, 5, 0, R, STEP, HEAD); // from on the platform, out east into the room
 
     expect(r.floorZ).toBe(0);
+  });
+
+  describe('solid decor obstacles (props block movement — DOOM: things block things)', () => {
+    const TOTEM = { x: 4, y: 5, radius: 0.5 };
+
+    it('mapObstacles collects exactly the SOLID decor things (screen and non-props excluded)', () => {
+      const dressed = buildBsp({
+        ...SAMPLE_MAP,
+        things: [
+          { x: 2, y: 2, angle: 0, type: 'barrel' },
+          { x: 3, y: 7, angle: 0, type: 'prop_totem' },
+          { x: 4, y: 7, angle: 0, type: 'prop_screen' }, // sits ON furniture — never a floor blocker
+          { x: 5, y: 8, angle: 0, type: 'player_start' }, // not a prop at all
+        ],
+      });
+
+      expect(mapObstacles(dressed)).toEqual([
+        { x: 2, y: 2, radius: 0.35 },
+        { x: 3, y: 7, radius: 0.5 },
+      ]);
+    });
+
+    it('crossing the centre PLANE while passing BESIDE the prop stays free (no phantom clamp)', () => {
+      // From west of the totem to east of it, but well off-axis: the path never dips inside the
+      // cylinder, so the far-side arrival must not be pulled back.
+      const r = movePlayer(MAP, 2.5, 3.6, 3, 0, R, STEP, HEAD, undefined, false, [TOTEM]);
+
+      expect(r.x).toBeCloseTo(5.5, 1);
+      expect(r.y).toBeCloseTo(3.6, 1);
+    });
+
+    it('walking INTO a prop stops at the summed radii, never inside', () => {
+      const r = movePlayer(MAP, 2.5, 5, 3, 0, R, STEP, HEAD, undefined, false, [TOTEM]);
+
+      const dist = Math.hypot(r.x - TOTEM.x, r.y - TOTEM.y);
+
+      expect(dist).toBeGreaterThanOrEqual(R + TOTEM.radius - 1e-6); // outside the cylinder
+      expect(r.x).toBeLessThan(4); // never crossed through the totem
+    });
+
+    it('a grazing path SLIDES around the prop (tangential progress preserved)', () => {
+      const r = movePlayer(MAP, 2.5, 4.5, 2, 0, R, STEP, HEAD, undefined, false, [TOTEM]);
+
+      const dist = Math.hypot(r.x - TOTEM.x, r.y - TOTEM.y);
+
+      expect(dist).toBeGreaterThanOrEqual(R + TOTEM.radius - 1e-6);
+      expect(r.x).toBeGreaterThan(2.6); // still advanced past the start — pushed off-axis, not stonewalled
+    });
+
+    it('a prop AGAINST a wall cannot squeeze the mover through the wall (co-resolution)', () => {
+      // A plant hugging the west wall: pushing between them must leave the mover on the room side.
+      const plant = { x: 0.5, y: 5, radius: 0.3 };
+      const r = movePlayer(MAP, 1.2, 5, -2, 0, R, STEP, HEAD, undefined, false, [plant]);
+
+      expect(r.x).toBeGreaterThan(0); // never pushed through the west wall at x=0
+      expect(Math.hypot(r.x - plant.x, r.y - plant.y)).toBeGreaterThanOrEqual(
+        R + plant.radius - 0.05,
+      );
+    });
+
+    it('a dead-centre overlap depenetrates opposite the motion (no NaN, no tunnel)', () => {
+      const r = movePlayer(MAP, 4, 5, 0, 0, R, STEP, HEAD, undefined, false, [TOTEM]);
+
+      expect(Number.isFinite(r.x)).toBe(true);
+      expect(Number.isFinite(r.y)).toBe(true);
+      expect(Math.hypot(r.x - TOTEM.x, r.y - TOTEM.y)).toBeGreaterThanOrEqual(
+        R + TOTEM.radius - 1e-6,
+      );
+    });
+
+    it('without obstacles the same path walks straight through (the lever is real)', () => {
+      const r = movePlayer(MAP, 2.5, 5, 3, 0, R, STEP, HEAD);
+
+      expect(r.x).toBeCloseTo(5.5, 1); // no totem → free passage... (5.5 lands on the dais approach)
+    });
   });
 
   describe('corner depenetration (no phantom push from off the end of a wall)', () => {

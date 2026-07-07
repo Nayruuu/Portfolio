@@ -8,6 +8,11 @@ export interface Texture {
   readonly height: number;
   readonly pixels: Uint8ClampedArray; // RGBA, row-major, width*height*4
   readonly worldSize?: number; // world units one tile spans (default 1); larger = the art repeats less often
+  // Present on a carved VOXEL GRID (see `voxel-carve.ts`): the pixels are not a flat image but stacked
+  // horizontal slices — `width` lateral cells × `voxelDepth` depth rows per slice × height/voxelDepth
+  // slices bottom-up (alpha 0 = empty cell). Marks the entry so the sprite pass renders its prop as a
+  // world-anchored voxel VOLUME instead of a billboard; plain textures never carry it.
+  readonly voxelDepth?: number;
 }
 
 /** World units spanned by one texture tile (so 1 = the texture repeats every world unit along a wall). */

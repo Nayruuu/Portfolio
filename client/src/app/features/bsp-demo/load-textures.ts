@@ -1,9 +1,12 @@
 import {
+  bakeVoxelAo,
   barrelTexture,
   brickTexture,
+  carveVoxelProp,
   ceilTexture,
   floorTexture,
   metalTexture,
+  parseVox,
   type Texture,
 } from '../../core/lib/bsp-engine';
 import { projectileEffect } from '../../shared/game/effects';
@@ -138,37 +141,39 @@ function coolerPlaceholder(): Texture {
 }
 
 /**
- * PLACEHOLDER — synthesize a 1×4 DIRECTIONAL ROTATION SHEET (front · right · back · left) from a single
- * frame, until the real 1×4 green-screen sheets land: right/left are the frame mirrored with a warm/cool
- * tint, back is darkened — so walking around a prop VISIBLY cycles its cells in-game. DELETE this (and its
- * call sites) when the real art arrives: a served 1×4 sheet needs no synthesis.
+ * PLACEHOLDER — synthesize a 1×`cells` DIRECTIONAL ROTATION SHEET from a single frame, for a prop whose
+ * REAL sheet failed to load: the four cardinal looks are tinted (front as-is · right warm+mirrored ·
+ * back dark · left cool+mirrored), and a cell count above 4 (an 8-view def) repeats each look over its
+ * span — so the fallback sheet always matches the def's `cols` and walking around the prop still
+ * VISIBLY cycles. Feature-layer, coverage-exempt.
  */
-function directionalSheetPlaceholder(base: Texture): Texture {
+function directionalSheetPlaceholder(base: Texture, cells = 4): Texture {
   const { width: w, height: h, pixels: src } = base;
-  const out = new Uint8ClampedArray(4 * w * h * 4);
-  // Per-cell (r,g,b) gains + horizontal mirror: front as-is · right warm+mirrored · back dark · left cool+mirrored.
-  const cells: readonly { gain: readonly [number, number, number]; mirror: boolean }[] = [
+  const out = new Uint8ClampedArray(cells * w * h * 4);
+  const looks: readonly { gain: readonly [number, number, number]; mirror: boolean }[] = [
     { gain: [1, 1, 1], mirror: false },
     { gain: [1, 0.8, 0.6], mirror: true },
     { gain: [0.55, 0.55, 0.55], mirror: false },
     { gain: [0.6, 0.8, 1], mirror: true },
   ];
 
-  cells.forEach((cell, c) => {
+  for (let c = 0; c < cells; c++) {
+    const look = looks[Math.floor((c * looks.length) / cells)];
+
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const s = (y * w + (cell.mirror ? w - 1 - x : x)) * 4;
-        const d = (y * 4 * w + c * w + x) * 4;
+        const s = (y * w + (look.mirror ? w - 1 - x : x)) * 4;
+        const d = (y * cells * w + c * w + x) * 4;
 
-        out[d] = src[s] * cell.gain[0];
-        out[d + 1] = src[s + 1] * cell.gain[1];
-        out[d + 2] = src[s + 2] * cell.gain[2];
+        out[d] = src[s] * look.gain[0];
+        out[d + 1] = src[s + 1] * look.gain[1];
+        out[d + 2] = src[s + 2] * look.gain[2];
         out[d + 3] = src[s + 3];
       }
     }
-  });
+  }
 
-  return { width: 4 * w, height: h, pixels: out };
+  return { width: cells * w, height: h, pixels: out };
 }
 
 /** A placeholder GLASS PANE — a "bidon" stand-in until real glass art lands (see `prompts/glass_pane.md`). Mostly
@@ -221,7 +226,7 @@ export function proceduralTextures(): Map<string, Texture> {
     ['PROP', plantPlaceholder()], // potted lobby plant — real art in ENV_ASSETS (this is the offline fallback)
     // Directional (4-rotation) props: their engine defs sample a 1×4 view-angle sheet, so EVERY texture
     // registered under these names — fallback or served — must be one (see `directionalSheetPlaceholder`).
-    ['PROP_SCREEN', directionalSheetPlaceholder(metalTexture())], // crashed desk monitor — real art in ENV_ASSETS
+    ['PROP_SCREEN', directionalSheetPlaceholder(metalTexture(), 8)], // crashed desk monitor — real art in ENV_ASSETS (8-view def)
     ['PROP_TOTEM', directionalSheetPlaceholder(metalTexture())], // directory totem — real art in ENV_ASSETS
     ['PROP_BOARD', directionalSheetPlaceholder(boardPlaceholder())], // whiteboard — real art in ENV_ASSETS
     ['PROP_CHAIR', directionalSheetPlaceholder(chairPlaceholder())], // office chair — real art in ENV_ASSETS
@@ -327,16 +332,48 @@ const ENV_ASSETS: Readonly<Record<string, { url: string; worldSize: number }>> =
   CEIL_LUX: { url: '/game/textures/ceiling_lux_512.webp', worldSize: 4 }, // white luminous cornice ceiling (LED cove grid + spots)
   // Decor prop billboards (green-screen art keyed to alpha offline; worldSize is unused by sprites).
   PROP: { url: '/game/props/prop_plant.webp', worldSize: 4 }, // potted lobby plant
-  PROP_SCREEN: { url: '/game/props/prop_screen.webp', worldSize: 4 }, // crashed desk monitor — REAL 1×4 rotation sheet (front/right/back/left)
+  PROP_SCREEN: { url: '/game/props/prop_screen.webp', worldSize: 4 }, // crashed desk monitor — REAL 1×8 rotation sheet (45° steps, DOOM enemy-style)
   PROP_TOTEM: { url: '/game/props/prop_totem.webp', worldSize: 4 }, // directory totem — REAL 1×4 rotation sheet (front/right/back/left)
   PROP_BOARD: { url: '/game/props/prop_board.webp', worldSize: 4 }, // whiteboard — REAL 1×4 rotation sheet (front/right/back/left)
   PROP_CHAIR: { url: '/game/props/prop_chair.webp', worldSize: 4 }, // office chair — REAL 1×4 rotation sheet (front/right/back/left)
   PROP_COOLER: { url: '/game/props/prop_cooler.webp', worldSize: 4 }, // water cooler — future single frame
+  // OPTIONAL top-down views (one file per prop, `prop_<name>_top.webp`): extra carve constraints for
+  // the voxel props — the footprint stamp + upward-face colours (see `voxel-carve.ts`). Delivered one
+  // prop at a time: a missing file just 404s to `null` and the carve runs without it (by design).
+  // These are CARVE INPUTS, not renderable surfaces — `loadEnvTextures` consumes and drops them.
+  PROP_SCREEN_TOP: { url: '/game/props/prop_screen_top.webp', worldSize: 4 }, // crashed CRT from above (bezel at the image bottom = the front)
+  PROP_TOTEM_TOP: { url: '/game/props/prop_totem_top.webp', worldSize: 4 }, // pending art
+  PROP_BOARD_TOP: { url: '/game/props/prop_board_top.webp', worldSize: 4 }, // pending art
+  PROP_CHAIR_TOP: { url: '/game/props/prop_chair_top.webp', worldSize: 4 }, // served — the star base is the case the footprint stamp exists for (5 legs separated)
   // Themed walls — per-zone identity for the episode.
   LOBBY: { url: '/game/textures/wall_lobby_512.webp', worldSize: 4 }, // reception (M1)
   KITCHEN: { url: '/game/textures/wall_kitchen_512.webp', worldSize: 4 }, // cafeteria (M5)
   EXEC: { url: '/game/textures/wall_exec_512.webp', worldSize: 4 }, // C-suite (M6)
 };
+
+/**
+ * Fetch + decode a hand-sculpted MagicaVoxel `.vox` model into a voxel-grid Texture (via the pure
+ * `parseVox`), or `null` on SSR / a 404 / a corrupt file — every failure just falls back to the
+ * silhouette carve. This is BINARY (not an image), so it goes through `fetch`, not `loadImageTexture`;
+ * only the DECODED grid ever leaves here (the raw `.vox` bytes never reach the workers or the GPU pool).
+ */
+async function loadVoxFile(url: string): Promise<Texture | null> {
+  if (typeof fetch === 'undefined' || typeof document === 'undefined') {
+    return null; // SSR / prerender — no DOM, no relative-URL origin
+  }
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return null; // a missing .vox (404) → keep the carve, the zero-regression fallback
+    }
+
+    return parseVox(await response.arrayBuffer());
+  } catch {
+    return null; // network error or a malformed model — fall back to the carve
+  }
+}
 
 /** Decode one image URL into a Texture via a canvas, or `null` (SSR, load error, or non-power-of-two). */
 function loadImageTexture(url: string, worldSize: number): Promise<Texture | null> {
@@ -439,10 +476,28 @@ export function projectileWidth(kind: string): number | undefined {
   return PROJECTILE_SCALE * effect.size * (effect.width / effect.height);
 }
 
+/** The directional props whose decoded rotation sheets are CARVED into voxel grids at load (see
+ *  `voxel-carve.ts`): their library entries then hold the grid and the sprite pass renders them as
+ *  world-anchored volumes. A failed carve keeps the sheet — the rotation-billboard fallback.
+ *  `n` is the per-prop lateral grid resolution: the small, detail-dense props (screen, board) carve
+ *  at 96 — 64 turned them to mush — while the big simple silhouettes keep 64 (finer buys nothing
+ *  visible and the grids clone to every worker: the four grids total ≈ 6 MB RGBA at these sizes).
+ *  `cells` is the sheet's view count (the screen ships a 1×8 — its four diagonals tighten the hull);
+ *  a served `PROP_<NAME>_TOP` image (optional, see {@link ENV_ASSETS}) joins the carve as the plan
+ *  footprint + top-face colours. */
+const VOXEL_PROPS: Readonly<Record<string, { n: number; cells: number }>> = {
+  PROP_TOTEM: { n: 64, cells: 4 },
+  PROP_CHAIR: { n: 64, cells: 4 },
+  PROP_SCREEN: { n: 96, cells: 8 },
+  PROP_BOARD: { n: 96, cells: 4 },
+};
+
 /**
  * Load the real environment textures (POT walls/flats), reporting progress. Returns a name → Texture map to
  * MERGE over the procedural library — entries that fail to load are simply absent, leaving their procedural
  * fallback. (Projectiles are NOT here: their art is decoded + painted screen-space in the demo, not by a worker.)
+ * The directional prop sheets are additionally SCULPTED into voxel grids here ({@link VOXEL_PROPS}) —
+ * once per load, before the map fans out to the workers and the GPU texel pool.
  */
 export async function loadEnvTextures(
   onProgress?: (loaded: number, total: number) => void,
@@ -466,6 +521,24 @@ export async function loadEnvTextures(
       onProgress?.(loaded, assets.length);
     }),
   );
+
+  for (const [name, config] of Object.entries(VOXEL_PROPS)) {
+    // A hand-sculpted `.vox` model wins over the silhouette carve when present: exact volume beats a
+    // guessed hull. Absent / 404 / parse-fail → the carve runs exactly as before (zero regression).
+    const voxel = await loadVoxFile(`/game/props/${name.toLowerCase()}.vox`);
+    const sheet = out.get(name);
+    const top = out.get(`${name}_TOP`);
+    const grid =
+      voxel ?? (sheet !== undefined ? carveVoxelProp(sheet, config.n, { cells: config.cells, top }) : null); // prettier-ignore
+
+    out.delete(`${name}_TOP`); // a carve input, never a surface to ship to the workers/GPU pool
+    if (grid !== null) {
+      // Bake per-voxel AO into the grid colours BEFORE it fans out to the workers / GPU texel pool, so
+      // both backends sample the shadowed RGB identically (crease/cavity contact shadows the flat
+      // per-face VOXEL_SHADE can't give). Cheap one-shot; runs for BOTH the `.vox` and the carved path.
+      out.set(name, bakeVoxelAo(grid));
+    }
+  }
 
   return out;
 }

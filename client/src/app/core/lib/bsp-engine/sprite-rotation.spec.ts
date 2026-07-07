@@ -61,6 +61,54 @@ describe('rotationCell', () => {
       expect(n).toBe(90);
     }
   });
+
+  describe('8-rotation sheets (DOOM enemy-style — the diagonals between the cardinals)', () => {
+    it('picks the eight cells around a +x-facing thing, in +rel (right-hand) order', () => {
+      const at = (dx: number, dy: number): number => rotationCell(0, 0, 0, dx, dy, 8);
+
+      expect(at(1, 0)).toBe(0); // front
+      expect(at(1, 1)).toBe(1); // front-right (y-down: +y is the thing's right)
+      expect(at(0, 1)).toBe(2); // right
+      expect(at(-1, 1)).toBe(3); // back-right
+      expect(at(-1, 0)).toBe(4); // back
+      expect(at(-1, -1)).toBe(5); // back-left
+      expect(at(0, -1)).toBe(6); // left
+      expect(at(1, -1)).toBe(7); // front-left
+    });
+
+    it('covers all eight cells evenly over a full circle (45° each)', () => {
+      const counts = [0, 0, 0, 0, 0, 0, 0, 0];
+
+      for (let i = 0; i < 360; i++) {
+        const a = (i / 360) * 2 * Math.PI;
+
+        counts[rotationCell(1.1, -4, 6, -4 + Math.cos(a), 6 + Math.sin(a), 8)]++;
+      }
+      for (const n of counts) {
+        expect(n).toBe(45);
+      }
+    });
+
+    it('orientSprite honours the sprite own rotation count (an 8-cell def picks diagonal cells)', () => {
+      const eight: Sprite = {
+        x: 0,
+        y: 0,
+        z: 0,
+        tex: 'PROP_BOARD',
+        width: 1.6,
+        height: 1.7,
+        cols: 8,
+        rows: 1,
+        col: 0,
+        row: 0,
+        rotations: 8,
+        facing: 0,
+      };
+
+      expect(orientSprite(eight, 1, 1).col).toBe(1); // a diagonal cell only an 8-sheet has
+      expect(orientSprite(eight, -1, 0).col).toBe(4);
+    });
+  });
 });
 
 describe('orientSprite', () => {
@@ -90,6 +138,15 @@ describe('orientSprite', () => {
     expect(orientSprite(rot, 2, 13).col).toBe(2); // viewer south → BACK
     expect(orientSprite(rot, -8, 3).col).toBe(3); // viewer west → LEFT
     expect(rot.col).toBe(0); // the source sprite is untouched
+  });
+
+  it('re-picks the cell of a VOXEL prop too — its billboard fallback depends on it', () => {
+    // The volume path ignores `col`, but wherever the carved grid didn't decode (SSR / procedural
+    // textures) the same sprite draws as the rotation billboard — with THIS cell.
+    const vox: Sprite = { ...rot, voxel: true };
+
+    expect(orientSprite(vox, 12, 3).col).toBe(1); // viewer east → RIGHT
+    expect(orientSprite(vox, 12, 3).voxel).toBe(true); // the flag survives the copy
   });
 
   it('defaults a missing facing to 0 (+x)', () => {

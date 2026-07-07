@@ -7,7 +7,14 @@ import {
   type Sprite,
   type ZoneNeighbor,
 } from './renderer';
-import { barrelTexture, brickTexture, ceilTexture, floorTexture, metalTexture } from './texture';
+import {
+  barrelTexture,
+  brickTexture,
+  ceilTexture,
+  floorTexture,
+  metalTexture,
+  type Texture,
+} from './texture';
 import { SAMPLE_MAP } from './sample-map';
 import { focalFor, type Camera } from './camera';
 import type { CompiledMap, MapSource, SideDef } from './types';
@@ -1067,23 +1074,23 @@ describe('atlas sprites', () => {
       // Symmetric props: whole-texture billboards, no atlas, no rotation metadata.
       expect(plant).toEqual({ x: 2, y: 2, z: 0, tex: 'PROP', width: 0.8, height: 1.6 });
       expect(cooler).toEqual({ x: 8, y: 8, z: 0, tex: 'PROP_COOLER', width: 0.6, height: 1.5 });
-      // Directional props: a 1×4 sheet + the authored facing, as view-angle BILLBOARDS (orientSprite
-      // re-picks the cell per frame) — the crossed-quad block mode read as "cardboard" on thin
-      // silhouettes (user call), so no def opts into `block` today; the path stays for boxy props.
+      // Directional props: a 1×4 sheet + the authored facing. EVERY directional prop opts into the
+      // world-anchored `voxel` volume (the rotation sheet stays its billboard fallback wherever the
+      // carved grid didn't decode — SSR, procedural library, a failed load).
       for (const s of [totem, board, chair]) {
-        expect(s).toMatchObject({ cols: 4, rows: 1, col: 0, row: 0, rotations: 4 });
-        expect(s.block).toBeUndefined();
+        expect(s).toMatchObject({ cols: 4, rows: 1, col: 0, row: 0, rotations: 4, voxel: true });
       }
       expect(totem.facing).toBe(north);
       expect(chair.facing).toBe(Math.PI);
-      expect(board).toMatchObject({ tex: 'PROP_BOARD', width: 1.6, height: 1.7 });
+      expect(board).toMatchObject({ tex: 'PROP_BOARD', width: 1.49, height: 1.7 });
     });
   });
 });
 
-describe('block props (wall-sprite blocks)', () => {
-  // A 12×12 open room. The block's 1×4 sheet has one SOLID COLOUR per cell — red front · green right ·
-  // blue back · yellow left — so "which face is on screen" reads directly off the framebuffer.
+describe('voxel props (world-anchored volumes)', () => {
+  // A 12×12 open room. The grids are HAND-BUILT voxel textures (carving is voxel-carve's concern — the
+  // renderer's contract starts at a grid) with one solid colour per voxel, so "which cells face the
+  // screen" reads directly off the framebuffer.
   const SIDE: SideDef = {
     sector: 0,
     xOffset: 0,
@@ -1109,30 +1116,64 @@ describe('block props (wall-sprite blocks)', () => {
     things: [],
   };
   const room = buildBsp(ROOM);
-  const CELL_COLOURS: readonly [number, number, number][] = [
-    [250, 20, 20], // cell 0 FRONT — red
-    [20, 250, 20], // cell 1 RIGHT — green
-    [20, 20, 250], // cell 2 BACK — blue
-    [250, 250, 20], // cell 3 LEFT — yellow
-  ];
-  const sheet = {
-    width: 8,
-    height: 2,
-    pixels: new Uint8ClampedArray(
-      Array.from({ length: 8 * 2 }, (_, i) => [...CELL_COLOURS[(i % 8) >> 1], 255]).flat(),
-    ),
-  };
+  const GREEN = [20, 250, 20] as const;
+  const RED = [250, 20, 20] as const;
+  const YELLOW = [250, 250, 20] as const;
+  const BLUE = [20, 20, 250] as const;
+
+  /** Hand-build an n×ny×nz voxel-grid texture (the `voxel-carve` encoding: bottom-up slices of ny
+   *  rows; alpha 0 = empty) from a per-voxel colour function. */
+  function grid(
+    n: number,
+    ny: number,
+    nz: number,
+    cell: (x: number, y: number, z: number) => readonly [number, number, number] | null,
+  ): Texture {
+    const pixels = new Uint8ClampedArray(n * ny * nz * 4);
+
+    for (let z = 0; z < nz; z++) {
+      for (let y = 0; y < ny; y++) {
+        for (let x = 0; x < n; x++) {
+          const colour = cell(x, y, z);
+
+          if (colour !== null) {
+            const i = ((z * ny + y) * n + x) * 4;
+
+            pixels[i] = colour[0];
+            pixels[i + 1] = colour[1];
+            pixels[i + 2] = colour[2];
+            pixels[i + 3] = 255;
+          }
+        }
+      }
+    }
+
+    return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+  }
+
   const magenta = {
     width: 2,
     height: 2,
     pixels: new Uint8ClampedArray(Array.from({ length: 4 }, () => [230, 20, 230, 255]).flat()),
   };
-  const tex = new Map([...TEX, ['SHEET', sheet], ['MAG', magenta]]);
-  const block: Sprite = {
+  const tex = new Map([
+    ...TEX,
+    ['DEPTH', grid(2, 2, 2, (_x, y) => (y === 0 ? BLUE : YELLOW))], // front row blue, back row yellow
+    ['LATERAL', grid(2, 2, 2, (x) => (x === 0 ? GREEN : RED))], // grid x: 0 green, 1 red
+    // Three-voxel corner: front row green+red, back row only (1,1) yellow — (0,1) is EMPTY, so rays
+    // can traverse the volume and the yellow flank hides behind red head-on.
+    ['CORNER', grid(2, 2, 2, (x, y) => (y === 0 ? (x === 0 ? GREEN : RED) : x === 1 ? YELLOW : null))], // prettier-ignore
+    ['GREY', grid(2, 2, 2, () => [100, 100, 100])], // uniform grey — the face-shading probe
+    ['SOLIDRED', grid(2, 2, 2, () => RED)],
+    ['LONE', grid(3, 3, 3, (x, y, z) => (x === 0 && y === 0 && z === 0 ? RED : null))], // one corner voxel
+    ['FARROW', grid(3, 3, 3, (_x, y) => (y === 2 ? RED : null))], // only the far depth row is solid
+    ['MAG', magenta],
+  ]);
+  const voxel: Sprite = {
     x: 8,
     y: 6,
     z: 0,
-    tex: 'SHEET',
+    tex: 'DEPTH',
     width: 1.4,
     height: 2,
     cols: 4,
@@ -1141,27 +1182,40 @@ describe('block props (wall-sprite blocks)', () => {
     row: 0,
     rotations: 4,
     facing: 0,
-    block: true,
+    voxel: true,
   };
 
-  /** Which of the four cell colours appear in the frame? */
-  function cellsShown(buf: Uint8ClampedArray): number[] {
-    const shown: number[] = [];
-
-    for (let cell = 0; cell < 4; cell++) {
-      const [r, g, b] = CELL_COLOURS[cell];
-
-      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
-        // Full-light sector + near distance → shade 1 for most face pixels: exact colour match.
-        if (buf[p * 4] === r && buf[p * 4 + 1] === g && buf[p * 4 + 2] === b) {
-          shown.push(cell);
-          break;
-        }
+  /** Is an exact (r,g,b) anywhere in the frame? (Full-light sector + near distance → shade 1.) */
+  function present(buf: Uint8ClampedArray, [r, g, b]: readonly [number, number, number]): boolean {
+    for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+      if (buf[p * 4] === r && buf[p * 4 + 1] === g && buf[p * 4 + 2] === b) {
+        return true;
       }
     }
 
-    return shown;
+    return false;
   }
+
+  /** Mean screen column of the pixels whose dominant colour matches, or NaN when none do. */
+  function meanColumn(
+    buf: Uint8ClampedArray,
+    pred: (r: number, g: number, b: number) => boolean,
+  ): number {
+    let sum = 0;
+    let count = 0;
+
+    for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+      if (pred(buf[p * 4], buf[p * 4 + 1], buf[p * 4 + 2])) {
+        sum += p % CONFIG.width;
+        count++;
+      }
+    }
+
+    return sum / count;
+  }
+  const isYellowish = (r: number, g: number, b: number): boolean => r > 150 && g > 150 && b < 60;
+  const isGreenish = (r: number, g: number, b: number): boolean => g > 150 && r < 60 && b < 60;
+  const isReddish = (r: number, g: number, b: number): boolean => r > 150 && g < 60 && b < 60;
 
   function render(
     camera: Camera,
@@ -1171,60 +1225,77 @@ describe('block props (wall-sprite blocks)', () => {
     return renderFrame(room, camera, CONFIG, tex, undefined, zbuf, undefined, undefined, sprites);
   }
 
-  it('shows ONE face head-on and TWO adjacent faces from a diagonal viewpoint', () => {
-    // Head-on in front (facing 0 → the front face points +x): the side faces are edge-on (culled).
-    expect(cellsShown(render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [block]))).toEqual([0]);
-    // From the front-right diagonal (y-down: +y is the prop's right): front AND right, in perspective.
-    expect(
-      cellsShown(render({ x: 10.5, y: 8.5, angle: -Math.PI * 0.75, z: 1.6 }, [block])),
-    ).toEqual([0, 1]);
-    // From behind: the back face only.
-    expect(cellsShown(render({ x: 5, y: 6, angle: 0, z: 1.6 }, [block]))).toEqual([2]);
+  it('anchors the volume in the WORLD: the far row hides head-on and swaps with the viewpoint', () => {
+    // Facing 0 → the front row (blue) points +x. From the east the blue faces the camera and fully
+    // occludes the yellow back row; from the west the roles swap. A billboard (any cell) would show
+    // the same image from both sides.
+    const fromFront = render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [voxel]);
+
+    expect(present(fromFront, BLUE)).toBe(true); // the depth-axis face shades ×1.0 — exact colour
+    expect(meanColumn(fromFront, isYellowish)).toBeNaN();
+
+    const fromBehind = render({ x: 5, y: 6, angle: 0, z: 1.6 }, [voxel]);
+
+    expect(present(fromBehind, YELLOW)).toBe(true);
+    expect(meanColumn(fromBehind, (r, g, b) => b > 150 && r < 60 && g < 60)).toBeNaN();
   });
 
-  it('keeps the SAME faces across the billboard mode’s snap boundary (no cell switch at ±45°)', () => {
-    // A cell-switched billboard flips front→right crossing the 45° bearing; the block just turns.
-    const bearing = (deg: number): Camera => {
-      const a = (deg * Math.PI) / 180;
+  it('keeps the head-on art chirality and mirrors with the WORLD when viewed from behind', () => {
+    // Grid x runs the front view's left→right: head-on from the east (the front viewer), grid x = 0
+    // (green) must sit screen-LEFT — exactly where the billboard drew the sheet's left edge. From
+    // the west the same world halves land on swapped screen sides (the object did not turn).
+    const lateral: Sprite = { ...voxel, tex: 'LATERAL' };
+    const fromFront = render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [lateral]);
 
-      return { x: 8 + 3 * Math.cos(a), y: 6 + 3 * Math.sin(a), angle: a + Math.PI, z: 1.6 };
-    };
+    expect(meanColumn(fromFront, isGreenish)).toBeLessThan(meanColumn(fromFront, isReddish));
 
-    expect(cellsShown(render(bearing(40), [block]))).toEqual([0, 1]);
-    expect(cellsShown(render(bearing(50), [block]))).toEqual([0, 1]); // same two faces — no snap
+    const fromBehind = render({ x: 5, y: 6, angle: 0, z: 1.6 }, [lateral]);
+
+    expect(meanColumn(fromBehind, isGreenish)).toBeGreaterThan(meanColumn(fromBehind, isReddish));
   });
 
-  it('interpolates depth PER COLUMN — the z-buffer slopes along a face (a billboard is constant)', () => {
-    // Cross-on view (block rotated 45°, camera due west): the RIGHT and BACK quads cross at the
-    // prop's axis (screen centre, depth ~6.0) and each recedes NEARER toward its own screen edge.
-    const corner: Sprite = { ...block, facing: Math.PI / 4 };
-    const zbuf = new Float32Array(CONFIG.width * CONFIG.height);
-    const buf = render({ x: 2, y: 6, angle: 0, z: 1.6 }, [corner], zbuf);
-    const row = 45; // inside the face's vertical span across the sampled columns
-    const depths: number[] = [];
+  it('reveals a flank voxel at a diagonal that stays hidden head-on (a true volume, no cell snap)', () => {
+    const corner: Sprite = { ...voxel, tex: 'CORNER' };
+    const headOn = render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [corner]);
 
-    for (let x = 61; x <= 64; x++) {
-      const [r, g, b] = pixel(buf, x, row);
+    expect(meanColumn(headOn, isGreenish)).not.toBeNaN(); // both front voxels face the camera…
+    expect(meanColumn(headOn, isReddish)).not.toBeNaN();
+    expect(meanColumn(headOn, isYellowish)).toBeNaN(); // …and the back voxel hides behind red
 
-      expect(g).toBeGreaterThan(r + 100); // the RIGHT face (green) is the nearer quad right of centre
-      expect(g).toBeGreaterThan(b + 100);
-      depths.push(zbuf[row * CONFIG.width + x]);
-    }
-    for (let i = 1; i < depths.length; i++) {
-      expect(depths[i]).toBeLessThan(depths[i - 1]); // strictly nearer away from the crossing column
-    }
-    expect(Math.min(...depths)).toBeGreaterThan(5.4); // the quad's near end sits ~5.5 units out
-    expect(Math.max(...depths)).toBeLessThan(6.1); // the crossing sits ~6.0 units out
+    // From the front-right diagonal (y-down: +y is the prop's right) the flank turns into view and
+    // the yellow back voxel appears alongside the front faces — in perspective, not a swapped cell.
+    const diagonal = render({ x: 10.5, y: 8.5, angle: -Math.PI * 0.75, z: 1.6 }, [corner]);
+
+    expect(meanColumn(diagonal, isYellowish)).not.toBeNaN();
+    expect(meanColumn(diagonal, isReddish)).not.toBeNaN();
   });
 
-  it('WRITES its depth: a nearer-sorted billboard behind the face plane cannot paint through it', () => {
-    // Both crossed faces sort at their shared centre depth (6.0); the billboard's centre (5.8) is
-    // nearer, so it paints AFTER them — but the visible surface at its columns is nearer still
-    // (~5.6): only the faces' per-pixel depth WRITE rejects it. Without the write, the billboard
-    // tests against the far wall and bleeds through.
-    const corner: Sprite = { ...block, facing: Math.PI / 4 };
-    const behind: Sprite = { x: 7.8, y: 6.3867, z: 0.5, tex: 'MAG', width: 0.2, height: 0.8 };
-    const cam: Camera = { x: 2, y: 6, angle: 0, z: 1.6 };
+  it('shades per face: top ×1.18, lateral ×0.82, underside ×0.55, depth faces ×1.0', () => {
+    // A uniform-grey volume under full light at < 6 units: the base shade is exactly 1, so each face
+    // reads its factor directly (100 → 118 / 82 / 55 / 100).
+    const grey: Sprite = { ...voxel, tex: 'GREY', height: 1 }; // short → the top is below eye height
+    const fromFront = render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [grey]);
+
+    expect(present(fromFront, [100, 100, 100])).toBe(true); // the depth-axis face, ×1.0
+    expect(present(fromFront, [118, 118, 118])).toBe(true); // the top, seen from above
+
+    const fromDiagonal = render({ x: 10.5, y: 8.5, angle: -Math.PI * 0.75, z: 1.6 }, [grey]);
+
+    expect(present(fromDiagonal, [82, 82, 82])).toBe(true); // the lateral flank
+
+    const floating: Sprite = { ...grey, z: 2.5 }; // lifted above the eye → the underside shows
+    const fromBelow = render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [floating]);
+
+    expect(present(fromBelow, [55, 55, 55])).toBe(true);
+  });
+
+  it('WRITES its depth: a nearer-sorted billboard inside the volume cannot paint through it', () => {
+    // The billboard's centre (≈2.55) is nearer than the volume's (3.0), so it paints AFTER the
+    // volume — and it sits INSIDE the box, behind the near face (≈2.3): only the volume's per-pixel
+    // depth WRITE rejects it. Without the write, the billboard tests against the far wall and bleeds.
+    const solid: Sprite = { ...voxel, tex: 'SOLIDRED' };
+    const inside: Sprite = { x: 8.45, y: 6, z: 0.5, tex: 'MAG', width: 0.2, height: 0.5 };
+    const cam: Camera = { x: 11, y: 6, angle: Math.PI, z: 1.6 };
 
     /** Is the billboard's magenta anywhere in the frame? */
     const magentaIn = (buf: Uint8ClampedArray): boolean => {
@@ -1237,15 +1308,133 @@ describe('block props (wall-sprite blocks)', () => {
       return false;
     };
 
-    expect(magentaIn(render(cam, [behind]))).toBe(true); // sanity: visible without the block
-    expect(magentaIn(render(cam, [corner, behind]))).toBe(false); // fully hidden behind the face
+    expect(magentaIn(render(cam, [inside]))).toBe(true); // sanity: visible without the volume
+    expect(magentaIn(render(cam, [solid, inside]))).toBe(false); // fully hidden inside it
   });
 
-  it('tints a face behind glass ONLY inside the pane span, and stops at layers behind the face', () => {
-    // A SKY courtyard (camera) | glass | room B | glass | room C. The block FLOATS in B, straddling the
-    // pane's top edge (z 2.5..5 vs an opening up to z 4): its lower rows tint through the near pane, its
-    // upper rows poke into the open sky ABOVE the pane's span (no tint), and the second pane sits BEHIND
-    // the face (the layer scan must stop there, not double-tint).
+  it('is occluded by nearer walls: columns behind a pillar never march the grid', () => {
+    // A thin slab wall between the camera and the prop: its columns hold a nearer depth in the
+    // z-buffer, so the volume's box entry fails the depth test there (and paints around its edges).
+    const walled = buildBsp({
+      ...ROOM,
+      vertices: [...ROOM.vertices, { x: 9.5, y: 5.6 }, { x: 9.5, y: 6.4 }],
+      linedefs: [
+        ...ROOM.linedefs,
+        { v1: 4, v2: 5, front: SIDE, back: null }, // faces the camera at x=11 (front = right of v1→v2)
+      ],
+    });
+    const cam: Camera = { x: 11, y: 6, angle: Math.PI, z: 1.6 };
+    const solid: Sprite = { ...voxel, tex: 'SOLIDRED' };
+    const clear = renderFrame(room, cam, CONFIG, tex, undefined, undefined, undefined, undefined, [solid]); // prettier-ignore
+    const behind = renderFrame(walled, cam, CONFIG, tex, undefined, undefined, undefined, undefined, [solid]); // prettier-ignore
+    const count = (buf: Uint8ClampedArray): number => {
+      let n = 0;
+
+      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+        if (isReddish(buf[p * 4], buf[p * 4 + 1], buf[p * 4 + 2])) {
+          n++;
+        }
+      }
+
+      return n;
+    };
+
+    expect(count(behind)).toBeGreaterThan(0); // still peeks past the slab's edges…
+    expect(count(behind)).toBeLessThan(count(clear)); // …but the covered columns stay the wall's
+  });
+
+  it('marches through empty cells and exits the grid on every axis', () => {
+    // A 3×3×3 grid with ONE solid corner voxel: most envelope rays traverse empty cells and leave
+    // through a bound (all three axes across these viewpoints); the few aimed at the voxel hit it.
+    const lone: Sprite = { ...voxel, tex: 'LONE' };
+    const reds = (buf: Uint8ClampedArray): number => {
+      let count = 0;
+
+      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+        if (isReddish(buf[p * 4], buf[p * 4 + 1], buf[p * 4 + 2])) {
+          count++;
+        }
+      }
+
+      return count;
+    };
+
+    // Head-on: straight rays pierce the empty front cells and exit through the back.
+    expect(reds(render({ x: 11, y: 6, angle: Math.PI, z: 1.6 }, [lone]))).toBeGreaterThan(0);
+    // Oblique + above the box: rays enter through the top, step across x/y/z, exit the bottom/sides.
+    expect(reds(render({ x: 10.5, y: 8.5, angle: -Math.PI * 0.75, z: 2.5 }, [lone]))).toBeGreaterThan(0); // prettier-ignore
+  });
+
+  it('skips axis-parallel rays that start outside the footprint (or above the grid) entirely', () => {
+    const solid: Sprite = { ...voxel, tex: 'SOLIDRED' };
+    const reds = (buf: Uint8ClampedArray): number => {
+      let count = 0;
+
+      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+        if (isReddish(buf[p * 4], buf[p * 4 + 1], buf[p * 4 + 2])) {
+          count++;
+        }
+      }
+
+      return count;
+    };
+
+    // Tangential near-corner cameras at angle 0 — the one viewpoint whose trig is EXACT, so the
+    // centre column's ray is exactly lateral-parallel (d = 0): a footprint corner behind the near
+    // plane widens the envelope to the whole screen, and the camera sits just OUTSIDE the grid on
+    // the lateral axis (above it, then below it).
+    expect(reds(render({ x: 7.29, y: 6.75, angle: 0, z: 1.6 }, [solid]))).toBeGreaterThan(0);
+    expect(reds(render({ x: 7.29, y: 5.25, angle: 0, z: 1.6 }, [solid]))).toBeGreaterThan(0);
+    // Eye EXACTLY on the grid top (camGZ = nz): the horizon row's flat ray starts outside vertically.
+    expect(reds(render({ x: 11, y: 6, angle: Math.PI, z: 2 }, [solid]))).toBeGreaterThan(0);
+  });
+
+  it('stops a march midway when a nearer wall depth already owns the pixel', () => {
+    // A slab wall CUTTING THROUGH the box (between its near and far depth rows): rays enter the
+    // empty near cells, march, and must stop at the wall's depth — the far row never paints at the
+    // covered columns (it still shows past the slab's edges).
+    const cut = buildBsp({
+      ...ROOM,
+      vertices: [...ROOM.vertices, { x: 8, y: 5.6 }, { x: 8, y: 6.4 }],
+      linedefs: [...ROOM.linedefs, { v1: 4, v2: 5, front: SIDE, back: null }],
+    });
+    const farRow: Sprite = { ...voxel, tex: 'FARROW' };
+    const cam: Camera = { x: 11, y: 6, angle: Math.PI, z: 1.6 };
+    const reds = (buf: Uint8ClampedArray): number => {
+      let count = 0;
+
+      for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+        if (isReddish(buf[p * 4], buf[p * 4 + 1], buf[p * 4 + 2])) {
+          count++;
+        }
+      }
+
+      return count;
+    };
+    const clear = reds(renderFrame(room, cam, CONFIG, tex, undefined, undefined, undefined, undefined, [farRow])); // prettier-ignore
+    const cutOff = reds(renderFrame(cut, cam, CONFIG, tex, undefined, undefined, undefined, undefined, [farRow])); // prettier-ignore
+
+    expect(cutOff).toBeGreaterThan(0);
+    expect(cutOff).toBeLessThan(clear);
+  });
+
+  it('renders byte-identically split into worker bands', () => {
+    const cam: Camera = { x: 10.5, y: 8.5, angle: -Math.PI * 0.75, z: 1.6 };
+    const sprites: Sprite[] = [{ ...voxel, tex: 'CORNER' }];
+    const whole = renderFrame(room, cam, CONFIG, tex, undefined, undefined, undefined, undefined, sprites); // prettier-ignore
+    const banded = new Uint8ClampedArray(CONFIG.width * CONFIG.height * 4);
+    const zbuf = new Float32Array(CONFIG.width * CONFIG.height);
+
+    renderFrame(room, cam, CONFIG, tex, banded, zbuf, 0, 33, sprites);
+    renderFrame(room, cam, CONFIG, tex, banded, zbuf, 33, CONFIG.height, sprites);
+    expect(Array.from(banded)).toEqual(Array.from(whole));
+  });
+
+  it('tints a volume behind glass ONLY inside the pane span, and stops at layers behind it', () => {
+    // A SKY courtyard (camera) | glass | room B | glass | room C. The volume FLOATS in B, straddling
+    // the pane's top edge (z 4.2..6.2 vs an opening up to z 4): its lower rows tint through the near
+    // pane, its upper rows poke into the open sky ABOVE the pane's span (no tint), and the second
+    // pane sits BEHIND the volume (the layer scan must stop there, not double-tint).
     const glassSide = (sector: number): SideDef => ({ ...SIDE, sector });
     const scene = (glass: boolean): MapSource => ({
       sectors: [
@@ -1278,10 +1467,17 @@ describe('block props (wall-sprite blocks)', () => {
       ],
     });
     const cam: Camera = { x: 4, y: 2, angle: Math.PI / 2, z: 1.6 };
-    // Front cell (red) toward the camera (facing −y), floating HIGH: the pane's recorded span tops out
-    // at the ceiling seen at the WALL's depth (screen row ~4 here), so the face needs z beyond ~5.8 for
-    // its upper rows to clear it against the open sky.
-    const floating: Sprite = { ...block, x: 4, y: 9, z: 4.2, facing: -Math.PI / 2 };
+    // All-red volume facing the camera (facing −y), floating HIGH: the pane's recorded span tops out
+    // at the ceiling seen at the WALL's depth (screen row ~4 here), so the volume needs z beyond ~5.8
+    // for its upper rows to clear it against the open sky.
+    const floating: Sprite = {
+      ...voxel,
+      tex: 'SOLIDRED',
+      x: 4,
+      y: 9,
+      z: 4.2,
+      facing: -Math.PI / 2,
+    };
     const glazed = renderFrame(buildBsp(scene(true)), cam, CONFIG, tex, undefined, undefined, undefined, undefined, [floating]); // prettier-ignore
     const plain = renderFrame(buildBsp(scene(false)), cam, CONFIG, tex, undefined, undefined, undefined, undefined, [floating]); // prettier-ignore
     let tinted = 0;
@@ -1291,7 +1487,7 @@ describe('block props (wall-sprite blocks)', () => {
       const i = p * 4;
 
       if (plain[i] > 190 && plain[i + 1] < 50 && plain[i + 2] < 50) {
-        // A red face pixel: through the pane it washes cooler (blue up, red down) ONCE; above the
+        // A red volume pixel: through the pane it washes cooler (blue up, red down) ONCE; above the
         // pane's span it stays byte-identical.
         if (glazed[i] === plain[i] && glazed[i + 2] === plain[i + 2]) {
           untouched++;
@@ -1304,23 +1500,67 @@ describe('block props (wall-sprite blocks)', () => {
     expect(untouched).toBeGreaterThan(20); // rows above the pane span, not washed
   });
 
-  it('projects NO quad for a face between two column centres, or one fully behind the camera', () => {
+  it('projects a voxel quad with the grid-space camera/axes and a conservative envelope', () => {
     const focal = focalFor(CONFIG.width, CONFIG.fov);
-    const project = (sprites: readonly Sprite[], camera: Camera) =>
-      projectSprites(sprites, room, camera, CONFIG.width, focal, CONFIG.height >> 1, tex);
+    const [quad] = projectSprites([voxel], room, { x: 11, y: 6, angle: Math.PI, z: 1.6 }, CONFIG.width, focal, CONFIG.height >> 1, tex); // prettier-ignore
+    const vox = quad.vox;
+    const scale = 2 / 1.4; // grid cells per world unit
 
-    // From 300 units away and slightly below, both visible faces span < 0.3 px and straddle no column
-    // centre — a sub-pixel sliver, skipped (its record would divide by a near-zero span).
-    expect(project([block], { x: 308.5, y: 5, angle: Math.PI, z: 1.6 })).toEqual([]);
-    // Camera a hair PAST the front face, looking away: the face is visible (normal side) but entirely
-    // behind the near plane — clipped out.
-    expect(project([block], { x: 8.75, y: 6, angle: 0, z: 1.6 })).toEqual([]);
-    // A block sprite without an authored facing defaults to facing 0.
+    expect(vox).toBeDefined();
+    expect(vox).toMatchObject({ n: 2, ny: 2, nz: 2 });
+    // Facing 0, camera due east looking west: grid x runs +y (0 world offset), depth runs −x.
+    expect(vox?.camGX).toBeCloseTo(1, 10); // laterally centred
+    expect(vox?.camGY).toBeCloseTo(1 - 3 * scale, 10); // 3 units in FRONT of the grid (negative depth)
+    expect(vox?.camGZ).toBeCloseTo(1.6, 10); // zScale = nz / height = 1
+    expect(vox?.fwdGX).toBeCloseTo(0, 10);
+    expect(vox?.fwdGY).toBeCloseTo(scale, 10); // looking straight INTO the depth axis
+    expect(vox?.rightGX).toBeCloseTo(-scale, 10);
+    expect(vox?.rightGY).toBeCloseTo(0, 10);
+    // The envelope brackets the prop (centre column 60) without going degenerate.
+    expect(quad.left).toBeLessThan(60);
+    expect(quad.right).toBeGreaterThan(60);
+    expect(quad.yTop).toBeLessThan(quad.yBottom);
+    // A missing facing defaults to 0.
     const cam: Camera = { x: 11, y: 8, angle: Math.PI * 0.9, z: 1.6 };
 
-    expect(project([{ ...block, facing: undefined }], cam)).toEqual(
-      project([{ ...block, facing: 0 }], cam),
-    );
+    expect(projectSprites([{ ...voxel, facing: undefined }], room, cam, CONFIG.width, focal, 40, tex)) // prettier-ignore
+      .toEqual(projectSprites([{ ...voxel, facing: 0 }], room, cam, CONFIG.width, focal, 40, tex));
+  });
+
+  it('falls back to the plain billboard quad when the texture carries no carved grid', () => {
+    const focal = focalFor(CONFIG.width, CONFIG.fov);
+    const flat = new Map([...tex, ['DEPTH', { ...magenta }]]); // same name, NO voxelDepth
+    const cam: Camera = { x: 11, y: 6, angle: Math.PI, z: 1.6 };
+    const project = (sprites: readonly Sprite[], lib: Map<string, Texture>) =>
+      projectSprites(sprites, room, cam, CONFIG.width, focal, CONFIG.height >> 1, lib);
+    const [fallback] = project([voxel], flat);
+
+    expect(fallback.vox).toBeUndefined(); // a billboard quad…
+    expect(project([voxel], flat)).toEqual(project([{ ...voxel, voxel: undefined }], flat)); // …exactly
+
+    // And behind the near plane, a voxel sprite culls exactly like a billboard.
+    expect(project([{ ...voxel, x: 11.5 }], tex)).toEqual([]);
+  });
+
+  it('widens the envelope to the whole screen when a footprint corner crosses the near plane', () => {
+    const focal = focalFor(CONFIG.width, CONFIG.fov);
+    // The camera stands INSIDE the footprint's x-range, a hair short of the near face: the closest
+    // corners project behind the near plane while the centre is still visible.
+    const cam: Camera = { x: 8.71, y: 6, angle: Math.PI, z: 1.6 };
+    const [quad] = projectSprites([{ ...voxel, tex: 'SOLIDRED' }], room, cam, CONFIG.width, focal, CONFIG.height >> 1, tex); // prettier-ignore
+
+    expect(quad.left).toBe(0);
+    expect(quad.right).toBe(CONFIG.width - 1);
+    // And the render still resolves per pixel (the DDA walks from the near plane, inside the box).
+    const buf = render(cam, [{ ...voxel, tex: 'SOLIDRED' }]);
+    let reds = 0;
+
+    for (let p = 0; p < CONFIG.width * CONFIG.height; p++) {
+      if (isReddish(buf[p * 4], buf[p * 4 + 1], buf[p * 4 + 2])) {
+        reds++;
+      }
+    }
+    expect(reds).toBeGreaterThan(100);
   });
 });
 
@@ -1483,19 +1723,20 @@ describe('zone portals', () => {
       .toEqual(Array.from(renderFrame(MAP, CAM, CONFIG, TEXP)));
   });
 
-  it('rasterises a warm neighbor BLOCK prop through the seam, clipped to its recorded windows', () => {
-    // An all-red 1×4 rotation sheet: whichever faces show, their pixels read saturated red.
-    const redSheet = {
-      width: 8,
-      height: 2,
-      pixels: new Uint8ClampedArray(Array.from({ length: 16 }, () => [250, 20, 20, 255]).flat()),
+  it('ray-marches a warm neighbor VOXEL prop through the seam, clipped to its recorded windows', () => {
+    // An all-red 2×2×2 voxel grid: whichever faces show, their pixels read saturated red.
+    const redGrid: Texture = {
+      width: 2,
+      height: 4,
+      pixels: new Uint8ClampedArray(Array.from({ length: 8 }, () => [250, 20, 20, 255]).flat()),
+      voxelDepth: 2,
     };
-    const lib = new Map([...TEXP, ['REDSHEET', redSheet]]);
-    const blockSpr: Sprite = {
-      x: 105, // local x = 5: the face straddles the pillar's screen shadow — some columns are
-      y: 10, // seam windows (painted), some are the pillar's (the face must not leak there)
+    const lib = new Map([...TEXP, ['REDGRID', redGrid]]);
+    const voxSpr: Sprite = {
+      x: 105, // local x = 5: the volume straddles the pillar's screen shadow — some columns are
+      y: 10, // seam windows (painted), some are the pillar's (the volume must not leak there)
       z: 0,
-      tex: 'REDSHEET',
+      tex: 'REDGRID',
       width: 1.2,
       height: 2,
       cols: 4,
@@ -1504,16 +1745,16 @@ describe('zone portals', () => {
       row: 0,
       rotations: 4,
       facing: -Math.PI / 2,
-      block: true,
+      voxel: true,
     };
-    const nbs = new Map([['nb', zone(neighbor(), [blockSpr])]]);
+    const nbs = new Map([['nb', zone(neighbor(), [voxSpr])]]);
     const isRed = (r: number, g: number, b: number): boolean => r > 150 && g < 60 && b < 60;
     const draw = (map: CompiledMap): Uint8ClampedArray =>
       renderFrame(map, CAM, CONFIG, lib, undefined, undefined, 0, CONFIG.height, undefined, undefined, nbs); // prettier-ignore
     const open = countWhere(draw(local()), isRed);
     const blocked = countWhere(draw(local({ pillar: true })), isRed);
 
-    expect(open).toBeGreaterThan(30); // the face shows through the un-occluded seam…
+    expect(open).toBeGreaterThan(30); // the volume shows through the un-occluded seam…
     expect(blocked).toBeGreaterThan(0); // …still peeks past the pillar's edge…
     expect(blocked).toBeLessThan(open); // …but the pillar's columns clip it (no leak outside the windows)
   });

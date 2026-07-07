@@ -1,6 +1,6 @@
 import { locateSubSector, signedSide } from './node-builder';
 import { castRay } from './raycast';
-import type { CompiledMap, LineDef } from './types';
+import type { CompiledMap, LineDef, ThingType } from './types';
 
 /**
  * Player movement against the world: slide along solid walls, and step UP through a two-sided portal when
@@ -17,6 +17,40 @@ export interface MoveResult {
   readonly x: number;
   readonly y: number;
   readonly floorZ: number;
+}
+
+/** A solid decor cylinder a mover may not cross (a prop's footprint): centre + its own radius. */
+export interface Obstacle {
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+}
+
+/** Blocking footprint radius per SOLID decor thing (DOOM: things block things). `prop_screen` is absent
+ *  on purpose — the monitor always sits ON furniture whose island edges already block. */
+export const PROP_OBSTACLE_RADII: Partial<Record<ThingType, number>> = {
+  barrel: 0.35,
+  prop: 0.3, // potted plant
+  prop_totem: 0.5,
+  prop_chair: 0.26,
+  prop_board: 0.45,
+  prop_cooler: 0.26,
+};
+
+/** The solid-decor obstacles authored into a map — every thing whose type has a blocking radius. Compute
+ *  once per zone (the list is static) and pass to {@link movePlayer}. */
+export function mapObstacles(map: CompiledMap): Obstacle[] {
+  const out: Obstacle[] = [];
+
+  for (const thing of map.source.things) {
+    const radius = PROP_OBSTACLE_RADII[thing.type];
+
+    if (radius !== undefined) {
+      out.push({ x: thing.x, y: thing.y, radius });
+    }
+  }
+
+  return out;
 }
 
 /**
@@ -83,7 +117,9 @@ function isBlocking(
   return far.floorZ - fromFloor > stepMax || far.ceilZ - far.floorZ < headroom;
 }
 
-/** Move the player by (`dx`,`dy`) from (`x`,`y`), sliding off blocking walls; returns the resolved pose.
+/** Move the player by (`dx`,`dy`) from (`x`,`y`), sliding off blocking walls AND solid decor
+ *  `obstacles` (prop cylinders — resolved in the same corner passes, so a prop against a wall cannot
+ *  squeeze the mover through either); returns the resolved pose.
  *  With `crossSeams`, PASSABLE zone-portal seams stop blocking this body (see {@link isBlocking}) — the
  *  caller detects the line crossing and performs the zone swap. */
 export function movePlayer(
@@ -97,6 +133,7 @@ export function movePlayer(
   headroom: number,
   slides?: readonly number[],
   crossSeams = false,
+  obstacles?: readonly Obstacle[],
 ): MoveResult {
   const fromFloor = map.source.sectors[locateSubSector(map.root, x, y).sector].floorZ;
   let px = x + dx;
@@ -126,8 +163,49 @@ export function movePlayer(
     blockers.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, nx, ny });
   }
 
-  // A few passes resolve corners (a push off one wall can press into another).
+  // A few passes resolve corners (a push off one wall can press into another — or into a prop).
   for (let pass = 0; pass < 3; pass++) {
+    if (obstacles !== undefined) {
+      for (const o of obstacles) {
+        const minDist = radius + o.radius;
+        const endD = Math.hypot(px - o.x, py - o.y);
+        const startD = Math.hypot(x - o.x, y - o.y);
+        // Which side did we END on? Negative = past the centre plane (crossed or crossing) — resolve on
+        // the START side then, or the endpoint radial would eject the mover out the FAR side (a tunnel).
+        const sameSide = (px - o.x) * (x - o.x) + (py - o.y) * (y - o.y) >= 0;
+
+        if (endD < minDist) {
+          // Endpoint inside the cylinder → depenetrate radially (this is what makes grazes SLIDE).
+          let nx: number;
+          let ny: number;
+
+          if (sameSide && endD > 1e-6) {
+            nx = (px - o.x) / endD;
+            ny = (py - o.y) / endD;
+          } else if (startD > 1e-6) {
+            nx = (x - o.x) / startD;
+            ny = (y - o.y) / startD;
+          } else {
+            const ml = Math.hypot(dx, dy) || 1; // dead-centre overlap with no history: back off the motion
+
+            nx = -dx / ml || 1;
+            ny = -dy / ml;
+          }
+          px = o.x + nx * minDist;
+          py = o.y + ny * minDist;
+        } else if (!sameSide && startD > 1e-6) {
+          // Endpoint OUTSIDE but on the far side: a large step tunnelled clean through (tests/teleports —
+          // per-tick game moves are far smaller than any radius). Only a real crossing counts: the path
+          // segment must actually dip inside the cylinder.
+          const cp = closestOnSeg(x, y, px, py, o.x, o.y);
+
+          if (Math.hypot(cp.x - o.x, cp.y - o.y) < minDist) {
+            px = o.x + ((x - o.x) / startD) * minDist; // stop on the NEAR face, the way we came
+            py = o.y + ((y - o.y) / startD) * minDist;
+          }
+        }
+      }
+    }
     for (const blk of blockers) {
       const cp = closestOnSeg(blk.ax, blk.ay, blk.bx, blk.by, px, py);
 

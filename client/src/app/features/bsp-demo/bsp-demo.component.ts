@@ -17,6 +17,7 @@ import {
   castRay,
   climbTarget,
   locateSubSector,
+  mapObstacles,
   mapSprites,
   movePlayer,
   nearestTargetHit,
@@ -25,6 +26,7 @@ import {
   type Camera,
   type CompiledMap,
   type MapSource,
+  type Obstacle,
   type Sector,
   type Sprite,
   type Target,
@@ -307,6 +309,7 @@ interface WarmZone {
   weaponPickups: (WeaponPickup & { idx: number })[];
   readonly doors: Door[];
   readonly slides: number[];
+  readonly obstacles: readonly Obstacle[];
   exit: Marker | null;
 }
 
@@ -316,6 +319,7 @@ interface WarmZone {
 interface CombatFrame {
   readonly map: CompiledMap;
   readonly slides: readonly number[];
+  readonly obstacles: readonly Obstacle[]; // the zone's solid decor (props block movers)
   readonly enemies: Foe[];
   readonly shots: EnemyShot[];
   readonly px: number;
@@ -388,6 +392,7 @@ export class BspDemoComponent {
   private sectors!: MutableSector[];
   private mapSource!: MapSource;
   private map!: CompiledMap;
+  private obstacles: readonly Obstacle[] = []; // the active zone's solid decor (props block movers)
   // The zone's LIVE-portal neighbors: every zone this map's `zonePortal` seams look into, compiled once per
   // session (`compiledZones` caches them — zones are small) and re-derived by each `loadZone`. The workers
   // receive the sources (each builds its own BSP); the main-thread fallback renders the compiled forms.
@@ -1072,6 +1077,7 @@ export class BspDemoComponent {
       HEADROOM,
       this.slides,
       true, // the player may cross PASSABLE seams — the crossing check right below performs the swap
+      this.obstacles,
     );
 
     // SEAMLESS crossing: stepping over a passable live seam swaps zones INSTANTLY — no fade. The portal
@@ -1722,6 +1728,7 @@ export class BspDemoComponent {
     this.sectors = this.level.map.sectors.map((s) => ({ ...s }));
     this.mapSource = { ...this.level.map, sectors: this.sectors };
     this.map = buildBsp(this.mapSource);
+    this.obstacles = mapObstacles(this.map);
     this.gatherNeighbors();
     this.gatherSeams();
     this.pool?.setMaps(this.zoneKey, this.mapSource, this.neighborSources); // the workers rebuild their BSPs in place (textures kept)
@@ -1871,6 +1878,7 @@ export class BspDemoComponent {
       enemyShots: [],
       doors,
       slides: zone.level.map.linedefs.map(() => 0), // sliding doors rest shut in a warm zone
+      obstacles: mapObstacles(map),
       ...pickups,
     };
   }
@@ -1893,6 +1901,7 @@ export class BspDemoComponent {
       weaponPickups: this.weaponPickups,
       doors: this.doors,
       slides: this.slides,
+      obstacles: this.obstacles,
       exit: this.exit,
     };
   }
@@ -1906,6 +1915,7 @@ export class BspDemoComponent {
     this.sectors = world.sectors;
     this.mapSource = world.mapSource;
     this.map = world.map;
+    this.obstacles = world.obstacles;
     this.targets = world.targets;
     this.enemies = world.enemies;
     this.enemyShots = world.enemyShots;
@@ -2099,6 +2109,7 @@ export class BspDemoComponent {
     return {
       map: this.map,
       slides: this.slides,
+      obstacles: this.obstacles,
       enemies: this.enemies,
       shots: this.enemyShots,
       px: this.camera.x,
@@ -2134,6 +2145,7 @@ export class BspDemoComponent {
     const frame: CombatFrame = {
       map: warm.map,
       slides: warm.slides,
+      obstacles: warm.obstacles,
       enemies: warm.enemies,
       shots: warm.enemyShots,
       px: this.camera.x - seam.dx, // the player, in the warm zone's coordinates
@@ -2223,6 +2235,8 @@ export class BspDemoComponent {
       STEP_MAX,
       HEADROOM,
       frame.slides, // respect open sliding doors (else foes stay stuck behind them)
+      false,
+      frame.obstacles, // props block foes too (DOOM: things block things)
     );
 
     e.walkDist += Math.hypot(moved.x - e.x, moved.y - e.y);
@@ -2342,6 +2356,8 @@ export class BspDemoComponent {
         STEP_MAX,
         HEADROOM,
         frame.slides,
+        false,
+        frame.obstacles,
       );
 
       e.x = moved.x;
@@ -2451,6 +2467,8 @@ export class BspDemoComponent {
           STEP_MAX,
           HEADROOM,
           this.slides,
+          false,
+          this.obstacles,
         );
 
         e.x = moved.x;

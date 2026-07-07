@@ -51,13 +51,13 @@ export const SPAN_SKY = 2;
 
 /** 32-bit words per GLASS-LAYER record in the aux buffer. */
 export const GLASS_STRIDE = 8;
-/** 32-bit words per SPRITE record in the aux buffer (billboards and block faces share the stride —
- *  words 12+ are the block-face tail, zeroed on a billboard). */
+/** 32-bit words per SPRITE record in the aux buffer (billboards and voxel volumes share the stride —
+ *  words 12+ are the voxel tail, zeroed on a billboard). */
 export const SPRITE_STRIDE = 20;
-/** SPRITE record kinds (word 11): a camera-facing billboard, or one block face (a mini-wall whose
- *  depth/span/u re-derive per column — see {@link BlockFaceQuad}). */
+/** SPRITE record kinds (word 11): a camera-facing billboard, or a world-anchored voxel volume (a
+ *  per-pixel 3D DDA through its carved grid — see {@link VoxelQuad}). */
 export const SPRITE_BILLBOARD = 0;
-export const SPRITE_BLOCK_FACE = 1;
+export const SPRITE_VOXEL = 1;
 /** 32-bit words per PHASE record in the aux buffer. */
 export const PHASE_STRIDE = 4;
 
@@ -103,15 +103,16 @@ export const PHASE_STRIDE = 4;
  * | GLASS word | content            | SPRITE word | content |
  * |------------|--------------------|-------------|---------|
  * | 0–3        | top, bot, vTop, vBot (i32) | 0–3 | left, right, yTop, yBottom (i32) |
- * | 4          | tu (f32, −1 = plain window)| 4–8 | texId, u0, v0, cellW, cellH (u32) |
+ * | 4          | tu (f32, −1 = plain window)| 4–8 | texId, u0, v0, cellW, cellH (u32) — a voxel record repurposes 5–8 as n, ny, nz, 0 |
  * | 5          | shade (f32)        | 9           | forward (f32) |
  * | 6          | depth (f32)        | 10          | shade (f32) |
- * | 7          | texId (u32)        | 11          | kind (u32 — `SPRITE_BILLBOARD` / `SPRITE_BLOCK_FACE`) |
- * |            |                    | 12–19       | block face only (else 0): xa, xb, invFa, invFb, uOverZa, uOverZb, zBottom, zTop (f32) |
+ * | 7          | texId (u32)        | 11          | kind (u32 — `SPRITE_BILLBOARD` / `SPRITE_VOXEL`) |
+ * |            |                    | 12–19       | voxel only (else 0): camGX, camGY, camGZ, fwdGX, fwdGY, rightGX, rightGY, zScale (f32) |
  *
- * A BLOCK-FACE record's `yTop`/`yBottom` are the face's screen ENVELOPE (early reject); the shader
- * re-projects the exact span per column off words 12–19 (see {@link BlockFaceQuad}) and — unlike a
- * billboard — writes its per-column depth into the pixel's depth register at opaque texels.
+ * A VOXEL record's `left`/`right`/`yTop`/`yBottom` are the volume's screen ENVELOPE (early reject);
+ * the shader ray-marches the carved grid per pixel off words 5–7 + 12–19 (see {@link VoxelQuad} — the
+ * grid rides the ordinary texel pool as an n × ny·nz image) and — unlike a billboard — writes each
+ * hit's depth into the pixel's depth register.
  *
  * Glass layers are stored nearest-first per column (the walk's front-to-back order): the shader blends
  * them in REVERSE (farthest-first) and scans them forward for the sprite tint — the CPU's exact orders.
@@ -525,25 +526,30 @@ export function buildFrameCommands(
       cmds.auxWords[w + 2] = q.yTop;
       cmds.auxWords[w + 3] = q.yBottom;
       cmds.auxWords[w + 4] = textureIds.get(q.name) ?? 0;
-      cmds.auxWords[w + 5] = q.u0;
-      cmds.auxWords[w + 6] = q.v0;
-      cmds.auxWords[w + 7] = q.cellW;
-      cmds.auxWords[w + 8] = q.cellH;
       cmds.auxFloats[w + 9] = q.forward;
       cmds.auxFloats[w + 10] = q.shade;
-      if (q.face === undefined) {
-        // The block-face tail is zeroed explicitly — `cmds` buffers are REUSED across frames.
+      if (q.vox === undefined) {
+        cmds.auxWords[w + 5] = q.u0;
+        cmds.auxWords[w + 6] = q.v0;
+        cmds.auxWords[w + 7] = q.cellW;
+        cmds.auxWords[w + 8] = q.cellH;
+        // The voxel tail is zeroed explicitly — `cmds` buffers are REUSED across frames.
         cmds.auxWords.fill(0, w + 11, w + SPRITE_STRIDE);
       } else {
-        cmds.auxWords[w + 11] = SPRITE_BLOCK_FACE;
-        cmds.auxFloats[w + 12] = q.face.xa;
-        cmds.auxFloats[w + 13] = q.face.xb;
-        cmds.auxFloats[w + 14] = q.face.invFa;
-        cmds.auxFloats[w + 15] = q.face.invFb;
-        cmds.auxFloats[w + 16] = q.face.uOverZa;
-        cmds.auxFloats[w + 17] = q.face.uOverZb;
-        cmds.auxFloats[w + 18] = q.face.zBottom;
-        cmds.auxFloats[w + 19] = q.face.zTop;
+        // A voxel record repurposes the atlas-cell words as its grid dimensions.
+        cmds.auxWords[w + 5] = q.vox.n;
+        cmds.auxWords[w + 6] = q.vox.ny;
+        cmds.auxWords[w + 7] = q.vox.nz;
+        cmds.auxWords[w + 8] = 0;
+        cmds.auxWords[w + 11] = SPRITE_VOXEL;
+        cmds.auxFloats[w + 12] = q.vox.camGX;
+        cmds.auxFloats[w + 13] = q.vox.camGY;
+        cmds.auxFloats[w + 14] = q.vox.camGZ;
+        cmds.auxFloats[w + 15] = q.vox.fwdGX;
+        cmds.auxFloats[w + 16] = q.vox.fwdGY;
+        cmds.auxFloats[w + 17] = q.vox.rightGX;
+        cmds.auxFloats[w + 18] = q.vox.rightGY;
+        cmds.auxFloats[w + 19] = q.vox.zScale;
       }
       w += SPRITE_STRIDE;
     }

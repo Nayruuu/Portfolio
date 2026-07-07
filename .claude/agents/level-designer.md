@@ -74,8 +74,10 @@ low-level linedefs. You never hand-wind a wall.
   `| 'prop_totem'` (directory totem) `| 'prop_board'` (whiteboard on casters) `| 'prop_chair'` (office
   swivel chair) `| 'prop_cooler'` (water cooler). Decor props; use them to dress rooms. Symmetric props
   (plant, barrel, cooler) render as plain billboards; the 4-rotation directional props (screen, totem,
-  board, chair) are view-angle billboards — the drawn cell (front/right/back/left) follows the viewer
-  vs the authored `angle`, so aim it deliberately.
+  board, chair) render as **world-anchored voxel volumes** (carved at load from their rotation sheets —
+  the object never turns with the camera, so every side is really seen in-world) with the view-angle
+  billboard as fallback — the authored `angle` sets which way the FRONT physically faces, so aim it
+  deliberately.
 - `b.build()` → `MapSource`. Then export a `Level` (mirror `level-m1-lobby.ts`'s `M1_LOBBY`) —
   `{ map, spawn, enemies, health, armor, ammo, weapons, keycards, exits, entries, doors }`, where:
   - `health` / `armor`: `[x, y]` (large) or `[x, y, 'small']` for the small variant.

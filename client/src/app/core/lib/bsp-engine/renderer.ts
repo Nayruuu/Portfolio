@@ -1,6 +1,5 @@
 import { focalFor, projectColumn, toCamera, type Camera, type CamPoint } from './camera';
 import { locateSubSector, signedSide } from './node-builder';
-import { visibleBlockFaces } from './sprite-block';
 import { missingTexture, TEX_WORLD, type Texture, type TextureLibrary } from './texture';
 import type { CompiledMap, NodeChild, Sector, Seg, ThingType, ZonePortalDef } from './types';
 
@@ -9,8 +8,8 @@ import type { CompiledMap, NodeChild, Sector, Seg, ThingType, ZonePortalDef } fr
  * near sector's textured CEILING (above), the wall (solid, or a portal's upper/lower bands), and the
  * textured FLOOR (below) — each sampled + distance-shaded, with a per-column occlusion window. It then
  * draws SPRITES (things), depth-tested per pixel against the wall z-buffer, with alpha: camera-facing
- * billboards, and — for `block` props — world-anchored BLOCK FACES rasterised as mini-walls with
- * per-column depth (Build-engine wall sprites; see `sprite-block.ts`).
+ * billboards, and — for `voxel` props whose grid decoded — world-anchored VOXEL VOLUMES ray-marched per
+ * pixel with an exact 3D DDA (Build/Blood-style column rendering; grids carved by `voxel-carve.ts`).
  *
  * Walls texture by U along the wall (perspective-correct) and V by world height. Floors/ceilings are cast
  * per pixel: a precomputed per-row distance table gives the world point under each screen pixel, which
@@ -55,7 +54,8 @@ interface Dims {
  *  Exported so the GPU command path reproduces the exact same backdrop. */
 export const BG_CEILING: Rgb = [34, 36, 46];
 export const BG_FLOOR: Rgb = [54, 48, 42];
-const NEAR = 0.02; // near clip plane (forward distance)
+/** Near clip plane (forward distance). Exported: the GPU voxel replay clamps its DDA entry to it. */
+export const NEAR = 0.02;
 
 /** World-Z anchor for wall vertical tiling, above any ceiling → texture row ≥ 0. (Exported: the GPU
  *  compute shader must anchor its wall V exactly the same way for pixel parity.) */
@@ -66,24 +66,31 @@ export const FLAT_ANCHOR = 1024;
 
 /** How a thing type renders as a sprite: its texture name + world size (none = not a sprite).
  *  `rotations` marks a DIRECTIONAL prop: its texture is a 1×`rotations` view-angle sheet (front · right ·
- *  back · left). `block` makes the directional prop a WALL-SPRITE BLOCK: the sheet's cells mount on two
- *  crossed quads anchored in the world (see `sprite-block.ts`) — true perspective, two faces at 45°
- *  meeting at the prop's axis, no cell snap — instead of a cell-switched camera-facing billboard.
+ *  back · left). `voxel` upgrades the directional prop to a WORLD-ANCHORED VOXEL VOLUME when its texture
+ *  resolves to a carved grid (see `voxel-carve.ts`) — the object never turns with the camera; every
+ *  orbit angle is true perspective. Where no grid decoded (SSR / procedural fallback) the same def
+ *  renders as the cell-switched rotation billboard, unchanged.
  *  Radially-symmetric props (a plant, a cooler) stay single-frame billboards. */
 interface SpriteDef {
   readonly tex: string;
   readonly width: number;
   readonly height: number;
   readonly rotations?: number;
-  readonly block?: true;
+  readonly voxel?: true;
 }
 const SPRITES: Partial<Record<ThingType, SpriteDef>> = {
   barrel: { tex: 'BARREL', width: 0.8, height: 1.1 },
   prop: { tex: 'PROP', width: 0.8, height: 1.6 }, // potted plant — symmetric, one frame
-  prop_screen: { tex: 'PROP_SCREEN', width: 0.7, height: 0.6, rotations: 4 }, // crashed desk monitor (sits on a counter block; w/h = the sheet's trimmed cell aspect)
-  prop_totem: { tex: 'PROP_TOTEM', width: 1.25, height: 2.0, rotations: 4 }, // free-standing directory totem (wide plinth — w/h = the sheet's trimmed cell aspect)
-  prop_board: { tex: 'PROP_BOARD', width: 1.6, height: 1.7, rotations: 4 }, // whiteboard on casters
-  prop_chair: { tex: 'PROP_CHAIR', width: 0.7, height: 1.1, rotations: 4 }, // office swivel chair
+  // Every directional prop renders as a world-anchored VOXEL volume — the billboard "turning with the
+  // camera" was the visible tell the user rejected. Small, detail-dense props carve on a finer 96 grid
+  // (with the screen's 1×8 diagonals + top view as extra hull constraints) so they stay crisp; the
+  // per-prop resolutions live with the carve call in the feature loader (`load-textures.ts`). A prop's
+  // `width` spans its carved grid, which covers the front cell's TRIMMED art bbox — so voxel widths are
+  // the billboard cell width × the art's bbox fraction, keeping the on-screen size the billboard had.
+  prop_screen: { tex: 'PROP_SCREEN', width: 0.57, height: 0.6, rotations: 8, voxel: true }, // crashed desk CRT (0.65 billboard × its 448/512 front bbox; 1×8 sheet + a served top view)
+  prop_totem: { tex: 'PROP_TOTEM', width: 1.25, height: 2.0, rotations: 4, voxel: true }, // free-standing directory totem (wide plinth — w/h = the sheet's trimmed cell aspect)
+  prop_board: { tex: 'PROP_BOARD', width: 1.49, height: 1.7, rotations: 4, voxel: true }, // whiteboard on casters (1.6 billboard × its 476/512 front bbox; the dominant-run span fixed its once-degenerate depth)
+  prop_chair: { tex: 'PROP_CHAIR', width: 1.2, height: 1.2, rotations: 4, voxel: true }, // office swivel chair — hand-sculpted .vox (48³ cubic box → width MUST equal height so the model renders undistorted; sized so the seat reads at eye level, base + backrest to scale)
   prop_cooler: { tex: 'PROP_COOLER', width: 0.6, height: 1.5 }, // water cooler — symmetric, one frame
 };
 
@@ -111,10 +118,11 @@ export interface Sprite {
   // `col` from these for the frame's viewpoint. Omitted → the cell (if any) is view-independent.
   readonly rotations?: number;
   readonly facing?: number;
-  // A WALL-SPRITE BLOCK (see `sprite-block.ts`): the rotation sheet's cells mount on two `width`-long
-  // crossed quads anchored at (x,y)/`facing`, rasterised as mini-walls with per-column depth —
-  // `col` is ignored (each face carries its own cell) and `orientSprite` leaves the sprite untouched.
-  readonly block?: boolean;
+  // A VOXEL prop (see `voxel-carve.ts`): when its texture resolves to a carved grid (`voxelDepth`), the
+  // prop renders as a WORLD-ANCHORED VOLUME ray-marched per pixel — `col` is ignored (the grid holds
+  // every angle). Without a grid the flag is inert and the sprite stays the rotation billboard above —
+  // the zero-regression fallback for SSR / failed decodes / the procedural library.
+  readonly voxel?: boolean;
   readonly flash?: number; // 0..1 white hit-flash blend (0 / omitted = normal shading)
 }
 
@@ -132,8 +140,9 @@ export interface ZoneNeighbor {
  * The static decor sprites authored into a map: every thing whose type has a sprite def, resting on its
  * floor. A DIRECTIONAL prop (its def carries `rotations`) is emitted as a 1×`rotations` atlas sprite
  * carrying the thing's authored facing, resting on FRONT (column 0) — the game's per-frame list re-picks
- * the cell for the viewpoint via `orientSprite`. A BLOCK prop (def opts into `block` — no shipped def
- * does today) instead binds its cells to its world faces at projection time, view-independent.
+ * the cell for the viewpoint via `orientSprite`. A VOXEL prop (def opts into `voxel` — all four
+ * directional props do) additionally renders as a world-anchored volume wherever its carved grid is in
+ * the texture library; the rotation metadata stays on the sprite as its billboard fallback.
  */
 export function mapSprites(map: CompiledMap): Sprite[] {
   const sprites: Sprite[] = [];
@@ -163,7 +172,7 @@ export function mapSprites(map: CompiledMap): Sprite[] {
           row: 0,
           rotations: def.rotations,
           facing: thing.angle,
-          block: def.block,
+          voxel: def.voxel,
         });
       }
     }
@@ -636,22 +645,45 @@ interface SpriteWindow {
 }
 
 /**
- * The extra projection a BLOCK FACE carries on its {@link SpriteQuad}: the face is rasterised as a
- * mini-wall, so — unlike a billboard's constant depth and fixed quad — its depth, vertical span and
- * texture u are re-derived PER COLUMN from the two projected endpoints. `1/forward` and `u/forward`
- * are screen-linear (the walls' perspective-correct rule), so a column at fraction `t` of [xa, xb]
- * interpolates both and divides back. `xa < xb` strictly: an edge-on face (the only way the endpoints
- * could project to one column) is already culled by `visibleBlockFaces`.
+ * Per-face shading of a voxel volume — the "Minecraft readability" the flat billboard art lacks: the
+ * DDA's entry axis names the face a pixel shows, and its factor multiplies the sprite's distance/light
+ * shade (channels clamp at 255). Exported: the WGSL compute shader interpolates these EXACT constants,
+ * the CPU/GPU parity contract.
  */
-export interface BlockFaceQuad {
-  readonly xa: number; // the projected endpoint columns (float, unclamped), xa < xb
-  readonly xb: number;
-  readonly invFa: number; // 1/forward at each endpoint
-  readonly invFb: number;
-  readonly uOverZa: number; // (cell-fraction u) / forward at each endpoint — u = 0 at xa's endpoint
-  readonly uOverZb: number;
-  readonly zBottom: number; // the face's world-vertical extent (sector floor … floor + height)
-  readonly zTop: number;
+export const VOXEL_SHADE = {
+  top: 1.18, // entered descending z — the sunlit face
+  bottom: 0.55, // entered ascending z — the underside
+  sideX: 0.82, // entered along the grid's lateral axis
+  sideY: 1.0, // entered along the depth axis (the front/back the art was authored from)
+} as const;
+
+/** The WGSL DDA's loop bound: a ray crosses at most n+ny+nz cells (≤ 96+96+128 across the shipped
+ *  grids' resolutions) before a bounds-exit break, so the cap NEVER binds — it exists only so the
+ *  shader loop is provably finite to the GPU. The CPU march needs no cap: its breaks terminate it. */
+export const VOXEL_MAX_STEPS = 512;
+
+/**
+ * The extra projection a VOXEL prop carries on its {@link SpriteQuad}: everything the per-pixel 3D DDA
+ * needs, pre-resolved into the prop's GRID SPACE so the march itself is camera-free (and a zone-portal
+ * NEIGHBOR pass — whose camera is translated — records exactly as a local one). Grid space: `x` lateral
+ * (`n` cells over `Sprite.width` world units), `y` depth (`ny` cells, same plan scale — the carve keeps
+ * plan cells square), `z` up (`nz` cells over `Sprite.height`), so a screen column's ray direction is
+ * `fwdG + ((width/2 − x)/focal) · rightG` in the plan and `((horizon − y)/focal) · zScale` vertically,
+ * and the ray parameter IS the camera-forward depth (the walls' z-buffer metric — `fwdG`/`rightG` are
+ * the unit camera axes rotated/scaled into the grid).
+ */
+export interface VoxelQuad {
+  readonly n: number; // grid cells: lateral × depth × up
+  readonly ny: number;
+  readonly nz: number;
+  readonly camGX: number; // the camera position in grid coordinates
+  readonly camGY: number;
+  readonly camGZ: number;
+  readonly fwdGX: number; // the camera FORWARD axis in grid units per world unit (plan)
+  readonly fwdGY: number;
+  readonly rightGX: number; // the screen-column offset axis, same units
+  readonly rightGY: number;
+  readonly zScale: number; // grid z cells per world unit (nz / world height)
 }
 
 /**
@@ -660,14 +692,14 @@ export interface BlockFaceQuad {
  * seam between the projection (the smart, cheap part — shared) and the per-pixel work: the CPU paints the
  * quads immediately; the GPU command builder serializes the SAME quads into sprite records a compute
  * shader executes (the WalkSink split, for sprites). A quad is either a camera-facing BILLBOARD
- * (`face` absent — constant depth, fixed vertical span) or one visible BLOCK FACE (`face` present —
- * per-column depth/span/u, see {@link BlockFaceQuad}); `yTop`/`yBottom` are then the face's screen
- * ENVELOPE (the union of both endpoints' extents) used for early rejection, not the painted span.
+ * (`vox` absent — constant depth, fixed vertical span) or a world-anchored VOXEL VOLUME (`vox`
+ * present — per-pixel depth via a 3D DDA, see {@link VoxelQuad}); `yTop`/`yBottom` (and `left`/`right`)
+ * are then the volume's conservative screen ENVELOPE used for early rejection, not the painted span.
  */
 export interface SpriteQuad {
   readonly tex: Texture;
   readonly name: string; // the texture's library name (the command builder keys GPU ids off it)
-  readonly forward: number; // the sprite's camera depth (a face: its visible centre) — the sort key
+  readonly forward: number; // the sprite's camera depth (its centre) — the far-to-near sort key
   readonly left: number; // screen quad, inclusive (may run off-screen — painters clamp)
   readonly right: number;
   readonly yTop: number;
@@ -677,28 +709,29 @@ export interface SpriteQuad {
   readonly cellW: number;
   readonly cellH: number;
   readonly shade: number; // sector light × distance falloff × (1 + hit-flash) — channels clamp at 255
-  readonly face?: BlockFaceQuad;
+  readonly vox?: VoxelQuad;
 }
 
-/** One sprite surface awaiting projection: a billboard's camera-space centre, or one visible block
- *  face's near-clipped endpoints (`u` = the cell fraction) + the cell that face wears. `depth` is the
- *  far-to-near sort key — the billboard's centre depth, or the visible face segment's centre depth
- *  (forward is linear along the segment, so the endpoint mean IS the centre). */
+/** One sprite surface awaiting projection: the camera-space centre plus, for a voxel prop whose grid
+ *  resolved, its grid texture and depth-cell count (`voxelDepth`, checked present at collection) —
+ *  a billboard carries its atlas `cell` instead (a voxel grid has none). `depth` (the centre's
+ *  camera-forward) is the far-to-near sort key. */
 type SpriteSurface = {
   readonly spr: Sprite;
   readonly depth: number;
-  readonly cell: number;
+  readonly cam: CamPoint;
 } & (
-  | { readonly kind: 'billboard'; readonly cam: CamPoint }
-  | { readonly kind: 'face'; readonly clip: readonly [WallVert, WallVert] }
+  | { readonly kind: 'billboard'; readonly cell: number }
+  | { readonly kind: 'voxel'; readonly grid: Texture; readonly ny: number }
 );
 
 /**
- * Project a frame's sprites to screen-space {@link SpriteQuad}s: cull behind the near plane (a BLOCK
- * sprite first expands into its ≤ 2 visible faces — back-face culled, near-clipped like walls), sort
- * far-to-near (nearer surfaces overdraw; the two faces of one block order farther-first by their own
- * centre depths), and resolve each surface's texture/cell/shade. Pure — shared by the CPU painter
- * ({@link drawSprites}) and the GPU command builder, so both derive identical quads.
+ * Project a frame's sprites to screen-space {@link SpriteQuad}s: cull behind the near plane, sort
+ * far-to-near (nearer surfaces overdraw), and resolve each surface's texture/cell/shade. A `voxel`
+ * sprite whose texture resolved to a carved grid becomes a VOXEL quad (grid-space DDA inputs + a
+ * conservative screen envelope); without a grid it falls through to the billboard path — the
+ * zero-regression fallback. Pure — shared by the CPU painter ({@link drawSprites}) and the GPU
+ * command builder, so both derive identical quads.
  */
 export function projectSprites(
   sprites: readonly Sprite[],
@@ -712,110 +745,138 @@ export function projectSprites(
   const visible: SpriteSurface[] = [];
 
   for (const spr of sprites) {
-    if (spr.block === true) {
-      for (const face of visibleBlockFaces(
-        spr.x,
-        spr.y,
-        spr.facing ?? 0,
-        spr.width,
-        camera.x,
-        camera.y,
-      )) {
-        const clip = clipNear(
-          { ...toCamera(camera, { x: face.x1, y: face.y1 }), u: 0 },
-          { ...toCamera(camera, { x: face.x2, y: face.y2 }), u: 1 },
-        );
-
-        if (clip !== null) {
-          const depth = (clip[0].forward + clip[1].forward) / 2;
-
-          visible.push({ spr, depth, kind: 'face', clip, cell: face.cell });
-        }
-      }
-      continue;
-    }
     const cam = toCamera(camera, spr);
 
-    if (cam.forward > NEAR) {
-      visible.push({ spr, depth: cam.forward, kind: 'billboard', cam, cell: spr.col ?? 0 });
+    if (cam.forward <= NEAR) {
+      continue;
     }
+    if (spr.voxel === true) {
+      const grid = resolve(textures, spr.tex);
+
+      if (grid.voxelDepth !== undefined) {
+        visible.push({ spr, depth: cam.forward, kind: 'voxel', cam, grid, ny: grid.voxelDepth });
+        continue;
+      }
+      // No carved grid in the library (SSR / failed decode / the procedural fallback): fall through —
+      // the sprite draws as the rotation billboard, with the cell `orientSprite` picked.
+    }
+    visible.push({ spr, depth: cam.forward, kind: 'billboard', cam, cell: spr.col ?? 0 });
   }
   visible.sort((a, b) => b.depth - a.depth); // far first → nearer surfaces overdraw
 
+  const cosA = Math.cos(camera.angle);
+  const sinA = Math.sin(camera.angle);
   const quads: SpriteQuad[] = [];
 
   for (const s of visible) {
     const sector = map.source.sectors[locateSubSector(map.root, s.spr.x, s.spr.y).sector];
     const tex = resolve(textures, s.spr.tex);
-    // The cell to sample: a whole-texture billboard (cols=rows=1) or one cell of a `cols`×`rows` atlas.
-    const cellW = (tex.width / (s.spr.cols ?? 1)) | 0;
-    const cellH = (tex.height / (s.spr.rows ?? 1)) | 0;
     // Additive hit-flash: brighten the sprite's OWN colours toward white (×(1+flash), clipped per channel) —
     // mirrors the grid's `lighter` re-blit, not a flat white wash.
     const flash = Math.max(0, Math.min(1, s.spr.flash ?? 0));
     const shade = (sector.light / 255) * Math.max(0.25, Math.min(1, 6 / s.depth)) * (1 + flash);
-    const common = {
-      tex,
-      name: s.spr.tex,
-      forward: s.depth,
-      u0: s.cell * cellW,
-      v0: (s.spr.row ?? 0) * cellH,
-      cellW,
-      cellH,
-      shade,
-    };
+    const common = { tex, name: s.spr.tex, forward: s.depth, shade };
 
-    if (s.kind === 'face') {
-      // A BLOCK FACE — a mini-wall: project both endpoints and keep the per-endpoint 1/z + u/z so the
-      // painter re-derives depth/span/u per column, perspective-correct. `xa < xb` needs no reorder:
-      // back-face culling keeps the camera strictly on the face's normal side, where the P1→P2 screen
-      // orientation is preserved (the u=0 endpoint was CHOSEN to project screen-left — see blockFaces)
-      // and the endpoints cannot share a column (that camera would be edge-on, already culled).
-      const [pa, pb] = s.clip;
-      const xa = projectColumn(pa, width, focal);
-      const xb = projectColumn(pb, width, focal);
-      const left = Math.ceil(xa);
-      const right = Math.floor(xb);
-
-      if (right < left) {
-        continue; // a sub-pixel sliver (grazing view) — no column centre falls inside it
-      }
-      const invFa = 1 / pa.forward;
-      const invFb = 1 / pb.forward;
+    if (s.kind === 'voxel') {
+      // A VOXEL VOLUME: resolve the camera and the ray axes into the prop's GRID SPACE once (the
+      // per-pixel DDA's inputs — see {@link VoxelQuad}) and project a CONSERVATIVE screen envelope
+      // off the footprint corners for early rejection (the DDA decides exact coverage per pixel).
+      const grid = s.grid;
+      const n = grid.width;
+      const ny = s.ny;
+      const nz = grid.height / ny;
+      const facing = s.spr.facing ?? 0;
+      // Grid axes in world space: x along the front view's left→right (the billboard's head-on U
+      // axis), y away from the front viewer (the carve's depth axis), z up.
+      const uX = -Math.sin(facing);
+      const uY = Math.cos(facing);
+      const vX = -Math.cos(facing);
+      const vY = -Math.sin(facing);
+      const planScale = n / s.spr.width; // grid cells per world unit — plan cells are square (carve contract)
       const zBottom = s.spr.z;
       const zTop = s.spr.z + s.spr.height;
-      // The screen ENVELOPE — the union of both endpoints' extents (y is linear in 1/forward, so every
-      // column's span lies between the endpoints') — used for early rejection; columns re-project exactly.
-      const yTopA = Math.round(horizon - (zTop - camera.z) * focal * invFa);
-      const yTopB = Math.round(horizon - (zTop - camera.z) * focal * invFb);
-      const yBottomA = Math.round(horizon - (zBottom - camera.z) * focal * invFa);
-      const yBottomB = Math.round(horizon - (zBottom - camera.z) * focal * invFb);
+      const zScale = nz / s.spr.height;
+      const relX = camera.x - s.spr.x;
+      const relY = camera.y - s.spr.y;
+      // Footprint corners → the horizontal envelope + the near/far depths the vertical envelope needs.
+      const halfU = s.spr.width / 2;
+      const halfV = ny / planScale / 2;
+      let minCol = Infinity;
+      let maxCol = -Infinity;
+      let nearest = Infinity;
+      let farthest = -Infinity;
+      let clipped = false;
+
+      for (const [su, sv] of [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ] as const) {
+        // prettier-ignore
+        const corner = toCamera(camera, {
+          x: s.spr.x + uX * halfU * su + vX * halfV * sv,
+          y: s.spr.y + uY * halfU * su + vY * halfV * sv,
+        });
+
+        nearest = Math.min(nearest, corner.forward);
+        farthest = Math.max(farthest, corner.forward);
+        if (corner.forward <= NEAR) {
+          clipped = true; // a corner behind the near plane projects nonsense — widen to the full screen
+          continue;
+        }
+        const col = projectColumn(corner, width, focal);
+
+        minCol = Math.min(minCol, col);
+        maxCol = Math.max(maxCol, col);
+      }
+      // The centre is inside the footprint and passed the NEAR cull, so at least one corner projected.
+      const invNear = 1 / Math.max(NEAR, nearest);
+      const invFar = 1 / farthest;
+      const topNear = horizon - (zTop - camera.z) * focal * invNear;
+      const topFar = horizon - (zTop - camera.z) * focal * invFar;
+      const botNear = horizon - (zBottom - camera.z) * focal * invNear;
+      const botFar = horizon - (zBottom - camera.z) * focal * invFar;
 
       quads.push({
         ...common,
-        left,
-        right,
-        yTop: Math.min(yTopA, yTopB),
-        yBottom: Math.max(yBottomA, yBottomB),
-        face: {
-          xa,
-          xb,
-          invFa,
-          invFb,
-          uOverZa: pa.u * invFa,
-          uOverZb: pb.u * invFb,
-          zBottom,
-          zTop,
+        u0: 0, // a voxel quad samples the whole grid — no atlas cell
+        v0: 0,
+        cellW: grid.width,
+        cellH: grid.height,
+        left: clipped ? 0 : Math.floor(minCol),
+        right: clipped ? width - 1 : Math.ceil(maxCol),
+        yTop: Math.floor(Math.min(topNear, topFar)),
+        yBottom: Math.ceil(Math.max(botNear, botFar)),
+        vox: {
+          n,
+          ny,
+          nz,
+          camGX: (relX * uX + relY * uY) * planScale + n / 2,
+          camGY: (relX * vX + relY * vY) * planScale + ny / 2,
+          camGZ: (camera.z - zBottom) * zScale,
+          fwdGX: (cosA * uX + sinA * uY) * planScale,
+          fwdGY: (cosA * vX + sinA * vY) * planScale,
+          rightGX: (-sinA * uX + cosA * uY) * planScale,
+          rightGY: (-sinA * vX + cosA * vY) * planScale,
+          zScale,
         },
       });
       continue;
     }
+    // The cell to sample: a whole-texture billboard (cols=rows=1) or one cell of a `cols`×`rows` atlas.
+    const cellW = (tex.width / (s.spr.cols ?? 1)) | 0;
+    const cellH = (tex.height / (s.spr.rows ?? 1)) | 0;
     const invF = 1 / s.cam.forward;
     const centerX = projectColumn(s.cam, width, focal);
     const halfW = s.spr.width * 0.5 * focal * invF;
 
     quads.push({
       ...common,
+      u0: s.cell * cellW,
+      v0: (s.spr.row ?? 0) * cellH,
+      cellW,
+      cellH,
       left: Math.round(centerX - halfW),
       right: Math.round(centerX + halfW),
       yTop: Math.round(horizon - (s.spr.z + s.spr.height - camera.z) * focal * invF),
@@ -827,32 +888,44 @@ export function projectSprites(
 }
 
 /**
- * Rasterise one BLOCK FACE quad as a mini alpha-tested wall: per column, interpolate `1/forward`
- * between the projected endpoints (depth is NOT constant — the billboard's one novelty), re-project the
- * vertical span off the face's world extent, and derive the texture u perspective-correct (u/z linear
- * in screen space, the walls' rule). Pixels z-test against `zbuf` AND — unlike billboards — WRITE their
- * depth at opaque texels: sprite surfaces only sort by centre depth, so the block's own two CROSSED
- * faces (equal centres — they intersect at the prop's axis) and a nearer-sorted billboard a face
- * actually crosses resolve per pixel instead of by paint order. Alpha and glass-tint behaviour mirror
- * the billboard painter (the atlases ship alpha-hardened to 0/255, so `!== 0` equals a 128 threshold).
+ * Ray-march one VOXEL VOLUME quad: for each pixel of the (clamped) screen envelope, build the pixel's
+ * ray IN GRID SPACE off the quad's precomputed axes and walk the grid with an EXACT 3D DDA (Amanatides
+ * & Woo — no fixed step: cell-crossing distances are computed, not accumulated by sampling, which is
+ * what keeps the f32 GPU replay aligned with this f64 reference). The ray parameter is the pixel's
+ * camera-forward depth (the z-buffer metric), so the march starts at the box entry (clamped to
+ * {@link NEAR}) and the FIRST solid voxel wins the pixel: its colour × the sprite shade × the per-face
+ * factor ({@link VOXEL_SHADE} — the DDA's entry axis names the face). Pixels z-test against `zbuf` AND
+ * WRITE their depth — the volume is real geometry to later-painted sprites, and the march exits early
+ * the moment it passes the buffer's depth. Alpha (0 = empty cell) and glass-tint behaviour mirror the
+ * billboard painter.
  */
-function drawBlockFace(
+function drawVoxel(
   buf32: Uint32Array,
   zbuf: Float32Array,
   dims: Dims,
   q: SpriteQuad,
-  face: BlockFaceQuad,
-  camZ: number,
+  vox: VoxelQuad,
   focal: number,
   horizon: number,
   glass: GlassPanes | null,
   window: SpriteWindow | null,
 ): void {
   const { width } = dims;
-  const { tex, u0, v0, cellW, cellH, shade } = q;
-  const tw = tex.width;
+  const { tex, shade } = q;
   const px = tex.pixels;
-  const span = face.xb - face.xa;
+  const { n, ny, nz, camGX, camGY, camGZ, fwdGX, fwdGY, rightGX, rightGY, zScale } = vox;
+  const halfW = width / 2;
+  // Per-axis march state, reused across the quad's pixels (grid axes 0 = lateral, 1 = depth, 2 = up).
+  // One shared code path per axis keeps the exact-zero-direction guards testable — a ray is EXACTLY
+  // axis-parallel only where the trig is exact (facing 0 / angle 0), which only the lateral axis can
+  // produce in a fixture; the loop lets that one case exercise the guard for all three axes.
+  const origin3 = [camGX, camGY, camGZ] as const;
+  const size3 = [n, ny, nz] as const;
+  const dir3 = new Float64Array(3);
+  const cell = new Int32Array(3);
+  const stepDir = new Int32Array(3);
+  const tDelta = new Float64Array(3);
+  const tMax = new Float64Array(3);
 
   for (let x = Math.max(0, q.left); x <= Math.min(width - 1, q.right); x++) {
     let winTop = dims.rowStart;
@@ -860,59 +933,137 @@ function drawBlockFace(
 
     if (window !== null) {
       if (window.seam[x] !== window.index) {
-        continue; // this column shows no opening of the seam — the face must not leak past it
+        continue; // this column shows no opening of the seam — the volume must not leak past it
       }
       winTop = Math.max(winTop, window.top[x]);
       winBot = Math.min(winBot, window.bot[x]);
     }
-    const t = (x - face.xa) / span;
-    const invF = face.invFa + t * (face.invFb - face.invFa);
-    const forward = 1 / invF;
-    // This column's vertical extent — re-projected, so the far edge of the face draws shorter.
-    const yTop = Math.round(horizon - (face.zTop - camZ) * focal * invF);
-    const yBottom = Math.round(horizon - (face.zBottom - camZ) * focal * invF);
-    const rowSpan = yBottom - yTop + 1;
-    const uFrac = Math.min(
-      1,
-      Math.max(0, (face.uOverZa + t * (face.uOverZb - face.uOverZa)) * forward),
-    );
-    const texCol = u0 + Math.min(cellW - 1, (uFrac * cellW) | 0);
-    const colLo = Math.max(winTop, yTop);
-    const colHi = Math.min(winBot, yBottom);
-    let i = colLo * width + x;
+    // The column's PLAN ray (constant down the column) and its slab window over the grid footprint.
+    const offset = (halfW - x) / focal;
 
-    for (let y = colLo; y <= colHi; y++) {
-      const ti = ((v0 + ((((y - yTop) / rowSpan) * cellH) | 0)) * tw + texCol) << 2;
+    dir3[0] = fwdGX + offset * rightGX;
+    dir3[1] = fwdGY + offset * rightGY;
+    let planEnter = NEAR;
+    let planExit = Infinity;
+    let planAxis = 1; // the face a ray STARTING inside the footprint shows (a depth-axis default)
+    let planMiss = false;
 
-      if (forward < zbuf[i] && px[ti + 3] !== 0) {
-        buf32[i] =
-          0xff000000 |
-          (Math.min(255, (px[ti + 2] * shade) | 0) << 16) |
-          (Math.min(255, (px[ti + 1] * shade) | 0) << 8) |
-          Math.min(255, (px[ti] * shade) | 0);
-        zbuf[i] = forward; // faces write depth — see the JSDoc's per-pixel ordering rationale
+    for (let a = 0; a < 2; a++) {
+      const dir = dir3[a];
 
-        // Seen THROUGH glass: same wash as billboards, with this COLUMN's depth (layers nearest-first).
-        if (glass !== null) {
-          for (let k = 0; k < glass.count[x]; k++) {
-            const l = x * GLASS_LAYERS + k;
+      if (dir !== 0) {
+        const t0 = (0 - origin3[a]) / dir;
+        const t1 = (size3[a] - origin3[a]) / dir;
 
-            if (forward <= glass.depth[l]) {
-              break; // this layer (and all farther ones) sits behind the face
-            }
-            if (y >= glass.top[l] && y <= glass.bot[l]) {
-              buf32[i] = coolGlassTint(buf32[i]);
+        if (Math.min(t0, t1) > planEnter) {
+          planEnter = Math.min(t0, t1);
+          planAxis = a;
+        }
+        planExit = Math.min(planExit, Math.max(t0, t1));
+      } else if (origin3[a] < 0 || origin3[a] >= size3[a]) {
+        planMiss = true; // an axis-parallel ray outside the footprint never enters it
+      }
+    }
+    if (planMiss || planEnter >= planExit) {
+      continue; // the column's ray misses the footprint entirely
+    }
+    const yLo = Math.max(winTop, q.yTop);
+    const yHi = Math.min(winBot, q.yBottom);
+    let i = yLo * width + x;
+
+    for (let y = yLo; y <= yHi; y++, i += width) {
+      // The pixel's vertical slope closes the 3D ray; the z slab narrows the plan window.
+      const dz = ((horizon - y) / focal) * zScale;
+      let tEnter = planEnter;
+      let tExit = planExit;
+      let axis = planAxis;
+
+      dir3[2] = dz;
+      if (dz !== 0) {
+        const tz0 = (0 - camGZ) / dz;
+        const tz1 = (nz - camGZ) / dz;
+
+        if (Math.min(tz0, tz1) > tEnter) {
+          tEnter = Math.min(tz0, tz1);
+          axis = 2;
+        }
+        tExit = Math.min(tExit, Math.max(tz0, tz1));
+      } else if (camGZ < 0 || camGZ >= nz) {
+        continue;
+      }
+      if (tEnter >= tExit || tEnter >= zbuf[i]) {
+        continue; // misses the box, or the box entry is already behind the nearest surface here
+      }
+      // Amanatides & Woo march from the entry point, in whole grid cells.
+      let t = tEnter;
+
+      for (let a = 0; a < 3; a++) {
+        const dir = dir3[a];
+
+        cell[a] = Math.min(size3[a] - 1, Math.max(0, Math.floor(origin3[a] + t * dir)));
+        stepDir[a] = dir > 0 ? 1 : -1;
+        tDelta[a] = dir !== 0 ? Math.abs(1 / dir) : Infinity;
+        tMax[a] = dir !== 0 ? (cell[a] + (dir > 0 ? 1 : 0) - origin3[a]) / dir : Infinity;
+      }
+
+      // Terminates unconditionally: every pass either breaks (hit / occluded / out of bounds) or
+      // advances exactly one cell toward a bound. (The WGSL twin adds VOXEL_MAX_STEPS on top.)
+      for (;;) {
+        if (t >= zbuf[i]) {
+          break; // everything from here on is occluded (t only grows)
+        }
+        const ti = ((cell[2] * ny + cell[1]) * n + cell[0]) << 2;
+
+        if (px[ti + 3] !== 0) {
+          const face =
+            axis === 2
+              ? dz < 0
+                ? VOXEL_SHADE.top
+                : VOXEL_SHADE.bottom
+              : axis === 0
+                ? VOXEL_SHADE.sideX
+                : VOXEL_SHADE.sideY;
+          const lit = shade * face;
+
+          buf32[i] =
+            0xff000000 |
+            (Math.min(255, (px[ti + 2] * lit) | 0) << 16) |
+            (Math.min(255, (px[ti + 1] * lit) | 0) << 8) |
+            Math.min(255, (px[ti] * lit) | 0);
+          zbuf[i] = t; // the volume writes depth — real geometry to every later surface
+
+          // Seen THROUGH glass: same wash as billboards, at this PIXEL's depth (layers nearest-first).
+          if (glass !== null) {
+            for (let k = 0; k < glass.count[x]; k++) {
+              const l = x * GLASS_LAYERS + k;
+
+              if (t <= glass.depth[l]) {
+                break; // this layer (and all farther ones) sits behind the voxel surface
+              }
+              if (y >= glass.top[l] && y <= glass.bot[l]) {
+                buf32[i] = coolGlassTint(buf32[i]);
+              }
             }
           }
+          break;
+        }
+        // Step into the adjacent cell across the nearest boundary (tie-break order x → y → z).
+        const axisNext = tMax[0] <= tMax[1] && tMax[0] <= tMax[2] ? 0 : tMax[1] <= tMax[2] ? 1 : 2;
+
+        t = tMax[axisNext];
+        tMax[axisNext] += tDelta[axisNext];
+        cell[axisNext] += stepDir[axisNext];
+        axis = axisNext;
+        if (cell[axisNext] < 0 || cell[axisNext] >= size3[axisNext]) {
+          break;
         }
       }
-      i += width;
     }
   }
 }
 
 /**
- * Draw sprites (things) after the walls: camera-facing billboard quads and block-face quads (via
+ * Draw sprites (things) after the walls: camera-facing billboard quads and voxel-volume quads (via
  * {@link projectSprites} — sorted far-to-near), depth-tested PER PIXEL against the wall z-buffer (so
  * steps/canopies occlude correctly), with per-texel alpha. A NEIGHBOR pass passes its seam's
  * {@link SpriteWindow} so its sprites stay inside the portal opening.
@@ -933,8 +1084,8 @@ function drawSprites(
   const { width } = dims;
 
   for (const q of projectSprites(sprites, map, camera, width, focal, horizon, textures)) {
-    if (q.face !== undefined) {
-      drawBlockFace(buf32, zbuf, dims, q, q.face, camera.z, focal, horizon, glass, window);
+    if (q.vox !== undefined) {
+      drawVoxel(buf32, zbuf, dims, q, q.vox, focal, horizon, glass, window);
       continue;
     }
     const { tex, forward, left, right, yTop, yBottom, u0, v0, cellW, cellH, shade } = q;

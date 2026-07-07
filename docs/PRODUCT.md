@@ -485,9 +485,12 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   distance-shaded through a per-column occlusion window — then draws **sprites** depth-tested per pixel
   against the wall z-buffer: camera-facing **billboards** (enemies, pickups, projectiles; directional
   decor carries a 1×4 **rotation sheet** whose cell follows the view angle vs the prop's authored
-  facing). The engine also has a Build-engine-style **wall-sprite block** mode (a prop's cells mounted
-  on two crossed, world-anchored quads with per-column depth) — kept per-def opt-in but unused today:
-  crossed quads read as cardboard on thin silhouettes, so all shipped props are billboards. Because
+  facing). The four directional decor props go further: at load their rotation sheets are **carved into
+  voxel grids** (a visual-hull intersection of the four views — no new assets) and rendered as
+  **world-anchored voxel volumes**, ray-marched per pixel with an exact 3D DDA and per-face shading,
+  z-tested AND depth-written like real geometry — the prop never turns with the camera, every orbit
+  angle is true perspective; where no grid decoded (SSR, procedural fallback) the same def stays the
+  cell-switched rotation billboard. Because
   every **sector carries its own floor and ceiling height**, the world has real **steps, raised daises,
   sunken pits and variable-height rooms**, and walls sit at **any free angle** (no grid); the camera
   also supports
@@ -529,8 +532,9 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   **magazine + reload** (`stepArsenal`), a shared FPS **`WeaponView`** sprite/animation, **weapon
   switching** (1–8 / mouse wheel, unowned slots skipped) and **reload** (R / right-click); an **office bestiary** of enemies;
   **decor props** (the potted plant, water cooler and explosive barrel as plain billboards; the crashed
-  reception monitor, directory totem, whiteboard and office chair as view-angle billboards wearing
-  1×4 **rotation sheets** — green-screen art under `public/game/props/`); **animated doors** (keycard doors open in place); and the **open-building
+  reception monitor, directory totem, whiteboard and office chair as **voxel volumes carved at load**
+  from their 1×4 **rotation sheets** — green-screen art under `public/game/props/` — with the
+  view-angle billboard as their no-grid fallback); **animated doors** (keycard doors open in place); and the **open-building
   zone system** — the tower is a graph of per-floor maps (`exits` walk-into transitions → named `entries`,
   short fade) with **per-zone world-state persistence** (kills, taken pickups and opened doors survive a
   round trip; the player's inventory travels), so badges collected on one floor open doors on another and

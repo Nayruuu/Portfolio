@@ -6,14 +6,17 @@ import {
   FLAT_ANCHOR,
   GLASS_TINT,
   missingTexture,
+  NEAR,
   PHASE_STRIDE,
   GLASS_STRIDE,
   SPAN_FLAT,
   SPAN_STRIDE,
   SPAN_WALL,
-  SPRITE_BLOCK_FACE,
+  SPRITE_VOXEL,
   SPRITE_STRIDE,
   TEX_ANCHOR,
+  VOXEL_MAX_STEPS,
+  VOXEL_SHADE,
   type Camera,
   type CompiledMap,
   type RenderConfig,
@@ -288,9 +291,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     // SPRITES: the phase's records are already far-to-near; z-tested and alpha-tested per pixel,
     // window-clipped on a seam phase, tinted once per glass layer of THIS phase's set in front of them.
-    // A record is a camera-facing BILLBOARD (constant depth/span) or one BLOCK FACE — a mini-wall whose
-    // depth, vertical span and texture u re-derive PER COLUMN from its projected endpoints (words 12+),
-    // and which WRITES its depth at opaque texels (the CPU z-buffer rule for faces).
+    // A record is a camera-facing BILLBOARD (constant depth/span) or a world-anchored VOXEL VOLUME —
+    // ray-marched per pixel through its carved grid (an n × ny·nz image in the texel pool) with an
+    // exact 3D DDA off the grid-space camera/axes in words 12+, WRITING each hit's depth (the CPU
+    // z-buffer rule for volumes).
     for (var s = 0u; s < spriteCount; s = s + 1u) {
       let sb = spriteBase + s * ${SPRITE_STRIDE}u;
       let left = bitcast<i32>(aux[sb]);
@@ -311,49 +315,159 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
           continue;
         }
       }
-      let blockFace = aux[sb + 11u] == ${SPRITE_BLOCK_FACE}u;
-      var forward = bitcast<f32>(aux[sb + 9u]);
-      var texCol: u32;
-      var vTop = yTop;
-      var vSpan = yBottom - yTop + 1;
+      if (aux[sb + 11u] == ${SPRITE_VOXEL}u) {
+        // VOXEL VOLUME — drawVoxel's math transcribed: the pixel's ray in GRID SPACE, a slab entry
+        // window over the grid box, then an Amanatides & Woo march to the first solid cell.
+        let n = i32(aux[sb + 5u]);
+        let nyG = i32(aux[sb + 6u]);
+        let nzG = i32(aux[sb + 7u]);
+        let camGX = bitcast<f32>(aux[sb + 12u]);
+        let camGY = bitcast<f32>(aux[sb + 13u]);
+        let camGZ = bitcast<f32>(aux[sb + 14u]);
+        let offCol = (f32(uni.width) / 2.0 - f32(xi)) / uni.focal;
+        let dx = bitcast<f32>(aux[sb + 15u]) + offCol * bitcast<f32>(aux[sb + 17u]);
+        let dy = bitcast<f32>(aux[sb + 16u]) + offCol * bitcast<f32>(aux[sb + 18u]);
+        let dz = (f32(uni.horizon - yi) / uni.focal) * bitcast<f32>(aux[sb + 19u]);
+        var tEnter: f32 = ${NEAR};
+        var tExit: f32 = SENTINEL;
+        var axis = 1;
+        var missed = false;
 
-      if (blockFace) {
-        let xa = bitcast<f32>(aux[sb + 12u]);
-        let xb = bitcast<f32>(aux[sb + 13u]);
-        let invFa = bitcast<f32>(aux[sb + 14u]);
-        let invFb = bitcast<f32>(aux[sb + 15u]);
-        let t = (f32(xi) - xa) / (xb - xa);
-        let invF = invFa + t * (invFb - invFa);
+        if (dx != 0.0) {
+          let tx0 = (0.0 - camGX) / dx;
+          let tx1 = (f32(n) - camGX) / dx;
 
-        forward = 1.0 / invF;
-        // This column's exact vertical span (the record's yTop/yBottom are only the face's envelope).
-        vTop = i32(floor(f32(uni.horizon) - (bitcast<f32>(aux[sb + 19u]) - uni.camZ) * uni.focal * invF + 0.5));
-        let vBottom = i32(floor(f32(uni.horizon) - (bitcast<f32>(aux[sb + 18u]) - uni.camZ) * uni.focal * invF + 0.5));
-
-        if (yi < vTop || yi > vBottom) {
-          continue;
+          if (min(tx0, tx1) > tEnter) {
+            tEnter = min(tx0, tx1);
+            axis = 0;
+          }
+          tExit = max(tx0, tx1);
+        } else if (camGX < 0.0 || camGX >= f32(n)) {
+          missed = true;
         }
-        vSpan = vBottom - vTop + 1;
-        // Perspective-correct u along the face (u/z screen-linear — the walls' rule), clamped into the cell.
-        let uzA = bitcast<f32>(aux[sb + 16u]);
-        let uzB = bitcast<f32>(aux[sb + 17u]);
-        let uFrac = clamp((uzA + t * (uzB - uzA)) * forward, 0.0, 1.0);
+        if (dy != 0.0) {
+          let ty0 = (0.0 - camGY) / dy;
+          let ty1 = (f32(nyG) - camGY) / dy;
 
-        texCol = aux[sb + 5u] + min(aux[sb + 7u] - 1u, u32(uFrac * f32(aux[sb + 7u])));
-      } else {
-        // Division-based atlas-cell sampling (non-POT art — no &-wrap): the cell coordinates stay inside
-        // [u0, u0+cellW) × [v0, v0+cellH) by construction, the CPU's exact truncations.
-        texCol = aux[sb + 5u] + u32((f32(xi - left) / f32(right - left + 1)) * f32(aux[sb + 7u]));
+          if (min(ty0, ty1) > tEnter) {
+            tEnter = min(ty0, ty1);
+            axis = 1;
+          }
+          tExit = min(tExit, max(ty0, ty1));
+        } else if (camGY < 0.0 || camGY >= f32(nyG)) {
+          missed = true;
+        }
+        if (dz != 0.0) {
+          let tz0 = (0.0 - camGZ) / dz;
+          let tz1 = (f32(nzG) - camGZ) / dz;
+
+          if (min(tz0, tz1) > tEnter) {
+            tEnter = min(tz0, tz1);
+            axis = 2;
+          }
+          tExit = min(tExit, max(tz0, tz1));
+        } else if (camGZ < 0.0 || camGZ >= f32(nzG)) {
+          missed = true;
+        }
+        if (missed || tEnter >= tExit || tEnter >= best) {
+          continue; // misses the box, or the box entry is already behind the nearest surface here
+        }
+        let grid = texInfo[aux[sb + 4u]];
+        var t = tEnter;
+        var ix = clamp(i32(floor(camGX + t * dx)), 0, n - 1);
+        var iy = clamp(i32(floor(camGY + t * dy)), 0, nyG - 1);
+        var iz = clamp(i32(floor(camGZ + t * dz)), 0, nzG - 1);
+        var stepX = -1;
+        var tDeltaX: f32 = SENTINEL;
+        var tMaxX: f32 = SENTINEL;
+        var stepY = -1;
+        var tDeltaY: f32 = SENTINEL;
+        var tMaxY: f32 = SENTINEL;
+        var stepZ = -1;
+        var tDeltaZ: f32 = SENTINEL;
+        var tMaxZ: f32 = SENTINEL;
+
+        if (dx != 0.0) {
+          stepX = select(-1, 1, dx > 0.0);
+          tDeltaX = abs(1.0 / dx);
+          tMaxX = (f32(ix + select(0, 1, dx > 0.0)) - camGX) / dx;
+        }
+        if (dy != 0.0) {
+          stepY = select(-1, 1, dy > 0.0);
+          tDeltaY = abs(1.0 / dy);
+          tMaxY = (f32(iy + select(0, 1, dy > 0.0)) - camGY) / dy;
+        }
+        if (dz != 0.0) {
+          stepZ = select(-1, 1, dz > 0.0);
+          tDeltaZ = abs(1.0 / dz);
+          tMaxZ = (f32(iz + select(0, 1, dz > 0.0)) - camGZ) / dz;
+        }
+        for (var stepI = 0u; stepI < ${VOXEL_MAX_STEPS}u; stepI = stepI + 1u) {
+          if (t >= best) {
+            break; // everything from here on is occluded (t only grows)
+          }
+          let texel = texels[grid.offset + u32((iz * nyG + iy) * n + ix)];
+
+          if ((texel >> 24u) != 0u) {
+            var face: f32 = ${VOXEL_SHADE.sideY};
+
+            if (axis == 2) {
+              face = select(${VOXEL_SHADE.bottom}, ${VOXEL_SHADE.top}, dz < 0.0);
+            } else if (axis == 0) {
+              face = ${VOXEL_SHADE.sideX};
+            }
+            color = shadePackClamp(texel, bitcast<f32>(aux[sb + 10u]) * face);
+            best = t; // the volume writes depth — real geometry to every later surface
+            for (var k = 0u; k < gcount; k = k + 1u) {
+              let g = goff + k * ${GLASS_STRIDE}u;
+
+              if (t <= bitcast<f32>(aux[g + 6u])) {
+                break;
+              }
+              if (yi >= bitcast<i32>(aux[g]) && yi <= bitcast<i32>(aux[g + 1u])) {
+                color = coolTint(color);
+              }
+            }
+            break;
+          }
+          if (tMaxX <= tMaxY && tMaxX <= tMaxZ) {
+            t = tMaxX;
+            tMaxX = tMaxX + tDeltaX;
+            ix = ix + stepX;
+            axis = 0;
+            if (ix < 0 || ix >= n) {
+              break;
+            }
+          } else if (tMaxY <= tMaxZ) {
+            t = tMaxY;
+            tMaxY = tMaxY + tDeltaY;
+            iy = iy + stepY;
+            axis = 1;
+            if (iy < 0 || iy >= nyG) {
+              break;
+            }
+          } else {
+            t = tMaxZ;
+            tMaxZ = tMaxZ + tDeltaZ;
+            iz = iz + stepZ;
+            axis = 2;
+            if (iz < 0 || iz >= nzG) {
+              break;
+            }
+          }
+        }
+        continue;
       }
+      // BILLBOARD — division-based atlas-cell sampling (non-POT art — no &-wrap): the cell coordinates
+      // stay inside [u0, u0+cellW) × [v0, v0+cellH) by construction, the CPU's exact truncations.
+      let forward = bitcast<f32>(aux[sb + 9u]);
+      let texCol = aux[sb + 5u] + u32((f32(xi - left) / f32(right - left + 1)) * f32(aux[sb + 7u]));
       let t = texInfo[aux[sb + 4u]];
-      let v = aux[sb + 6u] + u32((f32(yi - vTop) / f32(vSpan)) * f32(aux[sb + 8u]));
+      let v = aux[sb + 6u] + u32((f32(yi - yTop) / f32(yBottom - yTop + 1)) * f32(aux[sb + 8u]));
       let texel = texels[t.offset + v * t.width + texCol];
 
       if (forward < best && (texel >> 24u) != 0u) {
         color = shadePackClamp(texel, bitcast<f32>(aux[sb + 10u]));
-        if (blockFace) {
-          best = forward; // faces write depth — a later surface behind this pixel stays occluded
-        }
         // Seen THROUGH glass: one tint per layer of this phase's set in front of the sprite (layers are
         // nearest-first → stop at the first layer at/beyond the sprite's own depth).
         for (var k = 0u; k < gcount; k = k + 1u) {
