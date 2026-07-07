@@ -1,32 +1,19 @@
+import type { EnemyCombat } from '../../core/lib';
+
 /**
  * Enemy specs for the BSP demo — atlas layout + world sizing + combat tuning per kind, kept LOCAL to the
  * feature (the grid's `enemy-sprite.ts` is feature-coupled; a shared move comes if this grows). Four kinds:
  * the melee Corporate Husk, the hitscan-shotgun Security Guard, the projectile-lobbing Junior Office Drone,
  * and the fast melee-lunging Remote Consultant Husk.
+ *
+ * The art-free combat half ({@link EnemyCombat}, + its `EnemyShotgun` / `EnemyProjectile` sub-specs) lives in
+ * `core/lib/game`; this file owns only the atlas/animation half ({@link EnemyArt}) and composes the two into
+ * the full {@link EnemySpec}.
  */
 
-/** A ranged enemy's HITSCAN shotgun: an INSTANT blast within `range` — no projectile, no separate burst
- *  sprite (the firing tell is the enemy's own attack animation). */
-export interface EnemyShotgun {
-  readonly range: number; // effective hitscan range (a shotgun engages CLOSE)
-  readonly damage: number; // damage to the player on a connecting blast
-}
-
-/** A thrower's projectile: a spinning strip billboard that flies at the player and hurts on contact (dodgeable
- *  by side-stepping). */
-export interface EnemyProjectile {
-  readonly texName: string; // key under which the spin strip is registered
-  readonly url: string; // served spin strip (a `frames`×1 horizontal strip)
-  readonly frames: number; // spin frames
-  readonly speed: number; // world units / second
-  readonly damage: number; // damage to the player on contact
-  readonly worldHeight: number; // billboard height in world units
-  readonly aspect: number; // billboard width : height
-  readonly spinRate: number; // spin frames advanced per world cell travelled
-  readonly range: number; // cells of sight within which it throws (and the projectile's max flight)
-}
-
-export interface EnemySpec {
+/** The atlas layout + animation cadence of an enemy kind — the art half of {@link EnemySpec} (its combat +
+ *  world-sizing half is {@link EnemyCombat}, in core). */
+export interface EnemyArt {
   readonly texName: string; // walk atlas key
   readonly atlasUrl: string; // served walk atlas (a `walkCols`×`walkRows` grid)
   readonly walkCols: number;
@@ -43,19 +30,11 @@ export interface EnemySpec {
   readonly painTexName: string;
   readonly painUrl: string;
   readonly aspect: number; // cell width / height → billboard width : height
-  readonly worldHeight: number; // billboard height in world units
   readonly walkStepRate: number; // walk frames advanced per world cell travelled
-  readonly hitRadius: number; // shootable silhouette half-width (world units)
-  readonly hp: number; // damage points to kill
-  readonly speed: number; // move speed (world units / second)
-  readonly standoff: number; // distance it holds at (melee: in your face; ranged: a firing lane)
-  readonly windup: number; // seconds of telegraphed wind-up before an attack releases (a dodge window)
-  readonly cooldownTime: number; // seconds after an attack before it can wind up again
-  readonly meleeReach: number; // it strikes in melee within this range (0 = never melees)
-  readonly meleeDamage: number; // a landed melee strike's damage to the player
-  readonly shotgun?: EnemyShotgun; // present → a hitscan shotgunner
-  readonly thrower?: EnemyProjectile; // present → lobs a flying, dodgeable projectile
 }
+
+/** A full enemy kind = its art ({@link EnemyArt}) + its combat/physics tuning ({@link EnemyCombat}). */
+export interface EnemySpec extends EnemyArt, EnemyCombat {}
 
 /** The "Corporate Husk" — a melee rusher. Walk cell 512×716, feet-anchored. */
 export const PINKY_SPEC: EnemySpec = {

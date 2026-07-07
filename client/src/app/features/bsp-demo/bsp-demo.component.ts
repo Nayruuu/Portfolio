@@ -13,23 +13,28 @@ import {
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import {
   buildBsp,
-  castFloorCeil,
   castRay,
+  clampPitch,
   climbTarget,
+  HEADROOM,
   locateSubSector,
+  mantleStep,
   mapObstacles,
   mapSprites,
   movePlayer,
-  nearestTargetHit,
   orientSprite,
+  PLAYER_RADIUS,
   renderFrame,
+  isPassableSeam,
+  seamCrossing,
+  seamHysteresisPush,
+  STEP_MAX,
   type Camera,
   type CompiledMap,
   type MapSource,
+  type MutableSector,
   type Obstacle,
-  type Sector,
   type Sprite,
-  type Target,
   type Texture,
   type ZoneNeighbor,
 } from '../../core/lib/bsp-engine';
@@ -37,33 +42,34 @@ import type { Level } from './level-accueil';
 import { LEVELS, parseLevelParams, resolveZone, type LevelParams } from './level-select';
 import { zoneStates, type ZoneSnapshot } from './zone-state';
 import {
+  buildAtlasJobs,
   loadAtlasTexture,
   loadEnvTextures,
   proceduralTextures,
   projectileWidth,
 } from './load-textures';
-import { ENEMY_SPECS, type EnemySpec, type EnemyProjectile } from './enemies';
+import type { Foe } from './enemy-runtime';
+import type { Door, SeamEdge, WarmZone, ZoneExit } from './zone-world';
 import {
-  AMMO_BOX_SPECS,
+  buildPickups,
   EXIT_RADIUS,
   EXIT_SPEC,
-  keycardSpec,
   PICKUP_RADIUS,
-  PICKUP_TEXTURE_JOBS,
+  pickupFrame,
+  takenFlags,
   VITAL_MAX,
-  vitalSpec,
   weaponAmmoDose,
-  weaponPickupSpec,
   type AmmoBox,
   type Keycard,
-  type MarkerSpec,
+  type Marker,
   type Vital,
   type WeaponPickup,
   type WeaponPickupSpec,
 } from './pickups';
 import { createGpuRenderer, type GpuRenderer } from './gpu-renderer';
 import { createRenderPool, type RenderPool } from './render-pool';
-import { DoomHud, type Gaze } from '../../shared/game/doom-hud';
+import { DoomHud } from '../../shared/game/doom-hud';
+import { gazeForTurn, smoothTurnRate } from '../../shared/game/gaze';
 import {
   AMMO_MAX,
   ARSENAL,
@@ -79,15 +85,33 @@ import { impactEffect, projectileEffect } from '../../shared/game/effects';
 import { IconComponent } from '../../shared/icon/icon.component';
 import {
   ARC_DURATION,
+  DOOR_TRIGGER_RADIUS,
+  FRAME_STATS_WINDOW_MS,
+  FrameStats,
+  SLIDE_TRIGGER_RADIUS,
+  doorCeilZ,
+  fireWeapon,
   initialRenderGovernor,
+  movementDelta,
   nextOwnedIndex,
   shouldAutoEquip,
   stepArsenal,
+  stepDoorOpenness,
+  stepEnemies,
+  stepEnemyShots,
+  stepProjectiles,
   stepRenderGovernor,
-  type ChainSpec,
+  stepSlideOpenness,
+  type Arc,
+  type Barrel,
+  type CombatEnemy,
+  type CombatFrame,
+  type EnemyShot,
+  type Impact,
   type KeycardColor,
+  type PlayerCombatFrame,
+  type Projectile,
   type RenderGovernorState,
-  type WeaponCombat,
 } from '../../core/lib';
 
 /** Keys we react to (lower-cased), covering both QWERTY (WASD) and AZERTY (ZQSD) + arrows. */
@@ -104,9 +128,6 @@ const CONTROLS = new Set([
   'arrowright',
 ]);
 
-const PLAYER_RADIUS = 0.3;
-const STEP_MAX = 1.1; // a step ≤ this is climbable
-const HEADROOM = 0.8; // minimum sector clearance to pass through
 const EYE_HEIGHT = 1.4; // camera height above the floor
 const MOVE_SPEED = 4; // world units / second
 // Auto-mantle: a ledge whose rise is in (STEP_MAX, CLIMB_MAX] is too tall to step but climbable — walking
@@ -121,29 +142,17 @@ const CLIMB_LEDGE_MAX = 0.72; // the lip near the top, then slide down it as the
 const MOUSE_SENS = 0.0035; // radians per pixel of mouse motion (turning is mouse-only)
 const PITCH_UP_MAX = 0.85; // look-up limit (the camera pitch is a vertical y-shear, not a true rotation)
 const PITCH_DOWN_MAX = 2.0; // look-DOWN limit — much deeper than up (aim down at enemies below a platform); the renderer handles the off-screen horizon, so this can exceed 1.0 (walls stay vertical, as in any sheared-frustum tilt)
-const MAX_SHOT_RANGE = 40; // cells a launched projectile flies before it despawns (hitscan uses the weapon's range)
-const MUZZLE_CLEAR = 1.5; // cells a shot clears before floor/ceiling collision — lets a steep shot off a raised platform clear its own lip instead of bursting at your feet (wider than a pedestal half-width)
-const BARREL_HIT_RADIUS = 0.2; // the barrel's SOLID half-width (its art fills only the middle 50% of the 0.8 billboard)
 const HIT_FLASH_DURATION = 0.12; // seconds an enemy flashes white after a hit (mirrors the grid)
 const ENEMY_RECOIL = 0.18; // world units an enemy flinches UP at full hit-flash (the grid's recoil, in world z)
-const ENEMY_SEP_DIST = 0.85; // min centre distance between two living enemies (separation, so they don't stack)
-const STANDOFF_BAND = 0.25; // hysteresis around an enemy's standoff: hold within ±this, advance/retreat outside
-const PLAYER_HIT_RADIUS = 0.45; // a thrown enemy projectile within this of the camera lands on the player
 const HURT_FX_DURATION = 0.35; // seconds the player's red damage flash lingers after taking a hit
 const PICKUP_FX_DURATION = 0.3; // seconds the player's green pickup flash lingers after collecting an item
 const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the rest hits health) — DOOM green armour
 const RESERVE_START = 50; // starting reserve per ammo type at spawn (then clamped to each type's cap) — pickups top up
 const RESTART_DELAY = 1.2; // seconds after death/win before a click restarts (lets the end feedback settle)
 const ZONE_FADE = 0.35; // seconds each side of a zone swap fades (to black, swap the floor, back in)
-const SEAM_HYST = 0.1; // cells the player lands INSIDE the new zone past a crossed seam — the positional hysteresis that keeps grazing the line from oscillating swaps
 const HINT_DURATION = 1.8; // seconds a transient objective hint lingers (e.g. "badge requis" at a locked exit)
 const INSPECT_PICKUPS: boolean = false; // when true, ammo boxes spin but are never collected (art-inspection mode)
 const SPAWN_ENEMIES: boolean = true; // spawn the level's enemies (the live game in the player); /bsp shares the same scene
-const DOOR_OPEN_SPEED = 2.2; // openness units/second (≈0.45s for a door to fully raise)
-const DOOR_TRIGGER_RADIUS = 2.4; // approach this close to a door's trigger point to start it opening
-const SLIDE_OPEN_SPEED = 4; // sliding-glass panel openness units/second (a snappy automatic door)
-const SLIDE_TRIGGER_RADIUS = 4; // an automatic sliding door senses you as you approach (then it stays open)
-const PROJECTILE_SPAWN_AHEAD = 0.25; // cells ahead of the camera a launched shot spawns — close, so it leaves from the gun
 // Screen-space projectile painting, mirroring the grid's blitEffect so a shot reads as leaving the weapon:
 const PROJECTILE_SCREEN_SCALE = 0.42; // on-screen height = this × effects size, relative to a same-distance wall
 const PROJECTILE_MAX_HEIGHT_FRACTION = 0.28; // cap a close shot's height at this fraction of the canvas (no screen-fill)
@@ -165,8 +174,6 @@ const CHARGE_FLASH_DECAY_PER_S = 3; // how fast the green discharge flash fades
 const HUD_NATIVE_WIDTH = 2117; // x1.0 status-bar art width (biggest tier) — only the aspect source now
 const HUD_NATIVE_HEIGHT = 404; // …its height, so the backing store keeps the bar's 5.24:1 aspect
 const HUD_MAX_WIDTH = 1024; // cap the HUD backing store here → a cheap repaint even fullscreen (still crisp)
-const GAZE_TURN_RATE = 0.6; // rad/s of turning before the HUD face glances aside
-const GAZE_FAR_TURN_RATE = 2.5; // rad/s of turning for the extreme-glance face columns
 // DEBUG stress mode (toggle G): a load test for the MAIN-THREAD budget under a real fight — synthetic enemies
 // run a per-frame AI cost (line-of-sight castRay + collision chase) and fire projectiles, ramping in number.
 const STRESS_MAX = 64; // peak synthetic enemies the ramp climbs to
@@ -175,173 +182,6 @@ const STRESS_RAMP_INTERVAL = 2; // seconds between ramp ticks
 const ENEMY_SPEED = 2; // chase speed (world units / second)
 const ENEMY_FIRE_INTERVAL = 1.5; // seconds between an enemy's shots while it can see the player
 const PERF_RING_SIZE = 4096; // frames the dev perf ring (`?perflog=1`) holds — a power of two (index masks)
-
-/** A projectile in flight: a 3D position + horizontal heading + speed, the effects `kind` that draws it, and
- *  its blast on impact. It flies along the firing pitch — `z` climbs by `vSlope` per cell travelled — so a
- *  shot aimed over a barrel sails past it. */
-interface Projectile {
-  x: number;
-  y: number;
-  z: number; // world height, climbing with `vSlope` as it flies (so the vertical aim carries through)
-  readonly dx: number;
-  readonly dy: number;
-  readonly vSlope: number; // vertical climb per cell of horizontal travel (from the pitch at launch)
-  readonly speed: number;
-  readonly kind: string; // effects.json projectile kind → its sprite + drop + anchor at draw time
-  readonly impactKind: string; // effects.json impact kind → the burst strip played where it lands
-  readonly damage: number; // damage dealt to an enemy on a direct hit (and within the splash)
-  readonly radius: number; // collision half-width (cells)
-  readonly splashR: number;
-  readonly chain: ChainSpec | null; // the plasma's chain-lightning rider (null = no chain)
-  traveled: number;
-  alive: boolean;
-}
-
-/** A short-lived impact burst at a world point: an `impacts` strip animation (`kind`) played once from `age`,
- *  billboarded at (`x`,`y`,`z`) and culled when the strip finishes. */
-interface Impact {
-  readonly kind: string;
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-  age: number;
-}
-
-/** A short-lived chain-lightning arc between two world points (their mid-body height), faded over its age. */
-interface Arc {
-  readonly ax: number;
-  readonly ay: number;
-  readonly az: number;
-  readonly bx: number;
-  readonly by: number;
-  readonly bz: number;
-  age: number;
-}
-
-/** A shootable billboard (a destructible barrel): its sprite + whether it is still standing. */
-interface Barrel {
-  readonly sprite: Sprite;
-  alive: boolean;
-}
-
-/** A placed single-sprite floor marker (the exit sign). */
-interface Marker {
-  x: number;
-  y: number;
-  z: number;
-  spec: MarkerSpec;
-}
-
-/** A sector whose heights the game may animate live (doors) — the mutable per-zone clone of {@link Sector}. */
-type MutableSector = { -readonly [K in keyof Sector]: Sector[K] };
-
-/** A zone-graph exit placed in the world: walk into it → transition to zone `to` at its named `entry`. */
-interface ZoneExit {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number; // seated on its floor (the marker's base)
-  readonly to: string;
-  readonly entry: string;
-}
-
-/** A locked DOOR — a sector whose `ceilZ` animates between closed (== its floor, impassable) and open. Approach
- *  the trigger point holding the matching badge (if `requiresCard`) to open it; once opened it stays open (an unlock). */
-interface Door {
-  readonly sector: number; // the door sector whose ceilZ animates
-  readonly triggerX: number; // approach within DOOR_TRIGGER_RADIUS of this point to open
-  readonly triggerY: number;
-  readonly closedCeilZ: number; // ceilZ when shut (== floorZ → no headroom → physics blocks it)
-  readonly openCeilZ: number; // ceilZ when fully open (the sector's authored ceiling)
-  readonly requiresCard: KeycardColor | null; // the badge colour needed to open (null = no badge required)
-  openness: number; // 0 shut .. 1 open
-}
-
-/** A thrower's projectile in flight: a spinning billboard that hurts the player on contact (dodgeable).
- *  Liveness is positional: `stepEnemyShots` compacts spent shots out of its zone's array in place. */
-interface EnemyShot {
-  x: number;
-  y: number;
-  z: number;
-  readonly dx: number;
-  readonly dy: number;
-  readonly proj: EnemyProjectile;
-  traveled: number;
-}
-
-/** A PASSABLE live seam of the active map, pre-resolved for the per-frame crossing test: the seam segment,
- *  its unit normal pointing OUT of the room (the crossing direction — the seam's back side), and the zone
- *  transform (neighbor point + (`dx`,`dy`) = this map's point). */
-interface SeamEdge {
-  readonly ax: number;
-  readonly ay: number;
-  readonly bx: number;
-  readonly by: number;
-  readonly len: number;
-  readonly nx: number; // unit normal toward the seam's BACK side (into the neighbor zone)
-  readonly ny: number;
-  readonly zone: string;
-  readonly dx: number;
-  readonly dy: number;
-}
-
-/**
- * One zone's full LIVE world state — everything `loadZone` builds for the active floor. The active zone
- * holds this as the component's flat fields; the WARM neighbor (the zone behind a visible passable seam)
- * holds one of these: its enemies simulate each frame in THEIR map, its sprites show through the seam, and
- * on a crossing the warm world is ADOPTED wholesale as the active one (continuity — nothing reloads) while
- * the outgoing world becomes the new warm zone (the reverse portal).
- */
-interface WarmZone {
-  readonly key: string;
-  readonly level: Level;
-  // Entities exist only once the atlases have decoded: a bare (unpopulated) world is geometry-only, and
-  // its snapshot must never be persisted — takenFlags would read its empty pickup lists as "all taken".
-  readonly populated: boolean;
-  readonly sectors: MutableSector[];
-  readonly mapSource: MapSource;
-  readonly map: CompiledMap;
-  readonly targets: Barrel[];
-  enemies: Foe[];
-  readonly enemyShots: EnemyShot[];
-  vitals: (Vital & { idx: number })[];
-  ammoBoxes: (AmmoBox & { idx: number })[];
-  keycards: (Keycard & { idx: number })[];
-  weaponPickups: (WeaponPickup & { idx: number })[];
-  readonly doors: Door[];
-  readonly slides: number[];
-  readonly obstacles: readonly Obstacle[];
-  exit: Marker | null;
-}
-
-/** One zone's combat frame, as the enemy/enemy-shot steppers see it: the ACTIVE zone hands the real player
- *  and hurt callback; the WARM zone hands the player's seam-translated ghost and a no-op hurt (its foes can
- *  never land a hit across the seam anyway — `castRay` blocks their sight lines at the line). */
-interface CombatFrame {
-  readonly map: CompiledMap;
-  readonly slides: readonly number[];
-  readonly obstacles: readonly Obstacle[]; // the zone's solid decor (props block movers)
-  readonly enemies: Foe[];
-  readonly shots: EnemyShot[];
-  readonly px: number;
-  readonly py: number;
-  readonly hurt: (dmg: number) => void;
-}
-
-/** A live or dying enemy instance: its `spec` (kind) + world pose + walk-anim travel, hp, the white hit-flash
- *  timer, the death timer (`dying` → death atlas, frozen on the last frame = a corpse), and the attack timers. */
-interface Foe {
-  readonly spec: EnemySpec;
-  x: number;
-  y: number;
-  z: number;
-  walkDist: number;
-  hp: number;
-  dying: boolean;
-  deathTime: number;
-  hitFlash: number;
-  windup: number; // seconds left on a telegraphed attack wind-up (0 = not attacking)
-  cooldown: number; // seconds until it can attack again
-}
 
 /**
  * The BSP software-engine game: it blits {@link renderFrame}'s framebuffer onto a canvas each animation
@@ -446,11 +286,9 @@ export class BspDemoComponent {
   private readonly held = new Set<string>();
   private lastTime = 0;
   private frameId = 0;
-  private tickStart = 0;
-  private rendersSinceTick = 0; // COMPLETED renders in the roll-up window (the visual rate)
-  private msAccum = 0;
-  private msMax = 0; // worst single render in the current window → the spike readout
-  private stallMax = 0; // worst join straggler stall in the current window → the contention readout
+  // The pure per-window roll-up (fps / mean / max / worst-stall) behind the HUD signals + perf beacon — it
+  // ingests each completed render's cost and distils the window ~4×/second (core/lib/game/frame-stats.ts).
+  private readonly frameStats = new FrameStats();
   private lastRenderMs = 0; // the last completed render's measurements — the ring's render columns
   private lastStallMs = 0;
   private lastSlowest = 0;
@@ -600,9 +438,10 @@ export class BspDemoComponent {
           return; // look is frozen mid-mantle so the vault always clears the lip
         }
         this.camera.angle -= event.movementX * MOUSE_SENS;
-        this.camera.pitch = Math.max(
-          -PITCH_DOWN_MAX,
-          Math.min(PITCH_UP_MAX, this.camera.pitch - event.movementY * MOUSE_SENS),
+        this.camera.pitch = clampPitch(
+          this.camera.pitch - event.movementY * MOUSE_SENS,
+          PITCH_DOWN_MAX,
+          PITCH_UP_MAX,
         );
       };
 
@@ -887,16 +726,7 @@ export class BspDemoComponent {
       // Decode every enemy's atlases (walk/death/attack/pain + a ranged thrower's spin strip) AND every pickup
       // sprite (vitals + spinning ammo strips), register them (main + workers), then spawn the enemies + pickups
       // (so they never flash the magenta MISSING texture).
-      const atlasJobs = [
-        ...ENEMY_SPECS.flatMap((s) => [
-          { name: s.texName, url: s.atlasUrl, rows: s.walkRows },
-          { name: s.deathTexName, url: s.deathUrl, rows: 1 },
-          { name: s.attackTexName, url: s.attackUrl, rows: 1 },
-          { name: s.painTexName, url: s.painUrl, rows: 1 },
-          ...(s.thrower ? [{ name: s.thrower.texName, url: s.thrower.url, rows: 1 }] : []),
-        ]),
-        ...PICKUP_TEXTURE_JOBS.map((job) => ({ name: job.name, url: job.url, rows: 1 })),
-      ];
+      const atlasJobs = buildAtlasJobs();
 
       void Promise.all(atlasJobs.map((job) => loadAtlasTexture(job.url, job.rows))).then(
         (textures) => {
@@ -1021,10 +851,10 @@ export class BspDemoComponent {
       return;
     }
     this.stepStress(dt); // DEBUG load test (no-op unless toggled) — runs before projectiles so its shots step now
-    this.stepEnemies(this.activeFrame(), dt); // real enemies chase / shoot / throw
-    this.stepEnemyShots(this.activeFrame(), dt); // throwers' projectiles fly at the player
+    stepEnemies(this.activeFrame(), dt); // real enemies chase / shoot / throw
+    stepEnemyShots(this.activeFrame(), dt); // throwers' projectiles fly at the player
     this.stepWarm(dt); // the warm neighbor lives too: its foes think in THEIR map behind the seam
-    this.stepProjectiles(dt);
+    stepProjectiles(this.playerCombatFrame(), dt);
     this.stepPickups(dt); // spin the ammo boxes + collect anything the player is standing on
     this.stepDoors(dt); // animate doors (after pickups, so this frame's badge state gates the door) before moving
 
@@ -1064,14 +894,13 @@ export class BspDemoComponent {
     const sin = Math.sin(this.camera.angle);
     const fromX = this.camera.x;
     const fromY = this.camera.y;
-    const wantX = (cos * forward + sin * strafe) * reach;
-    const wantY = (sin * forward - cos * strafe) * reach;
+    const want = movementDelta(this.camera.angle, forward, strafe, reach);
     const moved = movePlayer(
       this.map,
       fromX,
       fromY,
-      wantX,
-      wantY,
+      want.x,
+      want.y,
       PLAYER_RADIUS,
       STEP_MAX,
       HEADROOM,
@@ -1127,18 +956,16 @@ export class BspDemoComponent {
     if (m === null) {
       return;
     }
-    const progress = m.progress + dt / MANTLE_DURATION;
-    const stride = CLIMB_VAULT_ADVANCE * Math.min(dt / MANTLE_DURATION, 1 - m.progress);
+    const step = mantleStep(m, dt, MANTLE_DURATION, CLIMB_VAULT_ADVANCE, EYE_HEIGHT);
 
-    this.camera.x += m.dirX * stride;
-    this.camera.y += m.dirY * stride;
+    this.camera.x += step.dx;
+    this.camera.y += step.dy;
+    this.camera.z = step.z;
 
-    if (progress >= 1) {
-      this.camera.z = m.targetZ + EYE_HEIGHT; // landed on the ledge
-      this.mantle = null;
+    if (step.done) {
+      this.mantle = null; // landed on the ledge (the eye snapped exactly onto it)
     } else {
-      this.camera.z = m.startZ + (m.targetZ - m.startZ) * progress + EYE_HEIGHT;
-      m.progress = progress;
+      m.progress = step.progress;
     }
   }
 
@@ -1333,7 +1160,7 @@ export class BspDemoComponent {
     for (const v of world.vitals) {
       // A grounded vitals billboard (health medkit/plant · mental figurine/card) — a turntable when `spin`,
       // else a static frame-0 billboard; depth-occluded by the z-buffer pass.
-      const col = v.spec.spin ? Math.floor(v.age / (v.spec.frameMs / 1000)) % v.spec.frames : 0;
+      const col = pickupFrame(v.age, v.spec.frameMs, v.spec.frames, v.spec.spin);
 
       sprites.push({
         x: v.x,
@@ -1350,7 +1177,7 @@ export class BspDemoComponent {
     }
     for (const b of world.ammoBoxes) {
       // A spinning ammo box: advance the turntable frame from its age (the quad never rotates).
-      const col = Math.floor(b.age / (b.spec.frameMs / 1000)) % b.spec.frames;
+      const col = pickupFrame(b.age, b.spec.frameMs, b.spec.frames);
 
       sprites.push({
         x: b.x,
@@ -1368,7 +1195,7 @@ export class BspDemoComponent {
     for (const k of world.keycards) {
       // A spinning access badge (blue employee / yellow manager / red director): advance its turntable frame
       // from its age (the quad never rotates) — mirrors the vitals/ammo turntables; drops once collected.
-      const col = Math.floor(k.age / (k.spec.frameMs / 1000)) % k.spec.frames;
+      const col = pickupFrame(k.age, k.spec.frameMs, k.spec.frames);
 
       sprites.push({
         x: k.x,
@@ -1386,7 +1213,7 @@ export class BspDemoComponent {
     for (const p of world.weaponPickups) {
       // A weapon unlock on the floor — the same turntable contract as the ammo boxes (advance the frame
       // from its age; the v1 single-frame placeholder art always resolves cell 0); drops once collected.
-      const col = Math.floor(p.age / (p.spec.frameMs / 1000)) % p.spec.frames;
+      const col = pickupFrame(p.age, p.spec.frameMs, p.spec.frames);
 
       sprites.push({
         x: p.x,
@@ -1470,73 +1297,18 @@ export class BspDemoComponent {
     return level.map.sectors[locateSubSector(map.root, x, y).sector].floorZ;
   }
 
-  /** Place the active zone's floor pickups + the legacy exit marker — see {@link buildPickups}. */
+  /** Place the active zone's floor pickups + the legacy exit marker — the pure {@link buildPickups}, seated on
+   *  the active level's floor. */
   private spawnPickups(): void {
-    const built = this.buildPickups(this.level, this.map, this.zoneSnap);
+    const built = buildPickups(this.level, this.zoneSnap, (x, y) =>
+      this.floorOn(this.level, this.map, x, y),
+    );
 
     this.vitals = built.vitals;
     this.ammoBoxes = built.ammoBoxes;
     this.keycards = built.keycards;
     this.weaponPickups = built.weaponPickups;
     this.exit = built.exit;
-  }
-
-  /** Build a zone's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, weapon unlocks,
-   *  spinning access badges) + the legacy exit marker, each seated on its sector floor. Each pickup carries its spawn index
-   *  and anything the zone's snapshot flags as TAKEN is skipped — collected items stay gone on return.
-   *  Shared by the active spawn and the warm-zone build. */
-  private buildPickups(
-    level: Level,
-    map: CompiledMap,
-    snap: ZoneSnapshot | null,
-  ): Pick<WarmZone, 'vitals' | 'ammoBoxes' | 'keycards' | 'weaponPickups' | 'exit'> {
-    const floor = (x: number, y: number): number => this.floorOn(level, map, x, y);
-    const vitals = [
-      ...level.health.map(([x, y, size]) => ({ spec: vitalSpec('health', size), x, y })),
-      ...level.armor.map(([x, y, size]) => ({ spec: vitalSpec('armor', size), x, y })),
-    ]
-      .map((v, idx) => ({ ...v, idx, z: floor(v.x, v.y), age: 0 }))
-      .filter((v) => snap?.vitalsTaken[v.idx] !== true);
-    const ammoBoxes = AMMO_BOX_SPECS.map((spec, idx) => ({
-      spec,
-      idx,
-      x: level.ammo[idx][0],
-      y: level.ammo[idx][1],
-      z: floor(level.ammo[idx][0], level.ammo[idx][1]),
-      age: 0,
-    })).filter((b) => snap?.ammoTaken[b.idx] !== true);
-    const keycards = level.keycards
-      .map(([x, y, color], idx) => ({
-        spec: keycardSpec(color),
-        idx,
-        x,
-        y,
-        z: floor(x, y),
-        age: 0,
-      }))
-      .filter((k) => snap?.cardsTaken[k.idx] !== true);
-    const weaponPickups = (level.weapons ?? [])
-      .map(([x, y, id], idx) => ({
-        spec: weaponPickupSpec(id),
-        idx,
-        x,
-        y,
-        z: floor(x, y),
-        age: 0,
-      }))
-      .filter((p) => snap?.weaponsTaken[p.idx] !== true);
-    const exit = level.exit;
-
-    return {
-      vitals,
-      ammoBoxes,
-      keycards,
-      weaponPickups,
-      exit:
-        exit === undefined
-          ? null
-          : { spec: EXIT_SPEC, x: exit[0], y: exit[1], z: floor(exit[0], exit[1]) },
-    };
   }
 
   /** Spin the ammo boxes + collect any pickup the player overlaps: coffee/RAM refill health/armour (capped at
@@ -1789,7 +1561,7 @@ export class BspDemoComponent {
     for (const line of this.mapSource.linedefs) {
       const portal = line.zonePortal;
 
-      if (portal?.passable !== true || LEVELS[portal.zone] === undefined) {
+      if (!isPassableSeam(portal) || LEVELS[portal.zone] === undefined) {
         continue;
       }
       const a = this.mapSource.vertices[line.v1];
@@ -1858,7 +1630,7 @@ export class BspDemoComponent {
     const map = buildBsp(mapSource);
     const doors = this.buildDoors(zone.level, snap);
     const pickups = this.atlasesReady
-      ? this.buildPickups(zone.level, map, snap)
+      ? buildPickups(zone.level, snap, (x, y) => this.floorOn(zone.level, map, x, y))
       : { vitals: [], ammoBoxes: [], keycards: [], weaponPickups: [], exit: null };
 
     this.applyDoors(doors, sectors); // a remembered-open door is open for the warm sim's foes too
@@ -1934,26 +1706,15 @@ export class BspDemoComponent {
 
   /** Does the movement step `from → to` cross a passable seam (front → back, within its span)? If so,
    *  perform the seamless zone swap and return true. The hysteresis lives in {@link swapZones}: the player
-   *  lands ≥ {@link SEAM_HYST} beyond the line, so grazing it can't oscillate. */
+   *  lands ≥ SEAM_HYSTERESIS beyond the line, so grazing it can't oscillate. */
   private crossSeam(fromX: number, fromY: number, toX: number, toY: number): boolean {
     for (const seam of this.seams) {
-      const dFrom = (fromX - seam.ax) * seam.nx + (fromY - seam.ay) * seam.ny; // signed dist, + = beyond
-      const dTo = (toX - seam.ax) * seam.nx + (toY - seam.ay) * seam.ny;
+      const beyond = seamCrossing(seam, fromX, fromY, toX, toY);
 
-      if (dFrom >= 0 || dTo < 0) {
-        continue; // no front → back crossing on this step
+      if (beyond === null) {
+        continue; // no front → back crossing within this seam's span
       }
-      const t = dFrom / (dFrom - dTo); // where along the step the line is met
-      const cx = fromX + (toX - fromX) * t;
-      const cy = fromY + (toY - fromY) * t;
-      const u =
-        ((cx - seam.ax) * (seam.bx - seam.ax) + (cy - seam.ay) * (seam.by - seam.ay)) /
-        (seam.len * seam.len);
-
-      if (u < 0 || u > 1) {
-        continue; // crossed the infinite line, but off the seam's actual span
-      }
-      this.swapZones(seam, toX, toY, dTo);
+      this.swapZones(seam, toX, toY, beyond);
 
       return true;
     }
@@ -1970,10 +1731,8 @@ export class BspDemoComponent {
    */
   private swapZones(seam: SeamEdge, toX: number, toY: number, beyond: number): void {
     const t0 = performance.now();
-    // Positional hysteresis: land at least SEAM_HYST past the line, so a graze can't instantly re-cross.
-    const push = Math.max(0, SEAM_HYST - beyond);
-    const x = toX + seam.nx * push;
-    const y = toY + seam.ny * push;
+    // Positional hysteresis: land at least SEAM_HYSTERESIS past the line, so a graze can't instantly re-cross.
+    const { x, y } = seamHysteresisPush(toX, toY, seam.nx, seam.ny, beyond);
 
     zoneStates.snapshot(this.zoneKey, this.captureZone()); // bookkeeping (the WARM world keeps the live continuity)
     const outgoing = this.captureWorld(); // the old zone STAYS ALIVE — it becomes the warm neighbor
@@ -2021,26 +1780,20 @@ export class BspDemoComponent {
           : { x: e.x, y: e.y, hp: e.hp, dead: e.dying }; // dying-in-progress persists as a corpse
       }),
       barrels: world.targets.map((t) => t.alive),
-      vitalsTaken: this.takenFlags(
+      vitalsTaken: takenFlags(
         world.level.health.length + world.level.armor.length,
         world.vitals,
+        this.atlasesReady,
       ),
-      ammoTaken: this.takenFlags(world.level.ammo.length, world.ammoBoxes),
-      cardsTaken: this.takenFlags(world.level.keycards.length, world.keycards),
-      weaponsTaken: this.takenFlags(world.level.weapons?.length ?? 0, world.weaponPickups),
+      ammoTaken: takenFlags(world.level.ammo.length, world.ammoBoxes, this.atlasesReady),
+      cardsTaken: takenFlags(world.level.keycards.length, world.keycards, this.atlasesReady),
+      weaponsTaken: takenFlags(
+        world.level.weapons?.length ?? 0,
+        world.weaponPickups,
+        this.atlasesReady,
+      ),
       doors: world.doors.map((d) => d.openness),
     };
-  }
-
-  /** Taken flags for an index-carrying pickup list: `true` where no pickup with that spawn index remains.
-   *  Before the atlases decode nothing has spawned, so nothing can have been taken. */
-  private takenFlags(count: number, remaining: readonly { idx: number }[]): boolean[] {
-    if (!this.atlasesReady) {
-      return Array.from({ length: count }, () => false);
-    }
-    const left = new Set(remaining.map((p) => p.idx));
-
-    return Array.from({ length: count }, (_, i) => !left.has(i));
   }
 
   /** Advance the zone swap: fade to black over {@link ZONE_FADE}, swap the floor at black, fade back in. */
@@ -2069,9 +1822,8 @@ export class BspDemoComponent {
         DOOR_TRIGGER_RADIUS;
       const mayOpen = door.requiresCard === null || this.heldCards.has(door.requiresCard);
 
-      if (near && mayOpen) {
-        door.openness = Math.min(1, door.openness + DOOR_OPEN_SPEED * dt);
-      } else if (near && !mayOpen && door.openness === 0) {
+      door.openness = stepDoorOpenness(door.openness, dt, near, mayOpen);
+      if (near && !mayOpen && door.openness === 0) {
         this.hint = HINT_DURATION; // locked — the badge is needed
       }
     }
@@ -2082,16 +1834,10 @@ export class BspDemoComponent {
   /** Sliding glass doors: proximity-driven + AUTO-CLOSING (a real automatic door). Each animates toward open
    *  when the player is within range and back toward shut when they leave; `this.slides` feeds render + physics. */
   private stepSliding(dt: number): void {
-    const step = SLIDE_OPEN_SPEED * dt;
-
     for (const s of this.slidingDoors) {
-      const target =
-        Math.hypot(s.mx - this.camera.x, s.my - this.camera.y) < SLIDE_TRIGGER_RADIUS ? 1 : 0;
+      const near = Math.hypot(s.mx - this.camera.x, s.my - this.camera.y) < SLIDE_TRIGGER_RADIUS;
 
-      this.slides[s.line] =
-        target > this.slides[s.line]
-          ? Math.min(target, this.slides[s.line] + step)
-          : Math.max(target, this.slides[s.line] - step);
+      this.slides[s.line] = stepSlideOpenness(this.slides[s.line], dt, near);
     }
   }
 
@@ -2099,8 +1845,7 @@ export class BspDemoComponent {
    *  straight off `source.sectors` each frame, so a raised ceiling both shows AND becomes passable. */
   private applyDoors(doors: readonly Door[], sectors: MutableSector[]): void {
     for (const door of doors) {
-      sectors[door.sector].ceilZ =
-        door.closedCeilZ + (door.openCeilZ - door.closedCeilZ) * door.openness;
+      sectors[door.sector].ceilZ = doorCeilZ(door.closedCeilZ, door.openCeilZ, door.openness);
     }
   }
 
@@ -2115,6 +1860,28 @@ export class BspDemoComponent {
       px: this.camera.x,
       py: this.camera.y,
       hurt: (dmg) => this.hurtPlayer(dmg),
+    };
+  }
+
+  /** The active zone's {@link PlayerCombatFrame}: the live map/barrels/foes + shared projectile pool + the
+   *  camera's firing pose, with the shell's side-effect callbacks (hurt a foe, queue an impact/arc, resolve a
+   *  projectile kind's width). The pure hitscan / projectile steppers read + mutate the shared arrays. */
+  private playerCombatFrame(): PlayerCombatFrame {
+    return {
+      map: this.map,
+      slides: this.slides,
+      targets: this.targets,
+      enemies: this.enemies,
+      projectiles: this.projectiles,
+      cameraX: this.camera.x,
+      cameraY: this.camera.y,
+      cameraZ: this.camera.z,
+      angle: this.camera.angle,
+      vSlope: this.aimVerticalSlope(),
+      hurtEnemy: (enemy, dmg) => this.hurtEnemy(enemy, dmg),
+      addImpact: (kind, x, y, z) => this.spawnImpact(kind, x, y, z),
+      addArc: (arc) => this.arcs.push(arc),
+      projectileWidth,
     };
   }
 
@@ -2153,217 +1920,8 @@ export class BspDemoComponent {
       hurt: () => undefined, // a warm foe can never truly reach the player across the seam
     };
 
-    this.stepEnemies(frame, dt);
-    this.stepEnemyShots(frame, dt);
-  }
-
-  /** Real-enemy AI (per-spec), over one zone's {@link CombatFrame} — the active zone or the warm neighbor.
-   *  With line of sight a foe holds at its `standoff` (a melee Husk in your face, a ranged Guard on a firing
-   *  lane), and when ready TELEGRAPHS a wind-up (feet planted, attack animation); on release it lands a melee
-   *  strike if in reach, else lobs a projectile. `walkDist` drives the walk frame. */
-  private stepEnemies(frame: CombatFrame, dt: number): void {
-    if (frame.enemies.length === 0 && frame.shots.length === 0) {
-      return;
-    }
-
-    for (const e of frame.enemies) {
-      e.hitFlash = Math.max(0, e.hitFlash - dt); // fade the white hit-flash
-      e.cooldown = Math.max(0, e.cooldown - dt);
-
-      if (e.dying) {
-        e.deathTime += dt; // play the death animation, then freeze on its last frame (a corpse)
-
-        continue;
-      }
-      const dx = frame.px - e.x;
-      const dy = frame.py - e.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const nx = dx / dist;
-      const ny = dy / dist;
-
-      const s = e.spec;
-
-      if (e.windup > 0) {
-        // Telegraphed attack: feet planted; on release → a melee strike if in reach, else a shotgun blast or a
-        // thrown projectile (whichever the kind has).
-        e.windup = Math.max(0, e.windup - dt);
-        if (e.windup === 0) {
-          if (s.meleeReach > 0 && dist <= s.meleeReach) {
-            frame.hurt(s.meleeDamage);
-          } else if (s.shotgun !== undefined) {
-            this.fireShotgun(frame, e, nx, ny, dist);
-          } else if (
-            s.thrower !== undefined &&
-            castRay(frame.map, e.x, e.y, nx, ny, dist) === null
-          ) {
-            this.throwProjectile(frame, e, nx, ny);
-          }
-          e.cooldown = s.cooldownTime;
-        }
-
-        continue;
-      }
-      if (castRay(frame.map, e.x, e.y, nx, ny, dist) !== null) {
-        continue; // no line of sight → idle (no wander yet)
-      }
-      const canMelee = s.meleeReach > 0 && dist <= s.meleeReach;
-      const canShoot = s.shotgun !== undefined && dist <= s.shotgun.range;
-      const canThrow = s.thrower !== undefined && dist <= s.thrower.range;
-
-      if (e.cooldown === 0 && (canMelee || canShoot || canThrow)) {
-        e.windup = s.windup; // ready + in range → start the telegraph
-      } else if (dist > s.standoff + STANDOFF_BAND) {
-        this.moveEnemy(frame, e, nx, ny, dt); // close in toward the standoff
-      } else if (dist < s.standoff - STANDOFF_BAND) {
-        this.moveEnemy(frame, e, -nx, -ny, dt); // crowded → ease back toward the lane
-      }
-    }
-    this.separateEnemies(frame);
-  }
-
-  /** Move one enemy by its speed along a unit direction (collision-aware), accumulating `walkDist` for the
-   *  legs. Enemies never `crossSeams`: a passable seam stays a solid wall to them — they don't change zones. */
-  private moveEnemy(frame: CombatFrame, e: Foe, dirX: number, dirY: number, dt: number): void {
-    const reach = e.spec.speed * dt;
-    const moved = movePlayer(
-      frame.map,
-      e.x,
-      e.y,
-      dirX * reach,
-      dirY * reach,
-      PLAYER_RADIUS,
-      STEP_MAX,
-      HEADROOM,
-      frame.slides, // respect open sliding doors (else foes stay stuck behind them)
-      false,
-      frame.obstacles, // props block foes too (DOOM: things block things)
-    );
-
-    e.walkDist += Math.hypot(moved.x - e.x, moved.y - e.y);
-    e.x = moved.x;
-    e.y = moved.y;
-    e.z = moved.floorZ;
-  }
-
-  /** Fire a shotgunner's blast: INSTANT (hitscan), no projectile — it connects if the player is still within
-   *  range + line of sight at the moment of release (so backing out of range during the wind-up dodges it). The
-   *  firing tell is the enemy's own attack animation. */
-  private fireShotgun(frame: CombatFrame, e: Foe, nx: number, ny: number, dist: number): void {
-    const gun = e.spec.shotgun;
-
-    if (
-      gun !== undefined &&
-      dist <= gun.range &&
-      castRay(frame.map, e.x, e.y, nx, ny, dist) === null
-    ) {
-      frame.hurt(gun.damage);
-    }
-  }
-
-  /** Lob a thrower's projectile from its upper body toward the player (a flying, dodgeable spinning billboard). */
-  private throwProjectile(frame: CombatFrame, e: Foe, nx: number, ny: number): void {
-    if (e.spec.thrower === undefined || frame.shots.length > 60) {
-      return;
-    }
-    frame.shots.push({
-      x: e.x,
-      y: e.y,
-      z: e.z + e.spec.worldHeight * 0.6,
-      dx: nx,
-      dy: ny,
-      proj: e.spec.thrower,
-      traveled: 0,
-    });
-  }
-
-  /** Step one zone's thrown projectiles: fly forward, hurt the player on contact, die on a wall or past
-   *  range. Compacts `frame.shots` in place (the array is shared with the zone's world state). */
-  private stepEnemyShots(frame: CombatFrame, dt: number): void {
-    const shots = frame.shots;
-    let live = 0;
-
-    for (const shot of shots) {
-      const step = shot.proj.speed * dt;
-
-      if (castRay(frame.map, shot.x, shot.y, shot.dx, shot.dy, step, true, frame.slides) !== null) {
-        continue; // struck a wall (or glass / a shut sliding door / a seam) — spent
-      }
-      shot.x += shot.dx * step;
-      shot.y += shot.dy * step;
-      shot.traveled += step;
-
-      if (Math.hypot(frame.px - shot.x, frame.py - shot.y) <= PLAYER_HIT_RADIUS) {
-        frame.hurt(shot.proj.damage);
-      } else if (shot.traveled <= shot.proj.range) {
-        shots[live++] = shot; // still flying
-      }
-    }
-    shots.length = live;
-  }
-
-  /** Keep one zone's living enemies from stacking: push apart every overlapping pair (circle-circle,
-   *  symmetric), then apply each push through `movePlayer` so the nudge still respects walls. O(n²), fine
-   *  for these counts. */
-  private separateEnemies(frame: CombatFrame): void {
-    const enemies = frame.enemies;
-    const n = enemies.length;
-
-    if (n < 2) {
-      return;
-    }
-    const push = enemies.map(() => ({ x: 0, y: 0 }));
-
-    for (let i = 0; i < n; i++) {
-      if (enemies[i].dying) {
-        continue;
-      }
-      for (let j = i + 1; j < n; j++) {
-        const a = enemies[i];
-        const b = enemies[j];
-
-        if (b.dying) {
-          continue;
-        }
-        const d = Math.hypot(b.x - a.x, b.y - a.y);
-
-        if (d >= ENEMY_SEP_DIST) {
-          continue;
-        }
-        const nx = d > 1e-4 ? (b.x - a.x) / d : 1; // exact overlap → split along an arbitrary axis
-        const ny = d > 1e-4 ? (b.y - a.y) / d : 0;
-        const amt = (ENEMY_SEP_DIST - d) * 0.5;
-
-        push[i].x -= nx * amt;
-        push[i].y -= ny * amt;
-        push[j].x += nx * amt;
-        push[j].y += ny * amt;
-      }
-    }
-    for (let i = 0; i < n; i++) {
-      const p = push[i];
-
-      if (p.x === 0 && p.y === 0) {
-        continue;
-      }
-      const e = enemies[i];
-      const moved = movePlayer(
-        frame.map,
-        e.x,
-        e.y,
-        p.x,
-        p.y,
-        PLAYER_RADIUS,
-        STEP_MAX,
-        HEADROOM,
-        frame.slides,
-        false,
-        frame.obstacles,
-      );
-
-      e.x = moved.x;
-      e.y = moved.y;
-      e.z = moved.floorZ;
-    }
+    stepEnemies(frame, dt);
+    stepEnemyShots(frame, dt);
   }
 
   /** A landed enemy strike: armour soaks a fraction of the hit (the rest drains hp), fire the red damage flash,
@@ -2511,182 +2069,10 @@ export class BspDemoComponent {
     });
   }
 
-  /** Fire the active weapon along the crosshair: a projectile weapon LAUNCHES a travelling shot (straight, no
-   *  cone); every other kind resolves an instant hitscan ray widened by the weapon's `cone`. */
-  private fire(combat: WeaponCombat): void {
-    const dx = Math.cos(this.camera.angle);
-    const dy = Math.sin(this.camera.angle);
-
-    this.shotFx = SHOT_FX_DURATION; // muzzle flash either way
-
-    if (combat.projectile !== null) {
-      const width = projectileWidth(combat.projectile.kind);
-
-      if (width !== undefined) {
-        const vSlope = this.aimVerticalSlope(); // the firing pitch → the shot's vertical climb per cell
-
-        this.projectiles.push({
-          x: this.camera.x + dx * PROJECTILE_SPAWN_AHEAD, // close, so the shot leaves from the gun
-          y: this.camera.y + dy * PROJECTILE_SPAWN_AHEAD,
-          z: this.camera.z + vSlope * PROJECTILE_SPAWN_AHEAD, // on the aim line at the spawn point
-          dx,
-          dy,
-          vSlope,
-          speed: combat.projectile.speed,
-          kind: combat.projectile.kind,
-          impactKind: combat.impactKind,
-          damage: combat.damage,
-          radius: width / 2,
-          splashR: combat.projectile.splashRadius,
-          chain: combat.projectile.chain,
-          traveled: 0,
-          alive: true,
-        });
-      }
-
-      return;
-    }
-    if (combat.pellets > 1) {
-      this.fireSpread(combat); // a shotgun: a fan of pellets across the cone
-
-      return;
-    }
-    this.resolveHitscan(dx, dy, combat.cone, combat.range, combat.impactKind, combat.damage);
-  }
-
-  /** A shotgun blast: `pellets` tight rays fanned evenly across ±`cone`, each culling the nearest barrel it
-   *  crosses within range (mirrors the grid's `resolveSpread` — a centred barrel eats several pellets). */
-  private fireSpread(combat: WeaponCombat): void {
-    for (let pellet = 0; pellet < combat.pellets; pellet++) {
-      const fraction = combat.pellets === 1 ? 0.5 : pellet / (combat.pellets - 1);
-      const angle = this.camera.angle + (-combat.cone + 2 * combat.cone * fraction);
-
-      this.resolveHitscan(
-        Math.cos(angle),
-        Math.sin(angle),
-        0,
-        combat.range,
-        combat.impactKind,
-        combat.damage,
-      );
-    }
-  }
-
-  /** Step every projectile forward, detonating on the first hittable (barrel OR enemy) or wall it reaches;
-   *  a direct hit deals `damage`, then `detonate` does the splash + burst. Cull the spent ones. */
-  private stepProjectiles(dt: number): void {
-    for (const p of this.projectiles) {
-      const step = p.speed * dt;
-      const wall = castRay(this.map, p.x, p.y, p.dx, p.dy, step, true, this.slides); // glass/shut door stops shots
-      const reach = wall === null ? step : Math.min(step, wall.dist);
-      // Floor/ceiling collision: a shot diving at the ground (or into a step that rises above it) bursts there
-      // instead of sailing on under the world — capped by the wall, so it can't reach a floor behind a wall.
-      // The muzzle grace (what's left of it after `traveled`) lets a shot off a platform clear its own lip.
-      const ground = castFloorCeil(
-        this.map,
-        p.x,
-        p.y,
-        p.dx,
-        p.dy,
-        p.z,
-        p.vSlope,
-        reach,
-        undefined,
-        Math.max(0, MUZZLE_CLEAR - p.traveled),
-      );
-      const targetReach = ground === null ? reach : Math.min(reach, ground.dist);
-      const hittables = this.hittables(p.radius); // inflate each target by the shot's radius
-      const hit = nearestTargetHit(
-        p.x,
-        p.y,
-        p.dx,
-        p.dy,
-        targetReach,
-        hittables.map((h) => h.target),
-        0,
-        p.z, // the shot's current height — must fall within the target (a shot flying over it sails on)
-        p.vSlope,
-      );
-
-      if (hit !== null) {
-        const h = hittables[hit.index];
-
-        h.hit(p.damage);
-        this.detonate(h.x, h.y, h.z, p.splashR, p.damage, p.impactKind);
-        if (p.chain !== null) {
-          this.chainFrom(h.x, h.y, h.z, p.chain); // the plasma hops its beam between nearby barrels
-        }
-        p.alive = false;
-      } else if (ground !== null) {
-        this.detonate(ground.x, ground.y, ground.z, p.splashR, p.damage, p.impactKind); // burst on the floor/ceiling
-        p.alive = false;
-      } else if (wall !== null) {
-        this.detonate(wall.x, wall.y, p.z, p.splashR, p.damage, p.impactKind); // burst where it struck the wall
-        p.alive = false;
-      } else {
-        p.x += p.dx * step;
-        p.y += p.dy * step;
-        p.z += p.vSlope * step; // climb/descend along the firing pitch
-        p.traveled += step;
-        p.alive = p.traveled <= MAX_SHOT_RANGE; // spend it once it has flown its distance
-      }
-    }
-    this.projectiles = this.projectiles.filter((p) => p.alive);
-  }
-
-  /** The combat targets this frame: every standing barrel + every living enemy, as a {@link Target} for the ray
-   *  test plus a `hit(dmg)` that applies the right damage (a barrel pops; an enemy loses hp / flashes / dies).
-   *  `inflate` grows each silhouette by a projectile's radius. */
-  private hittables(
-    inflate = 0,
-  ): { target: Target; x: number; y: number; z: number; hit: (dmg: number) => void }[] {
-    const out: { target: Target; x: number; y: number; z: number; hit: (dmg: number) => void }[] =
-      [];
-
-    for (const b of this.targets) {
-      if (!b.alive) {
-        continue;
-      }
-      const s = b.sprite;
-
-      out.push({
-        target: {
-          x: s.x,
-          y: s.y,
-          radius: BARREL_HIT_RADIUS + inflate,
-          zMin: s.z - inflate,
-          zMax: s.z + s.height + inflate,
-        },
-        x: s.x,
-        y: s.y,
-        z: s.z + s.height / 2,
-        hit: () => (b.alive = false),
-      });
-    }
-    for (const e of this.enemies) {
-      if (e.dying) {
-        continue;
-      }
-      out.push({
-        target: {
-          x: e.x,
-          y: e.y,
-          radius: e.spec.hitRadius + inflate,
-          zMin: e.z - inflate,
-          zMax: e.z + e.spec.worldHeight + inflate,
-        },
-        x: e.x,
-        y: e.y,
-        z: e.z + e.spec.worldHeight / 2,
-        hit: (dmg) => this.hurtEnemy(e, dmg),
-      });
-    }
-
-    return out;
-  }
-
-  /** Apply `dmg` to a living enemy: flash it, and on hp ≤ 0 switch it to the death animation. */
-  private hurtEnemy(enemy: Foe, dmg: number): void {
+  /** Apply `dmg` to a living enemy: flash it, and on hp ≤ 0 switch it to the death animation. The BSP-game's
+   *  {@link PlayerCombatFrame} routes every foe hit (direct + splash) through here — the flash/kill timing
+   *  stays in the shell, off the pure combat math. */
+  private hurtEnemy(enemy: CombatEnemy, dmg: number): void {
     enemy.hp -= dmg;
     enemy.hitFlash = HIT_FLASH_DURATION;
     if (enemy.hp <= 0) {
@@ -2695,79 +2081,11 @@ export class BspDemoComponent {
     }
   }
 
-  /** Apply an AOE blast at `(x, y, z)`: barrels in `splashR` pop, enemies take `splashDmg`; then spawn the
-   *  weapon's `kind` burst strip at the hit point. (A direct hit is dealt by the caller before this.) */
-  private detonate(
-    x: number,
-    y: number,
-    z: number,
-    splashR: number,
-    splashDmg: number,
-    kind: string,
-  ): void {
-    if (splashR > 0) {
-      for (const t of this.targets) {
-        if (t.alive && Math.hypot(t.sprite.x - x, t.sprite.y - y) <= splashR) {
-          t.alive = false;
-        }
-      }
-      for (const e of this.enemies) {
-        if (!e.dying && Math.hypot(e.x - x, e.y - y) <= splashR) {
-          this.hurtEnemy(e, splashDmg);
-        }
-      }
-    }
-    this.spawnImpact(kind, x, y, z);
-  }
-
   /** Queue an impact burst (`kind` from `effects.json`) at a world point — drawn + aged out by the impact
    *  system. An empty kind (a weapon with no mapped impact) spawns nothing. */
   private spawnImpact(kind: string, x: number, y: number, z: number): void {
     if (kind !== '') {
       this.impacts.push({ kind, x, y, z, age: 0 });
-    }
-  }
-
-  /** The plasma's chain-lightning: from the hit point, hop to the nearest still-standing barrel within
-   *  `range`, up to `targets` times — culling each and spawning a visual {@link Arc} between hits. */
-  private chainFrom(fromXIn: number, fromYIn: number, fromZIn: number, chain: ChainSpec): void {
-    let fromX = fromXIn;
-    let fromY = fromYIn;
-    let fromZ = fromZIn;
-
-    for (let hop = 0; hop < chain.targets; hop++) {
-      let nearest: Barrel | null = null;
-      let nearestDist = chain.range;
-
-      for (const t of this.targets) {
-        if (!t.alive) {
-          continue;
-        }
-        const dist = Math.hypot(t.sprite.x - fromX, t.sprite.y - fromY);
-
-        if (dist <= nearestDist) {
-          nearestDist = dist;
-          nearest = t;
-        }
-      }
-      if (nearest === null) {
-        break; // no barrel left within reach
-      }
-      nearest.alive = false;
-      const toZ = nearest.sprite.z + nearest.sprite.height / 2;
-
-      this.arcs.push({
-        ax: fromX,
-        ay: fromY,
-        az: fromZ,
-        bx: nearest.sprite.x,
-        by: nearest.sprite.y,
-        bz: toZ,
-        age: 0,
-      });
-      fromX = nearest.sprite.x;
-      fromY = nearest.sprite.y;
-      fromZ = toZ;
     }
   }
 
@@ -2991,64 +2309,6 @@ export class BspDemoComponent {
     ctx.restore();
   }
 
-  /** Resolve an instant hitscan ray along `(dx, dy)`, capped at the weapon's `range` (so a fist reaches only
-   *  as far as its reach) AND the first wall, culling the nearest barrel within `cone` — both horizontally and
-   *  VERTICALLY (the aim line rises/falls with the pitch, so a shot over/under a barrel misses). Records a
-   *  debug readout and returns whether it hit (so a shotgun blast can tally its pellets). */
-  private resolveHitscan(
-    dx: number,
-    dy: number,
-    cone: number,
-    range: number,
-    impactKind: string,
-    damage: number,
-  ): boolean {
-    const vSlope = this.aimVerticalSlope(); // how much the aim line climbs per cell of depth (from the pitch)
-    const wall = castRay(this.map, this.camera.x, this.camera.y, dx, dy, range);
-    const reach = wall === null ? range : wall.dist;
-    // The aim line can leave the room through the floor/ceiling before the wall — a downward shot sparks on the
-    // ground, an upward one on the ceiling, rather than on a wall it never visually reaches. The muzzle grace
-    // lets a steep shot off a raised platform clear its own lip instead of sparking at the shooter's feet.
-    const ground = castFloorCeil(
-      this.map,
-      this.camera.x,
-      this.camera.y,
-      dx,
-      dy,
-      this.camera.z,
-      vSlope,
-      reach,
-      undefined,
-      MUZZLE_CLEAR,
-    );
-    const targetReach = ground === null ? reach : Math.min(reach, ground.dist);
-    const hittables = this.hittables();
-    const hit = nearestTargetHit(
-      this.camera.x,
-      this.camera.y,
-      dx,
-      dy,
-      targetReach,
-      hittables.map((h) => h.target),
-      cone,
-      this.camera.z,
-      vSlope,
-    );
-
-    if (hit !== null) {
-      const h = hittables[hit.index];
-
-      h.hit(damage);
-      this.spawnImpact(impactKind, h.x, h.y, h.z);
-    } else if (ground !== null) {
-      this.spawnImpact(impactKind, ground.x, ground.y, ground.z); // sparks on the floor/ceiling
-    } else if (wall !== null) {
-      this.spawnImpact(impactKind, wall.x, wall.y, this.camera.z + vSlope * reach); // sparks on the wall
-    }
-
-    return hit !== null;
-  }
-
   /** Vertical climb of the aim line per cell of forward depth, from the camera pitch (a screen y-shear): the
    *  crosshair points at `camera.z + slope·depth`, so looking up raises where a hitscan lands downrange. */
   private aimVerticalSlope(): number {
@@ -3170,7 +2430,8 @@ export class BspDemoComponent {
       this.reserve.set(ammoType, result.reserve);
     }
     if (result.fired) {
-      this.fire(combat); // the strike/discharge landed → launch a projectile or resolve a hitscan
+      this.shotFx = SHOT_FX_DURATION; // muzzle flash either way
+      fireWeapon(this.playerCombatFrame(), combat); // launch a projectile or resolve a hitscan
     }
 
     // The BFG's live green charge-buildup tint while spinning up, and a bright green flash on the discharge.
@@ -3365,22 +2626,9 @@ export class BspDemoComponent {
     const turnRate = dt > 0 ? -(this.camera.angle - this.prevAngle) / dt : 0; // + = turning right
 
     this.prevAngle = this.camera.angle;
-    this.turnEMA += (turnRate - this.turnEMA) * Math.min(1, 8 * dt); // smooth → the gaze holds steady mid-turn
-    this.hud.lookAt(this.gazeForTurn(this.turnEMA));
+    this.turnEMA = smoothTurnRate(this.turnEMA, turnRate, dt); // smooth → the gaze holds steady mid-turn
+    this.hud.lookAt(gazeForTurn(this.turnEMA));
     this.hud.render(this.hudCanvas().nativeElement, dt);
-  }
-
-  /** Map a signed turn rate (rad/s, + = turning right) to a HUD gaze: centre below GAZE_TURN_RATE, then a
-   *  near or extreme glance toward the turn — the classic DOOM face that looks where you swing. */
-  private gazeForTurn(turnRate: number): Gaze {
-    const speed = Math.abs(turnRate);
-
-    if (speed < GAZE_TURN_RATE) {
-      return 0;
-    }
-    const far = speed >= GAZE_FAR_TURN_RATE ? 2 : 1;
-
-    return (turnRate > 0 ? far : -far) as Gaze;
   }
 
   /** Record one COMPLETED render (called per join, not per rAF): its cost + join-stall measurements feed
@@ -3395,10 +2643,7 @@ export class BspDemoComponent {
     this.lastStallMs = stallMs;
     this.lastSlowest = slowest;
     this.lastComputeMs = computeMs;
-    this.rendersSinceTick += 1;
-    this.msAccum += frameCost;
-    this.msMax = Math.max(this.msMax, frameCost);
-    this.stallMax = Math.max(this.stallMax, stallMs);
+    this.frameStats.record(frameCost, stallMs);
   }
 
   /** Per-rAF display bookkeeping: the ring row + the ~4×/second overlay/telemetry roll-up. The `fps`
@@ -3424,27 +2669,24 @@ export class BspDemoComponent {
       this.perfRingLast = now;
     }
 
-    if (this.tickStart === 0) {
-      this.tickStart = now;
-    } else if (now - this.tickStart >= 250) {
-      this.fps.set(Math.round((this.rendersSinceTick * 1000) / (now - this.tickStart)));
-      if (this.rendersSinceTick > 0) {
-        this.frameMs.set(Math.round((this.msAccum / this.rendersSinceTick) * 10) / 10);
+    // Roll the window up ~4×/second (the pure accumulator owns the timing + reset): push the distilled
+    // fps / mean / max into the HUD signals and fire one perf beacon carrying the worst stall.
+    const roll = this.frameStats.rollUp(now, FRAME_STATS_WINDOW_MS);
+
+    if (roll !== null) {
+      this.fps.set(roll.fps);
+      if (roll.meanMs !== null) {
+        this.frameMs.set(roll.meanMs);
       }
-      this.frameMaxMs.set(Math.round(this.msMax * 10) / 10);
-      this.logPerf(now);
-      this.rendersSinceTick = 0;
-      this.msAccum = 0;
-      this.msMax = 0;
-      this.stallMax = 0;
-      this.tickStart = now;
+      this.frameMaxMs.set(roll.maxMs);
+      this.logPerf(now, roll.stallMax);
     }
   }
 
   /** Fire-and-forget one telemetry sample to the dev server's /perf sink (localhost only). Uses `sendBeacon`
    *  so it never blocks or counts against the frame budget. The position + view + resolution let an offline
    *  reader correlate frame-time spikes with WHERE the player is and HOW it is being rendered. */
-  private logPerf(now: number): void {
+  private logPerf(now: number, stallMax: number): void {
     if (!this.perfLog || typeof navigator === 'undefined' || navigator.sendBeacon === undefined) {
       return;
     }
@@ -3457,7 +2699,7 @@ export class BspDemoComponent {
       max: this.frameMaxMs(),
       th: this.threads(),
       pool: this.poolSize(),
-      stall: Math.round(this.stallMax * 100) / 100, // worst join straggler stall in the window (ms)
+      stall: r2(stallMax), // worst join straggler stall in the window (ms)
       w: this.config.width,
       h: this.config.height,
       fs: typeof document !== 'undefined' && document.fullscreenElement !== null,

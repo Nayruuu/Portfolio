@@ -19,6 +19,18 @@ export interface MoveResult {
   readonly floorZ: number;
 }
 
+/** The player body's collision radius (world units) — the depenetration distance {@link movePlayer} keeps
+ *  from every blocking wall and prop. Enemies reuse it as their footprint (they move through the same solver). */
+export const PLAYER_RADIUS = 0.3;
+
+/** A floor step at most this tall is climbed in stride; a taller rise blocks (and, up to `CLIMB_MAX`, becomes
+ *  an auto-mantle ledge — see {@link climbTarget}). Passed as `stepMax` to {@link movePlayer}/{@link climbTarget}. */
+export const STEP_MAX = 1.1;
+
+/** The minimum sector clearance (ceil − floor) a body needs to pass through — `headroom` for
+ *  {@link movePlayer}/{@link climbTarget}; a shorter sector bars the way. */
+export const HEADROOM = 0.8;
+
 /** A solid decor cylinder a mover may not cross (a prop's footprint): centre + its own radius. */
 export interface Obstacle {
   readonly x: number;
@@ -269,6 +281,59 @@ export function climbTarget(
   }
 
   return ahead.floorZ;
+}
+
+/** A live auto-mantle: the captured launch/target floor heights, the frozen heading (unit `dir`), and how
+ *  far along the hoist is (`progress` 0→1). Fed to {@link mantleStep} each frame. */
+export interface MantleState {
+  readonly progress: number;
+  readonly startZ: number;
+  readonly targetZ: number;
+  readonly dirX: number;
+  readonly dirY: number;
+}
+
+/** One auto-mantle tick's result: the advanced `progress`, the forward glide (`dx`,`dy`) to add to the
+ *  camera position, the new eye height `z`, and whether the vault completes this frame (`done`). */
+export interface MantleStep {
+  readonly progress: number;
+  readonly dx: number;
+  readonly dy: number;
+  readonly z: number;
+  readonly done: boolean;
+}
+
+/**
+ * Advance an auto-mantle one frame (see {@link MantleState}). Glide forward along the captured heading by the
+ * slice of `advance` covered this tick, and lerp the eye from the launch floor up to the ledge — both frozen
+ * to the heading so the vault always clears the lip. `duration` is the hoist time (seconds), `advance` the
+ * total forward glide distance, `eyeHeight` the camera's height above the floor it stands on. On completion
+ * (`done`) the eye snaps exactly onto the ledge (`targetZ + eyeHeight`). The caller applies `dx`/`dy`/`z` to
+ * the camera and clears the state (or stores the new `progress`).
+ */
+export function mantleStep(
+  m: MantleState,
+  dt: number,
+  duration: number,
+  advance: number,
+  eyeHeight: number,
+): MantleStep {
+  const progress = m.progress + dt / duration;
+  const stride = advance * Math.min(dt / duration, 1 - m.progress);
+  const dx = m.dirX * stride;
+  const dy = m.dirY * stride;
+
+  if (progress >= 1) {
+    return { progress, dx, dy, z: m.targetZ + eyeHeight, done: true };
+  }
+
+  return {
+    progress,
+    dx,
+    dy,
+    z: m.startZ + (m.targetZ - m.startZ) * progress + eyeHeight,
+    done: false,
+  };
 }
 
 /** Where a pitched shot / flight line leaves the room VERTICALLY, as forward distance + world point. */

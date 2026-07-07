@@ -152,6 +152,19 @@ by relative path within the feature.
 
 ## 4. Folder layout
 
+### Group by category — nest, don't dump
+
+A folder holds **a few files or sub-folders grouped by category**, never a flat pile. As a unit grows,
+split it into named sub-folders by concern — the way `domain/` already groups by sub-domain and
+`core/services/` by service. Rule of thumb: **past ~4–5 files in one folder, group them.** The game
+sub-modules are where this bites right now and are **not yet compliant**: `core/lib/bsp-engine/` (14
+files) and `features/bsp-demo/` (17 files) are currently FLAT and well over the threshold — the ongoing
+component decomposition splits them into categorized sub-folders (`core/lib/game/{enemy,combat,zone,
+door}/`, `features/bsp-demo/{levels,render,load}/`, …), and every new file lands grouped, not at the
+root. Sub-folders are wired through the module's **existing sub-barrel** (§3): the barrel re-exports the
+nested files, so consumers still import from the one barrel — the nesting is internal organization, not
+new public surface. (Folder-level companion to the one-file-one-responsibility rule in `code.md §1`.)
+
 ### `domain/` — one file per type, grouped by sub-domain
 
 One **type / interface / value-set** per file. Files are grouped into sub-domain folders so the
@@ -217,7 +230,7 @@ features/home/
 features/bsp-demo/                                 # the hidden BSP game (OPEN SPACE.EXE) — a top-level lazy feature
   bsp-demo.component.{ts,html,scss}                # sd-bsp-demo — the game shell; served at /bsp AND mounted in the player
   render.worker.ts  render-pool.ts  gpu-renderer.ts  load-textures.ts  # browser-only render code (SAB worker pool + the WebGPU compute backend + WebP/procedural textures)
-  level-accueil.ts  level-m1-lobby.ts  level-hangar.ts  level-demo.ts  demo-map.ts  level-builder.ts  room-builder.ts  level-select.ts  zone-state.ts  pickups.ts  enemies.ts  # pure/tested hand-authored levels + the wall/room authoring builders + the level registry (dev URL params) + per-zone world-state persistence + entity helpers
+  level-accueil.ts  level-m1-lobby.ts  level-m2-openspace.ts  level-hangar.ts  level-demo.ts  demo-map.ts  level-builder.ts  room-builder.ts  level-select.ts  zone-state.ts  pickups.ts  enemies.ts  # hand-authored levels + the wall/room authoring builders + the level registry (dev URL params) + per-zone world-state persistence + entity helpers
 ```
 
 Features with internal routing keep a `*.routes.ts` at the feature root and a `*-detail/` folder for

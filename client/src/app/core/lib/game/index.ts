@@ -2,7 +2,12 @@
 // subsystem, the shared tuning constants, and the render governor (the contention-resilience decision
 // core behind the worker pool). Zero DOM, fully unit-tested.
 export * from './types';
+export * from './enemy';
+export * from './combat';
+export * from './controls';
+export * from './doors';
 export * from './arsenal';
 export * from './combat-constants';
+export * from './frame-stats';
 export * from './render-governor';
 export * from './weapon-progression';

@@ -10,6 +10,8 @@ import {
   type Texture,
 } from '../../core/lib/bsp-engine';
 import { projectileEffect } from '../../shared/game/effects';
+import { ENEMY_SPECS } from './enemies';
+import { PICKUP_TEXTURE_JOBS } from './pickups';
 
 /** A placeholder DECOR billboard (a potted plant) — a "bidon" stand-in until real prop art lands. Transparent
  *  background + a green bush in a terracotta pot; feature-layer, so not bound by the core-coverage guard. */
@@ -457,6 +459,32 @@ export function loadAtlasTexture(
     };
     image.src = url;
   });
+}
+
+/** A sprite-atlas decode job: a texture-library key, its served URL, and the atlas' vertical cell-row count. */
+export interface AtlasJob {
+  readonly name: string;
+  readonly url: string;
+  readonly rows: number;
+}
+
+/**
+ * Assemble the full sprite-atlas decode list for a play session: every enemy's walk / death / attack / pain
+ * atlas (plus a ranged thrower's spin strip) followed by every pickup + marker sheet. Pure over the feature's
+ * {@link ENEMY_SPECS} + {@link PICKUP_TEXTURE_JOBS}. The ORDER is load-significant — the caller zips the decoded
+ * textures back by index (`jobs[i]` ↔ the i-th decode) — so it is preserved exactly.
+ */
+export function buildAtlasJobs(): AtlasJob[] {
+  return [
+    ...ENEMY_SPECS.flatMap((spec) => [
+      { name: spec.texName, url: spec.atlasUrl, rows: spec.walkRows },
+      { name: spec.deathTexName, url: spec.deathUrl, rows: 1 },
+      { name: spec.attackTexName, url: spec.attackUrl, rows: 1 },
+      { name: spec.painTexName, url: spec.painUrl, rows: 1 },
+      ...(spec.thrower ? [{ name: spec.thrower.texName, url: spec.thrower.url, rows: 1 }] : []),
+    ]),
+    ...PICKUP_TEXTURE_JOBS.map((job) => ({ name: job.name, url: job.url, rows: 1 })),
+  ];
 }
 
 /** The grid's `PROJECTILE_EFFECT_SCALE`: a projectile's on-screen height is this × its `effects.json` size,

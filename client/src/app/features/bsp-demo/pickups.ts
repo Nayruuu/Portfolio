@@ -1,5 +1,7 @@
 import type { KeycardColor } from '../../core/lib';
 import { AMMO_MAX, WEAPON_IDS, requireWeapon, type WeaponId } from '../../shared/game/weapons';
+import type { Level } from './level-accueil';
+import type { ZoneSnapshot } from './zone-state';
 
 /**
  * Pickup + objective registry for the BSP demo — VITALS (health / armour), spinning AMMO boxes, the 3-tier
@@ -330,6 +332,14 @@ export interface MarkerSpec {
   readonly aspect: number;
 }
 
+/** A placed single-sprite floor marker (the exit sign) — a {@link MarkerSpec} positioned in the world. */
+export interface Marker {
+  x: number;
+  y: number;
+  z: number;
+  spec: MarkerSpec;
+}
+
 /** An access BADGE turntable — a corporate keycard that gates its colour-matched door; shows in the HUD card
  *  bay on collect. Rendered as a spinning turntable billboard (a `frames`×1 horizontal strip, center-bottom
  *  anchored), exactly like the vitals/ammo pickups. Its HUD card + door colour is {@link KeycardColor}. */
@@ -415,3 +425,93 @@ export const PICKUP_TEXTURE_JOBS: readonly { name: string; url: string }[] = [
 
 // (Per-level pickup/objective PLACEMENTS live on the level — see `level-accueil.ts` `Level` — so a level owns
 // where its entities sit; this file owns only the level-agnostic specs/art above.)
+
+/** A zone's placed floor pickups (each carrying its spawn `idx`) + the legacy exit marker — the output of
+ *  {@link buildPickups}, matching the pickup slots of `WarmZone`. */
+export interface BuiltPickups {
+  readonly vitals: (Vital & { idx: number })[];
+  readonly ammoBoxes: (AmmoBox & { idx: number })[];
+  readonly keycards: (Keycard & { idx: number })[];
+  readonly weaponPickups: (WeaponPickup & { idx: number })[];
+  readonly exit: Marker | null;
+}
+
+/**
+ * Build a zone's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, weapon unlocks,
+ * spinning access badges) + the legacy exit marker, each seated on its sector floor via `floorAt`. Each
+ * pickup carries its spawn INDEX (`idx`) and anything the zone's `snap` flags as TAKEN is skipped — collected
+ * items stay gone on return. Pure: `floorAt` is the only world seam (the shell resolves it from its map).
+ *
+ * ⚠️ The idx assigned here is the persistence key: it MUST stay index-aligned with the taken arrays
+ * {@link takenFlags} produces — vitals are `health` then `armor` in spawn order, ammo boxes follow
+ * {@link AMMO_BOX_SPECS} (one `level.ammo` coord per entry, in order), keycards/weapons follow their
+ * authoring order. A drift here respawns a collected pickup (or vanishes a fresh one) across a zone crossing.
+ */
+export function buildPickups(
+  level: Level,
+  snap: ZoneSnapshot | null,
+  floorAt: (x: number, y: number) => number,
+): BuiltPickups {
+  const vitals = [
+    ...level.health.map(([x, y, size]) => ({ spec: vitalSpec('health', size), x, y })),
+    ...level.armor.map(([x, y, size]) => ({ spec: vitalSpec('armor', size), x, y })),
+  ]
+    .map((v, idx) => ({ ...v, idx, z: floorAt(v.x, v.y), age: 0 }))
+    .filter((v) => snap?.vitalsTaken[v.idx] !== true);
+  const ammoBoxes = AMMO_BOX_SPECS.map((spec, idx) => ({
+    spec,
+    idx,
+    x: level.ammo[idx][0],
+    y: level.ammo[idx][1],
+    z: floorAt(level.ammo[idx][0], level.ammo[idx][1]),
+    age: 0,
+  })).filter((b) => snap?.ammoTaken[b.idx] !== true);
+  const keycards = level.keycards
+    .map(([x, y, color], idx) => ({
+      spec: keycardSpec(color),
+      idx,
+      x,
+      y,
+      z: floorAt(x, y),
+      age: 0,
+    }))
+    .filter((k) => snap?.cardsTaken[k.idx] !== true);
+  const weaponPickups = (level.weapons ?? [])
+    .map(([x, y, id], idx) => ({ spec: weaponPickupSpec(id), idx, x, y, z: floorAt(x, y), age: 0 }))
+    .filter((p) => snap?.weaponsTaken[p.idx] !== true);
+  const exit = level.exit;
+
+  return {
+    vitals,
+    ammoBoxes,
+    keycards,
+    weaponPickups,
+    exit:
+      exit === undefined
+        ? null
+        : { spec: EXIT_SPEC, x: exit[0], y: exit[1], z: floorAt(exit[0], exit[1]) },
+  };
+}
+
+/** Taken flags for an index-carrying pickup list: `true` at each index where no remaining pickup still
+ *  carries it (i.e. it was collected). The counterpart to {@link buildPickups}'s idx scheme — feed the result
+ *  into a {@link ZoneSnapshot}. Before the atlases decode nothing has spawned (`atlasesReady` false), so
+ *  nothing can have been taken — every flag is `false`. */
+export function takenFlags(
+  count: number,
+  remaining: readonly { idx: number }[],
+  atlasesReady: boolean,
+): boolean[] {
+  if (!atlasesReady) {
+    return Array.from({ length: count }, () => false);
+  }
+  const left = new Set(remaining.map((p) => p.idx));
+
+  return Array.from({ length: count }, (_, i) => !left.has(i));
+}
+
+/** The turntable cell a rotating floor pickup shows: `age` (seconds) advances one cell per `frameMs`, wrapping
+ *  at `frames`. A non-spinning billboard (`spin` false — e.g. a static vitals variant) always holds cell 0. */
+export function pickupFrame(age: number, frameMs: number, frames: number, spin = true): number {
+  return spin ? Math.floor(age / (frameMs / 1000)) % frames : 0;
+}

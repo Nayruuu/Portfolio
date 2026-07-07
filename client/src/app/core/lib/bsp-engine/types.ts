@@ -35,6 +35,9 @@ export interface Sector {
   readonly light: number; // 0..255 sector brightness
 }
 
+/** A sector whose heights the game may animate live (doors) — a mutable per-zone clone of {@link Sector}. */
+export type MutableSector = { -readonly [K in keyof Sector]: Sector[K] };
+
 /**
  * A LIVE window into another zone's map: the linedef's opening renders `zone`'s world, translated by
  * (`dx`, `dy`) — a neighbor point plus the offset lands on this map's point. TRANSLATION ONLY (no

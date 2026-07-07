@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildBsp } from './node-builder';
-import { castFloorCeil, climbTarget, mapObstacles, movePlayer } from './physics';
+import { castFloorCeil, climbTarget, mantleStep, mapObstacles, movePlayer } from './physics';
 import { SAMPLE_MAP } from './sample-map';
 import type { MapSource, SideDef } from './types';
 
@@ -531,5 +531,38 @@ describe('castFloorCeil', () => {
     expect(graced?.dist).toBeGreaterThanOrEqual(2.5);
     // A muzzle wider than the whole cast clears everything → no burst.
     expect(castFloorCeil(FLAT, 3, 4, 1, 0, 1.4, -1.0, 5, undefined, 6)).toBeNull();
+  });
+});
+
+describe('mantleStep', () => {
+  // A vault: launch floor 0, ledge at 2, heading +x, half-second hoist gliding 0.5 forward; eye 1.4 high.
+  const M = { progress: 0, startZ: 0, targetZ: 2, dirX: 1, dirY: 0 } as const;
+
+  it('advances progress by dt/duration and glides the covered slice of the forward advance', () => {
+    // progress 0 + 0.2/0.4 = 0.5 ; stride 0.5·min(0.2/0.4, 1−0) = 0.5·0.5 = 0.25
+    const step = mantleStep(M, 0.2, 0.4, 0.5, 1.4);
+
+    expect(step.progress).toBeCloseTo(0.5, 12);
+    expect(step.dx).toBeCloseTo(0.25, 12); // dirX·stride
+    expect(step.dy).toBe(0); // dirY·stride, dirY 0
+    expect(step.done).toBe(false);
+    // z = startZ + (targetZ − startZ)·progress + eyeHeight = 0 + 2·0.5 + 1.4 = 2.4
+    expect(step.z).toBeCloseTo(2.4, 12);
+  });
+
+  it('glides along the captured heading direction', () => {
+    const step = mantleStep({ ...M, dirX: 0, dirY: 1 }, 0.2, 0.4, 0.5, 1.4);
+
+    expect(step.dx).toBe(0);
+    expect(step.dy).toBeCloseTo(0.25, 12);
+  });
+
+  it('caps the stride by the remaining progress and snaps the eye onto the ledge on completion', () => {
+    // progress 0.9 + 0.5 = 1.4 ≥ 1 → done ; stride 0.5·min(0.5, 1−0.9) = 0.5·0.1 = 0.05
+    const step = mantleStep({ ...M, progress: 0.9 }, 0.2, 0.4, 0.5, 1.4);
+
+    expect(step.done).toBe(true);
+    expect(step.dx).toBeCloseTo(0.05, 12); // clamped to the leftover 1−progress, not the full tick slice
+    expect(step.z).toBe(2 + 1.4); // targetZ + eyeHeight, snapped exactly
   });
 });

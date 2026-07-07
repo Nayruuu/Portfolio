@@ -46,6 +46,15 @@ export function projectColumn(point: CamPoint, width: number, focal: number): nu
   return width / 2 - (point.side / point.forward) * focal;
 }
 
+/**
+ * Clamp a look pitch to its vertical range. The pitch is a horizon y-shear (not a true rotation): `+` looks
+ * up to `upMax`, `−` looks down to `−downMax` (both passed as positive magnitudes — the down limit runs
+ * deeper than up so you can aim down at enemies below a platform).
+ */
+export function clampPitch(pitch: number, downMax: number, upMax: number): number {
+  return Math.max(-downMax, Math.min(upMax, pitch));
+}
+
 /** Project a world height `z` seen at camera distance `forward` to its screen row (y). */
 export function projectRow(
   z: number,

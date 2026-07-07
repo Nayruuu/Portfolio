@@ -5,6 +5,7 @@ export * from './physics';
 export * from './camera';
 export * from './texture';
 export * from './raycast';
+export * from './seams';
 export * from './renderer';
 export * from './sprite-rotation';
 export * from './voxel-carve';

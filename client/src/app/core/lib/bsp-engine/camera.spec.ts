@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { focalFor, projectColumn, projectRow, toCamera, type Camera } from './camera';
+import { clampPitch, focalFor, projectColumn, projectRow, toCamera, type Camera } from './camera';
 
 const ORIGIN: Camera = { x: 0, y: 0, angle: 0, z: 0.5 };
 
@@ -36,5 +36,19 @@ describe('camera projection', () => {
     expect(floor).toBeGreaterThan(100); // below
     expect(ceil).toBeCloseTo(84, 6);
     expect(floor).toBeCloseTo(116, 6);
+  });
+});
+
+describe('clampPitch', () => {
+  it('leaves a pitch within range untouched', () => {
+    expect(clampPitch(0.3, 2.0, 0.85)).toBe(0.3);
+  });
+
+  it('clamps to the shallower look-up limit', () => {
+    expect(clampPitch(1.5, 2.0, 0.85)).toBe(0.85);
+  });
+
+  it('clamps to the deeper look-down limit (kept as a positive magnitude)', () => {
+    expect(clampPitch(-3.0, 2.0, 0.85)).toBe(-2.0);
   });
 });
