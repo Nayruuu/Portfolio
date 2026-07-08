@@ -11,23 +11,17 @@ import {
   viewChild,
 } from '@angular/core';
 import { I18nService } from '../../core/services/i18n/i18n.service';
-import {
-  climbTarget,
-  HEADROOM,
-  mantleStep,
-  movePlayer,
-  PLAYER_RADIUS,
-  STEP_MAX,
-  type Camera,
-  type Sprite,
-} from '../../core/lib/bsp-engine';
+import { type Camera, type Sprite } from '../../core/lib/bsp-engine';
 import { parseLevelParams, type LevelParams } from '../../core/lib';
 import { AssetLoader, type AssetLoaderHooks } from './boot/asset-loader';
 import type { WarmZone } from './world/zone-world';
 import { ZoneRuntime, EYE_HEIGHT, ZONE_FADE, type ZoneRuntimeHooks } from './world/zone-runtime';
 import { CombatRuntime, type CombatRuntimeHooks } from './world/combat-runtime';
 import { PickupRuntime, type PickupRuntimeHooks } from './world/pickup-runtime';
+import { PlayerMotion, type PlayerMotionHooks } from './world/player-motion';
+import type { FxPools } from './world/fx-pools';
 import { RenderHost, type DisplaySnapshot, type RenderRequest } from './render/render-host';
+import type { ViewState } from './render/view-state';
 import { DoomHud } from '../../shared/game/doom-hud';
 import { impactEffect } from '../../shared/game/effects';
 import { IconComponent } from '../../shared/icon/icon.component';
@@ -45,28 +39,13 @@ import {
   drawWinScreen,
   drawZoneFade,
 } from './painters/overlay-painter';
-import {
-  ARC_DURATION,
-  stepEnemies,
-  stepEnemyShots,
-  stepProjectiles,
-  type Arc,
-  type Impact,
-  type Projectile,
-} from '../../core/lib';
+import { ARC_DURATION, stepEnemies, stepEnemyShots, stepProjectiles } from '../../core/lib';
 import {
   InputController,
   RESTART_DELAY,
   type InputControllerHooks,
 } from './input/input-controller';
 
-const MOVE_SPEED = 4; // world units / second
-// Auto-mantle: a ledge whose rise is in (STEP_MAX, CLIMB_MAX] is too tall to step but climbable — walking
-// into it hoists the player up over MANTLE_DURATION while gliding CLIMB_VAULT_ADVANCE forward over the lip.
-const CLIMB_MAX = 2.4; // tallest ledge you can vault (above this it stays a solid wall)
-const CLIMB_PROBE_REACH = 0.45; // cells ahead the climb probe samples — just past the radius, into the ledge cell
-const MANTLE_DURATION = 0.4; // seconds the hoist takes
-const CLIMB_VAULT_ADVANCE = 0.5; // cells the hoist glides the player forward, so it clears the lip and stands on top
 const HUD_NATIVE_WIDTH = 2117; // x1.0 status-bar art width (biggest tier) — only the aspect source now
 const HUD_NATIVE_HEIGHT = 404; // …its height, so the backing store keeps the bar's 5.24:1 aspect
 const HUD_MAX_WIDTH = 1024; // cap the HUD backing store here → a cheap repaint even fullscreen (still crisp)
@@ -125,18 +104,12 @@ export class BspDemoComponent {
   // The SHARED player camera — the zone runtime places + translates it on loads/swaps (by reference); this
   // component reads + turns it. `z` starts at eye height until the first load seats it on the spawn floor.
   private readonly camera = { x: 0, y: 0, angle: 0, z: EYE_HEIGHT, pitch: 0 } satisfies Camera;
-  private projectiles: Projectile[] = []; // launched shots in flight (projectile weapons), stepped each frame
-  private arcs: Arc[] = []; // short-lived plasma chain-lightning visuals, aged out each frame
-  private impacts: Impact[] = []; // burst-strip animations playing at hit points, aged out each frame
-  // Non-null = mid auto-mantle: hoisting up over a too-tall-but-climbable ledge (movement/look frozen, gliding
-  // forward along the captured heading). `progress` 0→1 drives both the z-lerp and the (future) hands overlay.
-  private mantle: {
-    progress: number;
-    startZ: number;
-    targetZ: number;
-    dirX: number;
-    dirY: number;
-  } | null = null;
+  // The render/aim VIEW value object — the shared camera + the render host's mutated-in-place config, bundled as
+  // the SAME two refs the painters + sprite build + combat runtime read (never copied). Built after both above.
+  private readonly view: ViewState = { camera: this.camera, config: this.renderHost.config };
+  // The transient in-world FX pools, consolidated into ONE stable holder: a zone reset / seam crossing clears or
+  // shifts them by mutating `fx.projectiles = []` etc., so every collaborator that captured `fx` stays live.
+  private readonly fx: FxPools = { projectiles: [], impacts: [], arcs: [] };
   private lastTime = 0;
   private frameId = 0;
   // The blit target — the canvas 2D context the framebuffer is `putImageData`'d onto. Grabbed in
@@ -171,24 +144,30 @@ export class BspDemoComponent {
   // edges by reference; its handlers are stable bound refs so the component adds AND removes the SAME
   // references (an identity mismatch would leak the listeners). Assigned in the constructor over the runtimes.
   private readonly inputController: InputController;
+  // The PLAYER-MOTION boundary. {@link PlayerMotion} owns the last physics chunk — the player's own body: it
+  // integrates the collided/step-up move + walk-bob + eye ease each tick and OWNS the auto-mantle state + the
+  // weapon walk-bob phase. It moves the shared camera by reference, reads the movement axes off the input
+  // controller, and gates on the seamless-crossing check. Assigned in the constructor over both (the coordinator
+  // reads its `mantle`/`bob` for the weapon overlay + gates input on `isMantling`).
+  private readonly playerMotion: PlayerMotion;
   // The BOOTSTRAP asset-load boundary. {@link AssetLoader} owns the two decode pipelines (environment WebP +
   // enemy/pickup atlases) and, on each completion, feeds the decoded art back through the runtimes — but only
   // while the game is live: its callbacks are gated on `renderHost.disposed`, so a decode landing after teardown
   // is dropped (a stray `markAtlasesReady` would corrupt the next mount). Assigned over the runtimes below.
   private readonly assetLoader: AssetLoader;
-  private bob = 0; // weapon idle-bob phase, advanced while moving
 
   constructor() {
     const destroyRef = inject(DestroyRef);
 
     // Wire the collaborator boundaries in dependency order — each `new` takes its hook object from a build
     // helper (same instances, same closures, same order). RenderHost is a field initializer (already set), so
-    // ZoneRuntime → CombatRuntime → PickupRuntime → InputController → AssetLoader construct in sequence, each
-    // closing over the ones before it.
+    // ZoneRuntime → CombatRuntime → PickupRuntime → InputController → PlayerMotion → AssetLoader construct in
+    // sequence, each closing over the ones before it.
     this.zoneRuntime = new ZoneRuntime(this.buildZoneHooks());
     this.combatRuntime = new CombatRuntime(this.buildCombatHooks());
     this.pickupRuntime = new PickupRuntime(this.buildPickupHooks());
     this.inputController = new InputController(this.buildInputHooks());
+    this.playerMotion = new PlayerMotion(this.buildMotionHooks());
     this.assetLoader = new AssetLoader(this.buildAssetHooks());
     // The initial zone load — the SAME code path as every open-building transition (URL level or default).
     // Pure map/data work, so it is prerender-safe; enemies/pickups spawn once the atlases decode below.
@@ -229,21 +208,22 @@ export class BspDemoComponent {
       onGeometryLoaded: (key, source, neighbors) => this.renderHost.setMaps(key, source, neighbors),
       onSeamSwap: (key, neighbors) => this.renderHost.swapTo(key, neighbors),
       onZoneReset: () => {
-        this.projectiles = [];
-        this.impacts = [];
-        this.arcs = [];
-        this.mantle = null;
+        // Clear the transient FX THROUGH the stable holder, so the combat runtime's captured `fx` ref stays live.
+        this.fx.projectiles = [];
+        this.fx.impacts = [];
+        this.fx.arcs = [];
+        this.playerMotion.reset();
       },
       onSeamTranslate: (dx, dy) => {
         // In-flight visuals follow the seam translation (they age out in a blink); the player's own launched
-        // shots are dropped — like enemies, projectiles never cross zones.
-        this.projectiles = [];
-        this.impacts = this.impacts.map((impact) => ({
+        // shots are dropped — like enemies, projectiles never cross zones. Mutated through the holder.
+        this.fx.projectiles = [];
+        this.fx.impacts = this.fx.impacts.map((impact) => ({
           ...impact,
           x: impact.x - dx,
           y: impact.y - dy,
         }));
-        this.arcs = this.arcs.map((arc) => ({
+        this.fx.arcs = this.fx.arcs.map((arc) => ({
           ...arc,
           ax: arc.ax - dx,
           ay: arc.ay - dy,
@@ -254,18 +234,16 @@ export class BspDemoComponent {
     };
   }
 
-  /** Build the player-combat hooks over the zone world + the transient FX (all by reference — the FX pools are
-   *  read through accessors because a zone reset / seam crossing reassigns them). The runtime reads the shared
-   *  camera's firing pose + the render config; it makes the shared HUD face react on a landed hit. */
+  /** Build the player-combat hooks over the render/aim {@link ViewState} + the {@link FxPools} holder + the zone
+   *  world (all by reference — the `fx` holder is stable, so a zone reset / seam crossing clearing it through the
+   *  holder stays visible). The runtime reads the camera's firing pose + the render config off `view`; it makes
+   *  the shared HUD face react on a landed hit. */
   private buildCombatHooks(): CombatRuntimeHooks {
     return {
-      camera: this.camera,
-      config: this.renderHost.config,
+      view: this.view,
+      fx: this.fx,
       hud: this.hud,
       world: () => this.zoneRuntime.world,
-      projectiles: () => this.projectiles,
-      impacts: () => this.impacts,
-      arcs: () => this.arcs,
     };
   }
 
@@ -289,10 +267,26 @@ export class BspDemoComponent {
       camera: this.camera,
       combat: this.combatRuntime,
       canvas: () => this.canvas().nativeElement,
-      isMantling: () => this.mantle !== null,
+      isMantling: () => this.playerMotion.isMantling(),
       restart: () => this.resetGame(),
       toggleFullscreen: () => this.toggleFullscreen(),
       queueResolution: (width, height) => this.renderHost.queueResolution(width, height),
+    };
+  }
+
+  /** Build the player-motion hooks over the shared camera + the active zone world + the input controller's
+   *  movement axes (all by reference/thunk). `crossSeam` folds the component's exact gate — probe only when the
+   *  active map HAS passable seams — into the callback, so a seam-less zone never runs the crossing test and the
+   *  seamless mid-tick early-return stays byte-identical. */
+  private buildMotionHooks(): PlayerMotionHooks {
+    return {
+      camera: this.camera,
+      world: () => this.zoneRuntime.world,
+      movementAxes: () => this.inputController.movementAxes(),
+      movementWant: (angle, forward, strafe, reach) =>
+        this.inputController.movementWant(angle, forward, strafe, reach),
+      crossSeam: (fromX, fromY, toX, toY) =>
+        this.zoneRuntime.seams.length > 0 && this.zoneRuntime.crossSeam(fromX, fromY, toX, toY),
     };
   }
 
@@ -328,7 +322,7 @@ export class BspDemoComponent {
       perfState: () => ({
         camera: this.camera,
         spriteCount: this.zoneRuntime.world.targets.reduce((n, t) => n + (t.alive ? 1 : 0), 0),
-        projectileCount: this.projectiles.length,
+        projectileCount: this.fx.projectiles.length,
         stressEnemyCount: this.combatRuntime.stressEnemyCount,
         aiMs: this.combatRuntime.aiMs,
       }),
@@ -488,33 +482,30 @@ export class BspDemoComponent {
 
   /** The in-world transient FX, blitted first (behind the weapon + HUD): projectiles, impacts, plasma arcs. */
   private paintWorldFx(context: CanvasRenderingContext2D): void {
-    const config = this.renderHost.config;
-
-    this.worldFxPainter.drawProjectiles(
-      context,
-      config,
-      this.camera,
-      this.projectiles,
-      this.combatRuntime.weaponView,
-      this.bob,
-    );
-    this.worldFxPainter.drawImpacts(context, config, this.camera, this.impacts);
-    this.worldFxPainter.drawArcs(context, config, this.camera, this.arcs);
+    this.worldFxPainter.drawProjectiles({
+      ctx: context,
+      view: this.view,
+      projectiles: this.fx.projectiles,
+      weaponView: this.combatRuntime.weaponView,
+      bob: this.playerMotion.bob,
+    });
+    this.worldFxPainter.drawImpacts({ ctx: context, view: this.view, impacts: this.fx.impacts });
+    this.worldFxPainter.drawArcs({ ctx: context, view: this.view, arcs: this.fx.arcs });
   }
 
   /** The weapon COMBAT STEP runs on the blit's `drawDt` (NOT the advance dt), then the viewmodel is PAINTED —
    *  step-before-draw, exactly as the monolithic drawWeapon did, so the step's shotFx feeds this frame's
    *  crosshair. */
   private paintWeapon(context: CanvasRenderingContext2D, drawDt: number): void {
-    this.combatRuntime.stepWeapon(drawDt, this.mantle !== null);
+    this.combatRuntime.stepWeapon(drawDt, this.playerMotion.isMantling());
     this.weaponPainter.draw({
       ctx: context,
       weaponView: this.combatRuntime.weaponView,
       climbView: this.combatRuntime.climbView,
-      mantle: this.mantle,
+      mantle: this.playerMotion.mantle,
       camera: this.camera,
       fov: this.renderHost.config.fov,
-      bob: this.bob,
+      bob: this.playerMotion.bob,
     });
   }
 
@@ -579,13 +570,13 @@ export class BspDemoComponent {
     this.stepObjectiveAndDoors(dt);
     this.ageArcsAndImpacts(dt);
 
-    // Mid auto-mantle: the hoist owns the body (no move/look) until it completes — see `stepMantle`.
-    if (this.mantle) {
-      this.stepMantle(dt);
+    // Mid auto-mantle: the hoist owns the body (no move/look) until it completes — see `PlayerMotion.stepMantle`.
+    if (this.playerMotion.isMantling()) {
+      this.playerMotion.stepMantle(dt);
 
       return;
     }
-    this.stepPlayerMotion(dt);
+    this.playerMotion.stepPlayerMotion(dt);
   }
 
   /** The world step: the stress load-test shots (before projectiles so their shots step this frame), the real
@@ -610,116 +601,19 @@ export class BspDemoComponent {
   /** Age the transient in-world FX out: advance every plasma arc + impact by `dt` and drop the ones whose
    *  lifetime elapsed (arcs past {@link ARC_DURATION}, impacts past their effect's full frame span). */
   private ageArcsAndImpacts(dt: number): void {
-    for (const arc of this.arcs) {
+    for (const arc of this.fx.arcs) {
       arc.age += dt;
     }
-    this.arcs = this.arcs.filter((arc) => arc.age < ARC_DURATION);
+    this.fx.arcs = this.fx.arcs.filter((arc) => arc.age < ARC_DURATION);
 
-    for (const impact of this.impacts) {
+    for (const impact of this.fx.impacts) {
       impact.age += dt;
     }
-    this.impacts = this.impacts.filter((impact) => {
+    this.fx.impacts = this.fx.impacts.filter((impact) => {
       const effect = impactEffect(impact.kind);
 
       return effect !== undefined && impact.age < effect.frames * effect.frameDuration_s;
     });
-  }
-
-  /** Integrate the player's own motion: read the movement axes, advance the walk-bob, resolve the collided
-   *  move, take a seamless zone crossing (early-return — the world swapped under us), else commit the camera +
-   *  ease the eye onto the floor, then probe for a vaultable ledge ahead. Only reached when not mantling. */
-  private stepPlayerMotion(dt: number): void {
-    const { forward, strafe } = this.inputController.movementAxes();
-
-    if (forward !== 0 || strafe !== 0) {
-      this.bob += dt * 9; // advance the weapon's walk-bob cadence only while moving
-    }
-    const reach = MOVE_SPEED * dt;
-    const cos = Math.cos(this.camera.angle);
-    const sin = Math.sin(this.camera.angle);
-    const fromX = this.camera.x;
-    const fromY = this.camera.y;
-    const want = this.inputController.movementWant(this.camera.angle, forward, strafe, reach);
-    const world = this.zoneRuntime.world;
-    const moved = movePlayer(
-      world.map,
-      fromX,
-      fromY,
-      want.x,
-      want.y,
-      PLAYER_RADIUS,
-      STEP_MAX,
-      HEADROOM,
-      world.slides,
-      true, // the player may cross PASSABLE seams — the crossing check right below performs the swap
-      world.obstacles,
-    );
-
-    // SEAMLESS crossing: stepping over a passable live seam swaps zones INSTANTLY — no fade. The portal
-    // already showed exactly what now surrounds the player, so the view must not (and does not) jump.
-    if (
-      this.zoneRuntime.seams.length > 0 &&
-      this.zoneRuntime.crossSeam(fromX, fromY, moved.x, moved.y)
-    ) {
-      return; // the world swapped under our feet; next frame continues in the new zone
-    }
-
-    this.camera.x = moved.x;
-    this.camera.y = moved.y;
-
-    // Ease the eye toward the floor under us, so stepping up/down is smooth rather than a jump.
-    const targetZ = moved.floorZ + EYE_HEIGHT;
-
-    this.camera.z += (targetZ - this.camera.z) * Math.min(1, 12 * dt);
-    this.tryClimb(forward, cos, sin, moved.floorZ);
-  }
-
-  /** Trigger a climb: pushing FORWARD into a too-tall-but-climbable ledge straight ahead. `movePlayer` has
-   *  already blocked the player a radius off it (its rise > STEP_MAX), so the probe just classifies that
-   *  obstacle as a vaultable ledge. A normal step (≤ STEP_MAX) is `null` here and was already walked up. */
-  private tryClimb(forward: number, cos: number, sin: number, floorZ: number): void {
-    if (forward <= 0) {
-      return;
-    }
-    const ledge = climbTarget(
-      this.zoneRuntime.world.map,
-      this.camera.x,
-      this.camera.y,
-      floorZ,
-      cos,
-      sin,
-      CLIMB_PROBE_REACH,
-      STEP_MAX,
-      CLIMB_MAX,
-      HEADROOM,
-    );
-
-    if (ledge !== null) {
-      this.mantle = { progress: 0, startZ: floorZ, targetZ: ledge, dirX: cos, dirY: sin };
-    }
-  }
-
-  /** Advance the auto-mantle one frame: glide forward along the captured heading by the slice of
-   *  {@link CLIMB_VAULT_ADVANCE} covered this tick, lerp the eye from the launch floor up to the ledge, and
-   *  clear the state on completion (snapping the eye exactly onto the ledge). Look + walk stay frozen so the
-   *  vault always clears the lip. */
-  private stepMantle(dt: number): void {
-    const m = this.mantle;
-
-    if (m === null) {
-      return;
-    }
-    const step = mantleStep(m, dt, MANTLE_DURATION, CLIMB_VAULT_ADVANCE, EYE_HEIGHT);
-
-    this.camera.x += step.dx;
-    this.camera.y += step.dy;
-    this.camera.z = step.z;
-
-    if (step.done) {
-      this.mantle = null; // landed on the ledge (the eye snapped exactly onto it)
-    } else {
-      m.progress = step.progress;
-    }
   }
 
   /** Size the HUD bar's backing store to its displayed pixel size (DPR-aware, capped at the native width),
@@ -752,21 +646,26 @@ export class BspDemoComponent {
    *  Sources the active zone's live state for the pure {@link buildLiveSprites}. */
   private liveSprites(): Sprite[] {
     // The active world (a WarmZone) satisfies the sprite source directly — no per-frame re-bundling.
-    return buildLiveSprites(
-      this.zoneRuntime.world,
-      this.camera.x,
-      this.camera.y,
-      this.zoneRuntime.atlasesReady,
-      this.zoneRuntime.exits,
-      this.combatRuntime.stressEnemies,
-    );
+    return buildLiveSprites({
+      world: this.zoneRuntime.world,
+      viewX: this.camera.x,
+      viewY: this.camera.y,
+      atlasesReady: this.zoneRuntime.atlasesReady,
+      zoneExits: this.zoneRuntime.exits,
+      stress: this.combatRuntime.stressEnemies,
+    });
   }
 
   /** The WARM neighbor's billboards for the render's neighbor-sprites channel, in ITS own coordinates —
    *  directional props oriented for the camera translated through the seam (the same ghost point the warm
    *  AI tracks), so a totem seen through the window turns exactly like a local one. */
   private warmSprites(warm: WarmZone): Sprite[] {
-    return buildWarmSprites(warm, this.camera.x, this.camera.y, this.zoneRuntime.seams);
+    return buildWarmSprites({
+      warm,
+      cameraX: this.camera.x,
+      cameraY: this.camera.y,
+      seams: this.zoneRuntime.seams,
+    });
   }
 
   /** Restart the run — a NEW GAME: the combat runtime restores vitals + the starting loadout + the seeded

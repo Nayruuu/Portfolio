@@ -32,6 +32,34 @@ export type WorldSpriteSource = Pick<
   | 'exit'
 >;
 
+/** One zone's world-sprite build inputs: the live entity source + the camera IN THAT ZONE'S coordinates (the
+ *  view point that picks each directional prop's rotation cell). */
+export interface WorldSpritesInput {
+  readonly world: WorldSpriteSource;
+  readonly viewX: number;
+  readonly viewY: number;
+}
+
+/** The active zone's live-sprite build inputs: the world source + view point, the atlas-decoded gate for the
+ *  zone-graph exit signs, those exits, and the debug stress-test barrels. */
+export interface LiveSpritesInput {
+  readonly world: WorldSpriteSource;
+  readonly viewX: number;
+  readonly viewY: number;
+  readonly atlasesReady: boolean;
+  readonly zoneExits: readonly ZoneExit[];
+  readonly stress: readonly { readonly x: number; readonly y: number; readonly z: number }[];
+}
+
+/** A warm neighbour's sprite build inputs: the warm world + the camera (in the ACTIVE zone's coordinates) + the
+ *  passable seams, from which the matching seam translates the camera into the warm zone's own coordinates. */
+export interface WarmSpritesInput {
+  readonly warm: WarmZone;
+  readonly cameraX: number;
+  readonly cameraY: number;
+  readonly seams: readonly { readonly zone: string; readonly dx: number; readonly dy: number }[];
+}
+
 /** The shared shape every rotating floor pickup's spec exposes to the turntable billboard build. */
 interface SpinningPickupSpec {
   readonly texName: string;
@@ -147,11 +175,8 @@ function exitSprite(exit: Marker): Sprite {
  *  (via {@link buildWarmSprites}), in that zone's own coordinates. (`viewX`,`viewY`) is the camera IN THAT
  *  ZONE'S coordinates — it picks each directional prop's rotation cell per frame. Build order is load-bearing:
  *  targets → enemies → thrown shots → vitals → ammo → keycards → weapon pickups → exit. */
-export function buildWorldSprites(
-  world: WorldSpriteSource,
-  viewX: number,
-  viewY: number,
-): Sprite[] {
+export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
+  const { world, viewX, viewY } = input;
   const sprites = world.targets
     .filter((t) => t.alive)
     .map((t) => orientSprite(t.sprite, viewX, viewY));
@@ -184,15 +209,9 @@ export function buildWorldSprites(
 /** The active zone's live billboards this frame — the world sprites plus the zone-graph exit signs (gated on
  *  the pickup atlases having decoded) and the stress-test barrels. Projectiles are NOT here: they are painted
  *  screen-space over the frame by the world-fx painter. */
-export function buildLiveSprites(
-  world: WorldSpriteSource,
-  viewX: number,
-  viewY: number,
-  atlasesReady: boolean,
-  zoneExits: readonly ZoneExit[],
-  stressEnemies: readonly { readonly x: number; readonly y: number; readonly z: number }[],
-): Sprite[] {
-  const sprites = buildWorldSprites(world, viewX, viewY);
+export function buildLiveSprites(input: LiveSpritesInput): Sprite[] {
+  const { world, viewX, viewY, atlasesReady, zoneExits, stress } = input;
+  const sprites = buildWorldSprites({ world, viewX, viewY });
 
   if (atlasesReady) {
     // Each zone-graph exit shows the same exit sign (its art decodes with the pickup atlases). Active zone
@@ -208,7 +227,7 @@ export function buildLiveSprites(
       });
     }
   }
-  for (const e of stressEnemies) {
+  for (const e of stress) {
     sprites.push({ x: e.x, y: e.y, z: e.z, tex: 'BARREL', width: 0.8, height: 1.7 }); // synthetic enemy billboard
   }
 
@@ -218,13 +237,13 @@ export function buildLiveSprites(
 /** A WARM neighbour's live billboards for the render's neighbour-sprites channel, in ITS own coordinates —
  *  directional props oriented for the camera translated through the seam (the same ghost point the warm AI
  *  tracks), so a totem seen through the window turns exactly like a local one. */
-export function buildWarmSprites(
-  warm: WarmZone,
-  cameraX: number,
-  cameraY: number,
-  seams: readonly { readonly zone: string; readonly dx: number; readonly dy: number }[],
-): Sprite[] {
+export function buildWarmSprites(input: WarmSpritesInput): Sprite[] {
+  const { warm, cameraX, cameraY, seams } = input;
   const seam = seams.find((s) => s.zone === warm.key);
 
-  return buildWorldSprites(warm, cameraX - (seam?.dx ?? 0), cameraY - (seam?.dy ?? 0));
+  return buildWorldSprites({
+    world: warm,
+    viewX: cameraX - (seam?.dx ?? 0),
+    viewY: cameraY - (seam?.dy ?? 0),
+  });
 }

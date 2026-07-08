@@ -4,18 +4,14 @@ import {
   movePlayer,
   PLAYER_RADIUS,
   STEP_MAX,
-  type Camera,
 } from '../../../core/lib/bsp-engine';
 import {
   fireWeapon,
   nextOwnedIndex,
   stepArsenal,
-  type Arc,
   type CombatEnemy,
   type CombatFrame,
-  type Impact,
   type PlayerCombatFrame,
-  type Projectile,
 } from '../../../core/lib';
 import {
   AMMO_MAX,
@@ -31,6 +27,8 @@ import { DoomHud } from '../../../shared/game/doom-hud';
 import { HURT_FX_DURATION, SHOT_FX_DURATION } from '../painters/overlay-painter';
 import { HIT_FLASH_DURATION } from '../sprites/sprite-builder';
 import { projectileWidth } from '../render/load-textures';
+import type { ViewState } from '../render/view-state';
+import type { FxPools } from './fx-pools';
 import type { WarmZone } from './zone-world';
 
 const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the rest hits health) — DOOM green armour
@@ -55,26 +53,20 @@ export interface StressEnemy {
   cooldown: number;
 }
 
-/** The between-subsystem seams the combat runtime needs but does NOT own: the SHARED player camera (it reads
- *  the firing pose), the render CONFIG (the aim-slope projection reads it), the {@link DoomHud} (the hurt path
- *  makes the face react), the ACTIVE zone world (enemies / barrels / slides it fights over, by reference), and
- *  the component's transient FX pools (projectiles / impacts / arcs) — live accessors because the component
- *  reassigns those arrays on a zone reset / seam crossing, so a captured reference would go stale. */
+/** The between-subsystem seams the combat runtime needs but does NOT own: the render/aim {@link ViewState} (the
+ *  shared camera's firing pose + the render config the aim-slope projection reads), the {@link DoomHud} (the
+ *  hurt path makes the face react), the {@link FxPools} the shots feed (projectiles / impacts / arcs — pushed
+ *  into by reference through the STABLE holder, so a zone reset / seam crossing clearing them stays visible
+ *  here without a per-array thunk), and the ACTIVE zone world (enemies / barrels / slides it fights over). */
 export interface CombatRuntimeHooks {
-  /** The shared player camera — read-only here (the runtime reads the firing pose; the component turns it). */
-  readonly camera: Camera;
-  /** The live render resolution + fov — the vertical aim-slope projection reads it. */
-  readonly config: { readonly width: number; readonly height: number; readonly fov: number };
+  /** The render/aim view — the shared camera's firing pose + the live resolution/fov the aim-slope reads. */
+  readonly view: ViewState;
+  /** The transient in-world FX pools the shots feed — pushed into by reference through the stable holder. */
+  readonly fx: FxPools;
   /** The DOOM status bar — a landed hit makes its face react (`onHit`). Owned by the component. */
   readonly hud: DoomHud;
   /** The ACTIVE zone world (enemies / barrels / slides / obstacles) the player fights over, by reference. */
   world(): WarmZone;
-  /** The component's in-flight projectile pool (reassigned on a zone reset — always read live). */
-  projectiles(): Projectile[];
-  /** The component's in-flight impact-burst pool (reassigned on a zone reset — always read live). */
-  impacts(): Impact[];
-  /** The component's in-flight arc-visual pool (reassigned on a zone reset — always read live). */
-  arcs(): Arc[];
 }
 
 /**
@@ -302,8 +294,8 @@ export class CombatRuntime {
       obstacles: world.obstacles,
       enemies: world.enemies,
       shots: world.enemyShots,
-      px: this.hooks.camera.x,
-      py: this.hooks.camera.y,
+      px: this.hooks.view.camera.x,
+      py: this.hooks.view.camera.y,
       hurt: (dmg) => this.hurtPlayer(dmg),
     };
   }
@@ -313,14 +305,14 @@ export class CombatRuntime {
    *  projectile kind's width). The pure hitscan / projectile steppers read + mutate the shared arrays. */
   public playerCombatFrame(): PlayerCombatFrame {
     const world = this.hooks.world();
-    const camera = this.hooks.camera;
+    const camera = this.hooks.view.camera;
 
     return {
       map: world.map,
       slides: world.slides,
       targets: world.targets,
       enemies: world.enemies,
-      projectiles: this.hooks.projectiles(),
+      projectiles: this.hooks.fx.projectiles,
       cameraX: camera.x,
       cameraY: camera.y,
       cameraZ: camera.z,
@@ -328,7 +320,7 @@ export class CombatRuntime {
       vSlope: this.aimVerticalSlope(),
       hurtEnemy: (enemy, dmg) => this.hurtEnemy(enemy, dmg),
       addImpact: (kind, x, y, z) => this.spawnImpact(kind, x, y, z),
-      addArc: (arc) => this.hooks.arcs().push(arc),
+      addArc: (arc) => this.hooks.fx.arcs.push(arc),
       projectileWidth,
     };
   }
@@ -366,7 +358,7 @@ export class CombatRuntime {
    *  system. An empty kind (a weapon with no mapped impact) spawns nothing. */
   public spawnImpact(kind: string, x: number, y: number, z: number): void {
     if (kind !== '') {
-      this.hooks.impacts().push({ kind, x, y, z, age: 0 });
+      this.hooks.fx.impacts.push({ kind, x, y, z, age: 0 });
     }
   }
 
@@ -452,7 +444,7 @@ export class CombatRuntime {
     const t0 = performance.now();
     const reach = ENEMY_SPEED * dt;
     const world = this.hooks.world();
-    const camera = this.hooks.camera;
+    const camera = this.hooks.view.camera;
 
     for (const e of this.stressRoster) {
       const dx = camera.x - e.x;
@@ -538,10 +530,10 @@ export class CombatRuntime {
   /** Vertical climb of the aim line per cell of forward depth, from the camera pitch (a screen y-shear): the
    *  crosshair points at `camera.z + slope·depth`, so looking up raises where a hitscan lands downrange. */
   private aimVerticalSlope(): number {
-    const config = this.hooks.config;
+    const config = this.hooks.view.config;
     const focal = config.width / 2 / Math.tan(config.fov / 2);
 
-    return ((this.hooks.camera.pitch ?? 0) * (config.height / 2)) / focal;
+    return ((this.hooks.view.camera.pitch ?? 0) * (config.height / 2)) / focal;
   }
 
   /** Drive the active weapon's viewmodel for the tick and report its fire intent. AUTO fires off the held
@@ -630,7 +622,7 @@ export class CombatRuntime {
   /** A synthetic enemy shot toward the player — reuses the player projectile system (stepped + collided each
    *  frame), so it loads `stepProjectiles`. Capped so a runaway flux can't lock the loop. */
   private fireEnemyShot(x: number, y: number, z: number, nx: number, ny: number): void {
-    const projectiles = this.hooks.projectiles();
+    const projectiles = this.hooks.fx.projectiles;
 
     if (projectiles.length > STRESS_SHOT_CAP) {
       return;

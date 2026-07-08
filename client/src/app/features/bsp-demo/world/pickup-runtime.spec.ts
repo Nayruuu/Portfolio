@@ -123,13 +123,10 @@ function setup(worldOverrides: Partial<WarmZone> = {}): Harness {
   const hud = new DoomHud();
   const world = makeWorld(worldOverrides);
   const combat = new CombatRuntime({
-    camera,
-    config: { width: 1280, height: 720, fov: Math.PI / 2 },
+    view: { camera, config: { width: 1280, height: 720, fov: Math.PI / 2 } },
+    fx: { projectiles: [], impacts: [], arcs: [] },
     hud,
     world: () => world,
-    projectiles: () => [],
-    impacts: () => [],
-    arcs: () => [],
   });
   const zone: TestZone = {
     world,

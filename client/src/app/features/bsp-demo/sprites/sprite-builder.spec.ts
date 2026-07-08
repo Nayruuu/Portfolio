@@ -86,7 +86,7 @@ function fixtureWorld(): WorldSpriteSource {
 
 describe('buildWorldSprites', () => {
   it('builds one billboard per live entity, in a fixed order, culling dead barrels', () => {
-    const sprites = buildWorldSprites(fixtureWorld(), 0, 0);
+    const sprites = buildWorldSprites({ world: fixtureWorld(), viewX: 0, viewY: 0 });
 
     // The dead barrel drops out; the rest keep the build order: target → enemy → shot → pickups → exit.
     expect(sprites.map((s) => s.tex)).toEqual([
@@ -104,7 +104,7 @@ describe('buildWorldSprites', () => {
   it('omits the exit billboard when the zone has no exit marker', () => {
     const world = { ...fixtureWorld(), exit: null };
 
-    const sprites = buildWorldSprites(world, 0, 0);
+    const sprites = buildWorldSprites({ world, viewX: 0, viewY: 0 });
 
     expect(sprites.some((s) => s.tex === 'EXIT_MARKER')).toBe(false);
   });
@@ -115,7 +115,14 @@ describe('buildLiveSprites', () => {
   const stress = [{ x: 7, y: 7, z: 0 }];
 
   it('appends the zone-graph exit signs (once atlases are ready) and the stress barrels, after the world', () => {
-    const sprites = buildLiveSprites(fixtureWorld(), 0, 0, true, zoneExits, stress);
+    const sprites = buildLiveSprites({
+      world: fixtureWorld(),
+      viewX: 0,
+      viewY: 0,
+      atlasesReady: true,
+      zoneExits,
+      stress,
+    });
 
     expect(sprites.map((s) => s.tex)).toEqual([
       'B_ALIVE',
@@ -132,7 +139,14 @@ describe('buildLiveSprites', () => {
   });
 
   it('gates the zone-graph exit signs on the atlases having decoded', () => {
-    const sprites = buildLiveSprites(fixtureWorld(), 0, 0, false, zoneExits, stress);
+    const sprites = buildLiveSprites({
+      world: fixtureWorld(),
+      viewX: 0,
+      viewY: 0,
+      atlasesReady: false,
+      zoneExits,
+      stress,
+    });
 
     // Still the world + the stress barrel, but no exit-sign billboard.
     expect(sprites.filter((s) => s.tex === EXIT_SPEC.texName)).toHaveLength(0);
@@ -146,12 +160,16 @@ describe('buildWarmSprites', () => {
     const seams = [{ zone: 'z2', dx: 10, dy: 20 }];
 
     // Equivalent to building the warm world at the seam-translated camera point.
-    expect(buildWarmSprites(warm, 100, 200, seams)).toEqual(buildWorldSprites(warm, 90, 180));
+    expect(buildWarmSprites({ warm, cameraX: 100, cameraY: 200, seams })).toEqual(
+      buildWorldSprites({ world: warm, viewX: 90, viewY: 180 }),
+    );
   });
 
   it('falls back to a zero offset when no seam matches the warm key', () => {
     const warm = { key: 'z2', ...fixtureWorld() } as unknown as WarmZone;
 
-    expect(buildWarmSprites(warm, 100, 200, [])).toEqual(buildWorldSprites(warm, 100, 200));
+    expect(buildWarmSprites({ warm, cameraX: 100, cameraY: 200, seams: [] })).toEqual(
+      buildWorldSprites({ world: warm, viewX: 100, viewY: 200 }),
+    );
   });
 });

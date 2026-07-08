@@ -106,13 +106,10 @@ function setup(overrides: Record<string, unknown> = {}): Harness {
     arcs: [] as Arc[],
   };
   const hooks: CombatRuntimeHooks = {
-    camera,
-    config,
+    view: { camera, config },
+    fx,
     hud,
     world: () => world,
-    projectiles: () => fx.projectiles,
-    impacts: () => fx.impacts,
-    arcs: () => fx.arcs,
   };
 
   return { cr: new CombatRuntime(hooks), camera, hud, world, fx };

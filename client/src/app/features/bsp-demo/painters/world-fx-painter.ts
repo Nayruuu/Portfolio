@@ -1,6 +1,7 @@
 import { ARC_DURATION, type Arc, type Impact, type Projectile } from '../../../core/lib';
 import { impactEffect, projectileEffect } from '../../../shared/game/effects';
 import type { WeaponView } from '../../../shared/game/weapon-view';
+import type { ViewState } from '../render/view-state';
 
 // Screen-space projectile painting, mirroring the grid's blitEffect so a shot reads as leaving the weapon:
 const PROJECTILE_SCREEN_SCALE = 0.42; // on-screen height = this × effects size, relative to a same-distance wall
@@ -10,22 +11,29 @@ const PROJECTILE_CROSSHAIR_BLEND = 2; // cells: within this a shot is pulled to 
 const IMPACT_SCREEN_SCALE = 0.9; // on-screen size of an impact burst vs a same-distance wall (mirrors the grid)
 const IMPACT_MAX_HEIGHT_FRACTION = 0.5; // cap a point-blank burst at this fraction of the canvas height
 
-/** The internal render resolution + field-of-view the FX are projected against — the component's live `config`,
- *  passed BY REFERENCE (it is mutated in place by the resolution switch), read-only here. */
-interface RenderConfig {
-  readonly width: number;
-  readonly height: number;
-  readonly fov: number;
+/** One in-flight projectile repaint's inputs: the target context, the render/aim {@link ViewState} the shots
+ *  project against, the live projectile pool, plus the weapon viewmodel + walk-bob that anchor a fresh shot to
+ *  the swaying muzzle. Grouped into an options object (the `config`+`camera` clump rides as one `view`). */
+interface ProjectilesPaint {
+  readonly ctx: CanvasRenderingContext2D;
+  readonly view: ViewState;
+  readonly projectiles: readonly Projectile[];
+  readonly weaponView: WeaponView;
+  readonly bob: number;
 }
 
-/** The camera pose the FX are projected from — the component's live `camera` (mutated in place), read-only here.
- *  A concrete shape (every field present) since the FX always run with a fully-placed camera. */
-interface ViewCamera {
-  readonly x: number;
-  readonly y: number;
-  readonly angle: number;
-  readonly z: number;
-  readonly pitch: number;
+/** One impact-burst repaint's inputs: the context, the render/aim {@link ViewState}, and the live impact pool. */
+interface ImpactsPaint {
+  readonly ctx: CanvasRenderingContext2D;
+  readonly view: ViewState;
+  readonly impacts: readonly Impact[];
+}
+
+/** One plasma-arc repaint's inputs: the context, the render/aim {@link ViewState}, and the live arc pool. */
+interface ArcsPaint {
+  readonly ctx: CanvasRenderingContext2D;
+  readonly view: ViewState;
+  readonly arcs: readonly Arc[];
 }
 
 /**
@@ -43,20 +51,16 @@ export class WorldFxPainter {
    *  distance-scaled (height capped so a close shot doesn't fill the screen), pulled to the crosshair near the
    *  muzzle, and DROPPED below the aim line (depth-attenuated + capped) so it reads as leaving the weapon. No
    *  wall occlusion (a shot detonates on contact, so it is never behind the wall it heads for). */
-  public drawProjectiles(
-    ctx: CanvasRenderingContext2D,
-    config: RenderConfig,
-    camera: ViewCamera,
-    projectiles: readonly Projectile[],
-    weaponView: WeaponView,
-    bob: number,
-  ): void {
+  public drawProjectiles(inputs: ProjectilesPaint): void {
+    const { ctx, view, projectiles, weaponView, bob } = inputs;
+
     if (projectiles.length === 0) {
       return;
     }
-    const { width, height, fov } = config;
+    const camera = view.camera;
+    const { width, height, fov } = view.config;
     const focal = width / 2 / Math.tan(fov / 2);
-    const horizon = height / 2 + camera.pitch * (height / 2);
+    const horizon = height / 2 + (camera.pitch ?? 0) * (height / 2);
     const cos = Math.cos(camera.angle);
     const sin = Math.sin(camera.angle);
     // The gun's current walk-bob offset — near the muzzle a fresh shot is anchored to the SWAYING barrel tip
@@ -104,18 +108,16 @@ export class WorldFxPainter {
   /** Paint each live impact as a WORLD billboard at its hit point: face-camera, distance-scaled, the strip
    *  cell chosen from the impact's `age`. Like the barrels it sits at a true world (x,y,z), so a burst on a
    *  far wall reads small and one on a near barrel large. Drawn on top of the scene (brief bright flashes). */
-  public drawImpacts(
-    ctx: CanvasRenderingContext2D,
-    config: RenderConfig,
-    camera: ViewCamera,
-    impacts: readonly Impact[],
-  ): void {
+  public drawImpacts(inputs: ImpactsPaint): void {
+    const { ctx, view, impacts } = inputs;
+
     if (impacts.length === 0) {
       return;
     }
-    const { width, height, fov } = config;
+    const camera = view.camera;
+    const { width, height, fov } = view.config;
     const focal = width / 2 / Math.tan(fov / 2);
-    const horizon = height / 2 + camera.pitch * (height / 2);
+    const horizon = height / 2 + (camera.pitch ?? 0) * (height / 2);
     const cos = Math.cos(camera.angle);
     const sin = Math.sin(camera.angle);
 
@@ -159,18 +161,16 @@ export class WorldFxPainter {
 
   /** Draw the live chain-lightning arcs, each endpoint projected to the barrel's mid-body. Screen-space, no
    *  wall occlusion — they are brief bright flashes, so an arc crossing a wall edge is acceptable. */
-  public drawArcs(
-    ctx: CanvasRenderingContext2D,
-    config: RenderConfig,
-    camera: ViewCamera,
-    arcs: readonly Arc[],
-  ): void {
+  public drawArcs(inputs: ArcsPaint): void {
+    const { ctx, view, arcs } = inputs;
+
     if (arcs.length === 0) {
       return;
     }
-    const { width, height, fov } = config;
+    const camera = view.camera;
+    const { width, height, fov } = view.config;
     const focal = width / 2 / Math.tan(fov / 2);
-    const horizon = height / 2 + camera.pitch * (height / 2);
+    const horizon = height / 2 + (camera.pitch ?? 0) * (height / 2);
     const cos = Math.cos(camera.angle);
     const sin = Math.sin(camera.angle);
     const project = (x: number, y: number, z: number): { sx: number; sy: number } | null => {
