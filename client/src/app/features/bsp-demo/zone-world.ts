@@ -47,19 +47,31 @@ export interface SeamEdge {
   readonly dy: number;
 }
 
+/** A sliding glass door's proximity trigger: its linedef index + the segment midpoint the player nears to
+ *  open it. Derived from the active level's linedefs (never persisted — re-indexed on every zone adopt). */
+export interface SlidingDoor {
+  readonly line: number;
+  readonly mx: number;
+  readonly my: number;
+}
+
 /**
- * One zone's full LIVE world state — everything `loadZone` builds for the active floor. The active zone
- * holds this as the component's flat fields; the WARM neighbor (the zone behind a visible passable seam)
- * holds one of these: its enemies simulate each frame in THEIR map, its sprites show through the seam, and
- * on a crossing the warm world is ADOPTED wholesale as the active one (continuity — nothing reloads) while
- * the outgoing world becomes the new warm zone (the reverse portal).
+ * One zone's full LIVE world state — the reified GAME WORLD the zone runtime owns. The SAME
+ * shape backs BOTH the active floor (the world the player stands in) and the WARM neighbor (the zone behind a
+ * visible passable seam, kept alive one at a time): the warm world's enemies simulate each frame in THEIR
+ * map and its sprites show through the seam, and on a crossing the two references simply SWAP — the warm
+ * world becomes active (continuity — nothing reloads) while the outgoing world becomes the new warm zone
+ * (the reverse portal). Location-derived indexes (seams, graph exits, sliding-door triggers) are NOT bundled
+ * here — the runtime re-derives them from the active world after every load/swap.
  */
 export interface WarmZone {
   readonly key: string;
   readonly level: Level;
   // Entities exist only once the atlases have decoded: a bare (unpopulated) world is geometry-only, and
   // its snapshot must never be persisted — takenFlags would read its empty pickup lists as "all taken".
-  readonly populated: boolean;
+  // Mutable: the active world is built bare on the first (pre-atlas) load, then populated in place once the
+  // atlases decode (the deferred spawn), which flips this true so a later demotion-to-warm snapshots it.
+  populated: boolean;
   readonly sectors: MutableSector[];
   readonly mapSource: MapSource;
   readonly map: CompiledMap;
