@@ -1,4 +1,4 @@
-import type { CombatEnemy, EnemySpec } from '../../core/lib';
+import type { CombatEnemy, EnemySpec } from '../../../core/lib';
 
 /**
  * A live or dying enemy instance in the BSP demo — the feature-side widening of the art-free {@link

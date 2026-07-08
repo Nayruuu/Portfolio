@@ -6,7 +6,7 @@ import { DoomHud } from '../../../shared/game/doom-hud';
 import { ARSENAL, ammoTypeMax } from '../../../shared/game/weapons';
 import { HURT_FX_DURATION, SHOT_FX_DURATION } from '../painters/overlay-painter';
 import { HIT_FLASH_DURATION } from '../sprites/sprite-builder';
-import type { WarmZone } from '../zone-world';
+import type { WarmZone } from './zone-world';
 import { CombatRuntime, type CombatRuntimeHooks } from './combat-runtime';
 
 /**

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Sprite } from '../../../core/lib/bsp-engine';
-import { EXIT_SPEC } from '../pickups';
-import type { WarmZone } from '../zone-world';
-import type { Foe } from '../enemy-runtime';
+import { EXIT_SPEC } from '../world/pickups';
+import type { WarmZone } from '../world/zone-world';
+import type { Foe } from '../world/enemy-runtime';
 import {
   buildLiveSprites,
   buildWarmSprites,

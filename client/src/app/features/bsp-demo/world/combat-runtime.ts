@@ -31,7 +31,7 @@ import { DoomHud } from '../../../shared/game/doom-hud';
 import { HURT_FX_DURATION, SHOT_FX_DURATION } from '../painters/overlay-painter';
 import { HIT_FLASH_DURATION } from '../sprites/sprite-builder';
 import { projectileWidth } from '../render/load-textures';
-import type { WarmZone } from '../zone-world';
+import type { WarmZone } from './zone-world';
 
 const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the rest hits health) — DOOM green armour
 const RESERVE_START = 50; // starting reserve per ammo type at spawn (then clamped to each type's cap) — pickups top up

@@ -26,9 +26,9 @@ import {
   type ZoneLoad,
   type ZoneSnapshot,
 } from '../../../core/lib';
-import { buildPickups, takenFlags } from '../pickups';
-import type { Foe } from '../enemy-runtime';
-import type { Door, SeamEdge, SlidingDoor, WarmZone, ZoneExit } from '../zone-world';
+import { buildPickups, takenFlags } from './pickups';
+import type { Foe } from './enemy-runtime';
+import type { Door, SeamEdge, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
 
 /** Camera eye height above the floor — the world-vs-camera constant the runtime seats the player at on every
  *  load; the component reads it too (the eased step-up + the mantle hoist stand the eye this far off a floor). */

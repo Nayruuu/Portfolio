@@ -15,9 +15,9 @@ import {
   type Marker,
   type Vital,
   type WeaponPickup,
-} from '../pickups';
+} from './pickups';
 import type { MutableSector } from '../../../core/lib/bsp-engine';
-import type { Door, SlidingDoor, WarmZone, ZoneExit } from '../zone-world';
+import type { Door, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
 import { CombatRuntime } from './combat-runtime';
 import { PickupRuntime } from './pickup-runtime';
 

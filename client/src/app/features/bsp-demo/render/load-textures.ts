@@ -11,7 +11,7 @@ import {
 } from '../../../core/lib/bsp-engine';
 import { projectileEffect } from '../../../shared/game/effects';
 import { ENEMY_SPECS } from '../../../core/lib';
-import { PICKUP_TEXTURE_JOBS } from '../pickups';
+import { PICKUP_TEXTURE_JOBS } from '../world/pickups';
 
 /** A placeholder DECOR billboard (a potted plant) — a "bidon" stand-in until real prop art lands. Transparent
  *  background + a green bush in a terracotta pot; feature-layer, so not bound by the core-coverage guard. */

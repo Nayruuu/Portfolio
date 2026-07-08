@@ -11,9 +11,9 @@
  */
 import { orientSprite, type Sprite } from '../../../core/lib/bsp-engine';
 import type { EnemyShot } from '../../../core/lib';
-import type { Foe } from '../enemy-runtime';
-import type { WarmZone, ZoneExit } from '../zone-world';
-import { EXIT_SPEC, pickupFrame, type Marker } from '../pickups';
+import type { Foe } from '../world/enemy-runtime';
+import type { WarmZone, ZoneExit } from '../world/zone-world';
+import { EXIT_SPEC, pickupFrame, type Marker } from '../world/pickups';
 
 export const HIT_FLASH_DURATION = 0.12; // seconds an enemy flashes white after a hit (mirrors the grid)
 const ENEMY_RECOIL = 0.18; // world units an enemy flinches UP at full hit-flash (the grid's recoil, in world z)

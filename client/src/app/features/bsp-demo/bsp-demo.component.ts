@@ -12,7 +12,6 @@ import {
 } from '@angular/core';
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import {
-  clampPitch,
   climbTarget,
   HEADROOM,
   mantleStep,
@@ -21,14 +20,13 @@ import {
   STEP_MAX,
   type Camera,
   type Sprite,
-  type Texture,
 } from '../../core/lib/bsp-engine';
 import { parseLevelParams, type LevelParams } from '../../core/lib';
-import { buildAtlasJobs, loadAtlasTexture, loadEnvTextures } from './render/load-textures';
-import type { WarmZone } from './zone-world';
-import { ZoneRuntime, EYE_HEIGHT, ZONE_FADE } from './world/zone-runtime';
-import { CombatRuntime } from './world/combat-runtime';
-import { PickupRuntime } from './world/pickup-runtime';
+import { AssetLoader, type AssetLoaderHooks } from './boot/asset-loader';
+import type { WarmZone } from './world/zone-world';
+import { ZoneRuntime, EYE_HEIGHT, ZONE_FADE, type ZoneRuntimeHooks } from './world/zone-runtime';
+import { CombatRuntime, type CombatRuntimeHooks } from './world/combat-runtime';
+import { PickupRuntime, type PickupRuntimeHooks } from './world/pickup-runtime';
 import { RenderHost, type DisplaySnapshot, type RenderRequest } from './render/render-host';
 import { DoomHud } from '../../shared/game/doom-hud';
 import { impactEffect } from '../../shared/game/effects';
@@ -49,7 +47,6 @@ import {
 } from './painters/overlay-painter';
 import {
   ARC_DURATION,
-  movementDelta,
   stepEnemies,
   stepEnemyShots,
   stepProjectiles,
@@ -57,20 +54,11 @@ import {
   type Impact,
   type Projectile,
 } from '../../core/lib';
-
-/** Keys we react to (lower-cased), covering both QWERTY (WASD) and AZERTY (ZQSD) + arrows. */
-const CONTROLS = new Set([
-  'w',
-  'z',
-  'arrowup',
-  's',
-  'arrowdown',
-  'a',
-  'q',
-  'arrowleft',
-  'd',
-  'arrowright',
-]);
+import {
+  InputController,
+  RESTART_DELAY,
+  type InputControllerHooks,
+} from './input/input-controller';
 
 const MOVE_SPEED = 4; // world units / second
 // Auto-mantle: a ledge whose rise is in (STEP_MAX, CLIMB_MAX] is too tall to step but climbable — walking
@@ -79,17 +67,6 @@ const CLIMB_MAX = 2.4; // tallest ledge you can vault (above this it stays a sol
 const CLIMB_PROBE_REACH = 0.45; // cells ahead the climb probe samples — just past the radius, into the ledge cell
 const MANTLE_DURATION = 0.4; // seconds the hoist takes
 const CLIMB_VAULT_ADVANCE = 0.5; // cells the hoist glides the player forward, so it clears the lip and stands on top
-const MOUSE_SENS = 0.0035; // radians per pixel of mouse motion (turning is mouse-only)
-const PITCH_UP_MAX = 0.85; // look-up limit (the camera pitch is a vertical y-shear, not a true rotation)
-const PITCH_DOWN_MAX = 2.0; // look-DOWN limit — much deeper than up (aim down at enemies below a platform); the renderer handles the off-screen horizon, so this can exceed 1.0 (walls stay vertical, as in any sheared-frustum tilt)
-const RESTART_DELAY = 1.2; // seconds after death/win before a click restarts (lets the end feedback settle)
-// Internal render resolution per display mode: 720p when the canvas is embedded in the ~960px viewport (a
-// near-free quality match, ~2× cheaper), full 1080p when it fills the screen in fullscreen (native, no
-// upscale blur). Each mode ALWAYS renders at 100% of its tier — sharpness is part of the product. Under
-// contention the RENDER GOVERNOR (core/lib/game/telemetry/render-governor.ts) trades the pool's ACTIVE WORKER COUNT
-// only (join stalls shrink it, proven calm grows it back); it never touches the resolution.
-const WINDOWED_RENDER = { width: 1280, height: 720 } as const;
-const FULLSCREEN_RENDER = { width: 1920, height: 1080 } as const;
 const HUD_NATIVE_WIDTH = 2117; // x1.0 status-bar art width (biggest tier) — only the aspect source now
 const HUD_NATIVE_HEIGHT = 404; // …its height, so the backing store keeps the bar's 5.24:1 aspect
 const HUD_MAX_WIDTH = 1024; // cap the HUD backing store here → a cheap repaint even fullscreen (still crisp)
@@ -160,9 +137,15 @@ export class BspDemoComponent {
     dirX: number;
     dirY: number;
   } | null = null;
-  private readonly held = new Set<string>();
   private lastTime = 0;
   private frameId = 0;
+  // The blit target — the canvas 2D context the framebuffer is `putImageData`'d onto. Grabbed in
+  // `afterNextRender` (null until then / on SSR); `frame` reads it every tick once the loop is armed.
+  private renderContext: CanvasRenderingContext2D | null = null;
+  // A render (kick → join → blit) is in flight — the rAF loop keeps advancing + re-arming but skips a fresh
+  // kick until the outstanding one blits + releases, so the single shared framebuffer never overlaps.
+  private renderBusy = false;
+  private lastBlit = 0; // previous blit's timestamp → the dt stepping the weapon/HUD animations (the blit clock)
   private readonly hud = new DoomHud();
   // The PLAYER-COMBAT boundary. {@link CombatRuntime} owns the player's combat + inventory state (health,
   // armour, the death/win latch, the magazine + reserve pools, the weapon progression + viewmodel, the fire /
@@ -182,17 +165,65 @@ export class BspDemoComponent {
   // The weapon VIEWMODEL painter — the screen-space overlay half of the old drawWeapon (the fire STEP lives in
   // the combat runtime). Stateless; drew each blit just after the runtime's weapon step (step-before-draw).
   private readonly weaponPainter = new WeaponPainter();
+  // The INPUT boundary. {@link InputController} owns the held-keys set + every DOM input handler (keyboard
+  // movement + debug routing, mouse look, the fire / reload / weapon-cycle buttons, the wheel, the resize) and
+  // derives the movement axes `advance` integrates. It mutates the shared camera on look + the combat runtime's
+  // edges by reference; its handlers are stable bound refs so the component adds AND removes the SAME
+  // references (an identity mismatch would leak the listeners). Assigned in the constructor over the runtimes.
+  private readonly inputController: InputController;
+  // The BOOTSTRAP asset-load boundary. {@link AssetLoader} owns the two decode pipelines (environment WebP +
+  // enemy/pickup atlases) and, on each completion, feeds the decoded art back through the runtimes — but only
+  // while the game is live: its callbacks are gated on `renderHost.disposed`, so a decode landing after teardown
+  // is dropped (a stray `markAtlasesReady` would corrupt the next mount). Assigned over the runtimes below.
+  private readonly assetLoader: AssetLoader;
   private bob = 0; // weapon idle-bob phase, advanced while moving
 
   constructor() {
     const destroyRef = inject(DestroyRef);
 
-    // Wire the world-ownership boundary. The pool lives on {@link RenderHost} (the sole owner), so a geometry
-    // change routes to the host, which QUEUES it and re-points the SAME workers in its next between-frames
-    // window (never mid-render). The camera is shared by reference; the component's transient FX
-    // (projectiles/impacts/arcs/mantle) are its own, so the runtime signals a reset/translate rather than
-    // reaching into them.
-    this.zoneRuntime = new ZoneRuntime({
+    // Wire the collaborator boundaries in dependency order — each `new` takes its hook object from a build
+    // helper (same instances, same closures, same order). RenderHost is a field initializer (already set), so
+    // ZoneRuntime → CombatRuntime → PickupRuntime → InputController → AssetLoader construct in sequence, each
+    // closing over the ones before it.
+    this.zoneRuntime = new ZoneRuntime(this.buildZoneHooks());
+    this.combatRuntime = new CombatRuntime(this.buildCombatHooks());
+    this.pickupRuntime = new PickupRuntime(this.buildPickupHooks());
+    this.inputController = new InputController(this.buildInputHooks());
+    this.assetLoader = new AssetLoader(this.buildAssetHooks());
+    // The initial zone load — the SAME code path as every open-building transition (URL level or default).
+    // Pure map/data work, so it is prerender-safe; enemies/pickups spawn once the atlases decode below.
+    this.zoneRuntime.loadZone(this.params.levelKey);
+
+    afterNextRender(() => {
+      const canvasEl = this.canvas().nativeElement;
+      const context = canvasEl.getContext('2d');
+
+      if (context === null) {
+        return;
+      }
+
+      this.bootstrapRenderHost(context, canvasEl);
+      this.combatRuntime.climbView.preload(); // decode the mantle hands now, so the first vault never shows a blank frame
+      this.bindInputListeners(canvasEl);
+      const hudResize = this.observeHudResize();
+
+      this.renderContext = context; // hand `frame` the blit target now the loop is about to arm
+      this.armFrameLoop();
+      // Kick both decode pipelines (environment WebP + enemy/pickup atlases) — the loader feeds the decoded art
+      // back through the runtimes on completion, gated on `renderHost.disposed` so a late decode is dropped.
+      void this.assetLoader.load();
+
+      destroyRef.onDestroy(() => this.teardownGame(canvasEl, hudResize));
+    });
+  }
+
+  /** Build the world-ownership hooks. The pool lives on {@link RenderHost} (the sole owner), so a geometry
+   *  change routes to the host, which QUEUES it and re-points the SAME workers in its next between-frames
+   *  window (never mid-render). The camera is shared by reference; the component's transient FX
+   *  (projectiles/impacts/arcs/mantle) are its own, so the runtime signals a reset/translate rather than
+   *  reaching into them. */
+  private buildZoneHooks(): ZoneRuntimeHooks {
+    return {
       camera: this.camera,
       params: this.params,
       onGeometryLoaded: (key, source, neighbors) => this.renderHost.setMaps(key, source, neighbors),
@@ -220,11 +251,14 @@ export class BspDemoComponent {
           by: arc.by - dy,
         }));
       },
-    });
-    // Wire the player-combat boundary over the zone world + the transient FX (all by reference — the FX pools
-    // are read through accessors because a zone reset / seam crossing reassigns them). The runtime reads the
-    // shared camera's firing pose + the render config; it makes the shared HUD face react on a landed hit.
-    this.combatRuntime = new CombatRuntime({
+    };
+  }
+
+  /** Build the player-combat hooks over the zone world + the transient FX (all by reference — the FX pools are
+   *  read through accessors because a zone reset / seam crossing reassigns them). The runtime reads the shared
+   *  camera's firing pose + the render config; it makes the shared HUD face react on a landed hit. */
+  private buildCombatHooks(): CombatRuntimeHooks {
+    return {
       camera: this.camera,
       config: this.renderHost.config,
       hud: this.hud,
@@ -232,240 +266,178 @@ export class BspDemoComponent {
       projectiles: () => this.projectiles,
       impacts: () => this.impacts,
       arcs: () => this.arcs,
-    });
-    // Wire the pickup-objective boundary over the zone world + the combat grant API + the HUD. It reads the
-    // shared camera for proximity, mutates the zone world's pickup / door / slide arrays by reference, and owns
-    // the collected badge set + the two collect-feedback timers the overlay painter reads.
-    this.pickupRuntime = new PickupRuntime({
+    };
+  }
+
+  /** Build the pickup-objective hooks over the zone world + the combat grant API + the HUD. It reads the shared
+   *  camera for proximity, mutates the zone world's pickup / door / slide arrays by reference, and owns the
+   *  collected badge set + the two collect-feedback timers the overlay painter reads. */
+  private buildPickupHooks(): PickupRuntimeHooks {
+    return {
       camera: this.camera,
       hud: this.hud,
       combat: this.combatRuntime,
       zone: this.zoneRuntime,
+    };
+  }
+
+  /** Build the input hooks over the shared camera + the combat edges (by reference) + the canvas the pointer
+   *  locks to; the mantle-freeze predicate + the three component callbacks (restart, fullscreen, resolution)
+   *  are lazy hooks so it never reaches into private state directly. */
+  private buildInputHooks(): InputControllerHooks {
+    return {
+      camera: this.camera,
+      combat: this.combatRuntime,
+      canvas: () => this.canvas().nativeElement,
+      isMantling: () => this.mantle !== null,
+      restart: () => this.resetGame(),
+      toggleFullscreen: () => this.toggleFullscreen(),
+      queueResolution: (width, height) => this.renderHost.queueResolution(width, height),
+    };
+  }
+
+  /** Build the bootstrap asset-load hooks over the render host + the runtimes it feeds on decode completion.
+   *  `isDisposed` reads the host's teardown latch so a late atlas decode never spawns into a destroyed game. */
+  private buildAssetHooks(): AssetLoaderHooks {
+    return {
+      applyTextures: (loaded) => this.renderHost.applyTextures(loaded),
+      onEnvTexturesLoaded: (hasArt) => this.texturesLoaded.set(hasArt),
+      markAtlasesReady: () => this.zoneRuntime.markAtlasesReady(),
+      seedReserves: () => this.combatRuntime.seedReserves(),
+      isDisposed: () => this.renderHost.disposed,
+    };
+  }
+
+  /** Hand the render confluence its browser resources: the framebuffer/canvas backing store, the worker pool
+   *  (seeded with the initial zone's geometry), the governor, the dev perf ring, the async WebGPU backend. From
+   *  here the host is the SOLE owner of the pool/GPU/config/textures/framebuffer/telemetry. */
+  private bootstrapRenderHost(
+    context: CanvasRenderingContext2D,
+    canvasEl: HTMLCanvasElement,
+  ): void {
+    this.renderHost.bootstrap({
+      context,
+      canvas: canvasEl,
+      zoneKey: this.zoneRuntime.currentKey,
+      mapSource: this.zoneRuntime.world.mapSource,
+      neighborSources: this.zoneRuntime.neighborSources,
+      perfRing: this.params.perfRing,
+      noGovernor: this.params.noGovernor,
+      forceCpu: this.params.renderer === 'cpu',
+      camera: this.camera,
+      perfState: () => ({
+        camera: this.camera,
+        spriteCount: this.zoneRuntime.world.targets.reduce((n, t) => n + (t.alive ? 1 : 0), 0),
+        projectileCount: this.projectiles.length,
+        stressEnemyCount: this.combatRuntime.stressEnemyCount,
+        aiMs: this.combatRuntime.aiMs,
+      }),
     });
-    // The initial zone load — the SAME code path as every open-building transition (URL level or default).
-    // Pure map/data work, so it is prerender-safe; enemies/pickups spawn once the atlases decode below.
-    this.zoneRuntime.loadZone(this.params.levelKey);
+  }
 
-    afterNextRender(() => {
-      const canvasEl = this.canvas().nativeElement;
-      const context = canvasEl.getContext('2d');
+  /** Wire the DOM events to the input controller's handlers, then size the HUD bar. Each handler is a STABLE
+   *  bound reference stored on the controller, so `teardownGame` removes the EXACT same function — the
+   *  add/remove pair must match by identity or the listeners leak (the CLAUDE.md leak/SSR gotcha). */
+  private bindInputListeners(canvasEl: HTMLCanvasElement): void {
+    const input = this.inputController;
 
-      if (context === null) {
+    window.addEventListener('keydown', input.onDown);
+    window.addEventListener('keyup', input.onUp);
+    canvasEl.addEventListener('click', input.onClick);
+    window.addEventListener('mousemove', input.onMouse);
+    window.addEventListener('mousedown', input.onMousedown);
+    window.addEventListener('mouseup', input.onMouseup);
+    canvasEl.addEventListener('contextmenu', input.onContextMenu);
+    window.addEventListener('wheel', input.onWheel, { passive: false });
+    window.addEventListener('resize', input.onResize);
+    document.addEventListener('fullscreenchange', input.onResize);
+    this.resizeHud(); // size the HUD bar's backing store now the canvas is laid out
+  }
+
+  /** Observe the HUD canvas so its backing store is sized the instant it IS laid out — on first paint the
+   *  canvas may not be measurable yet (0-size behind the loading screen), so the one-shot `resizeHud` in
+   *  `bindInputListeners` can no-op; the observer re-sizes on layout + every fullscreen/window resize. */
+  private observeHudResize(): ResizeObserver {
+    const hudResize = new ResizeObserver(() => this.resizeHud());
+
+    hudResize.observe(this.hudCanvas().nativeElement);
+
+    return hudResize;
+  }
+
+  /** Arm the rAF chain. It is NEVER gated on the workers' frame join (the root of contention stutter: one
+   *  descheduled worker used to freeze display AND input for its whole scheduling quantum). The world advances
+   *  and the chain re-arms every display frame; a render is KICKED only when the pool is idle, and its
+   *  completion blits + releases. A join straggler therefore costs one REPEATED frame on screen — never a
+   *  frozen pipeline. The per-frame WORK lives in `frame`; the loop does the frame then unconditionally re-arms
+   *  (teardown's `cancelAnimationFrame` stops it). */
+  private armFrameLoop(): void {
+    const loop = (now: number): void => {
+      this.frame(now);
+      this.frameId = requestAnimationFrame(loop);
+    };
+
+    this.frameId = requestAnimationFrame(loop);
+  }
+
+  /** Tear the game down on destroy: dispose the render confluence (pool workers + GPU device), stop the rAF
+   *  chain, then remove the EXACT input handler references `bindInputListeners` added and disconnect the HUD
+   *  observer. */
+  private teardownGame(canvasEl: HTMLCanvasElement, hudResize: ResizeObserver): void {
+    const input = this.inputController;
+
+    this.renderHost.dispose(); // tears down the pool workers + GPU device
+    cancelAnimationFrame(this.frameId);
+    window.removeEventListener('keydown', input.onDown);
+    window.removeEventListener('keyup', input.onUp);
+    canvasEl.removeEventListener('click', input.onClick);
+    window.removeEventListener('mousemove', input.onMouse);
+    window.removeEventListener('mousedown', input.onMousedown);
+    window.removeEventListener('mouseup', input.onMouseup);
+    canvasEl.removeEventListener('contextmenu', input.onContextMenu);
+    window.removeEventListener('wheel', input.onWheel);
+    window.removeEventListener('resize', input.onResize);
+    document.removeEventListener('fullscreenchange', input.onResize);
+    hudResize.disconnect();
+  }
+
+  /** One rAF frame's WORK (the scheduling stays in the loop closure): step the world on the tick `dt`, push the
+   *  display roll-up, then — unless a render is already in flight or the host tore down — flush the queued
+   *  between-frames actuations and KICK a render, whose completion blits the framebuffer, paints the overlay
+   *  stack, and rolls up the join. The sequence is pixel-load-bearing: advance → measure → render → blit →
+   *  paint → measure, with the blit clock (`lastBlit`) driving the weapon/HUD animation `drawDt`. */
+  private frame(now: number): void {
+    const context = this.renderContext;
+
+    if (context === null) {
+      return; // the loop only arms once the context is grabbed, so this is a belt-and-braces SSR guard
+    }
+    const dt = this.lastTime === 0 ? 0 : Math.min(0.05, (now - this.lastTime) / 1000);
+
+    this.lastTime = now;
+    this.advance(dt);
+    this.applyDisplaySnapshot(this.renderHost.measureDisplay(now));
+
+    if (this.renderHost.disposed || this.renderBusy) {
+      return;
+    }
+    this.renderBusy = true;
+    this.renderHost.flushPending(); // apply queued geometry re-points + resolution — no render in flight
+    const renderStart = performance.now();
+
+    void this.renderHost.renderInto(this.buildRenderRequest()).then(() => {
+      if (this.renderHost.disposed) {
         return;
       }
+      context.putImageData(this.renderHost.frame, 0, 0);
+      const blitNow = performance.now();
+      const drawDt = this.lastBlit === 0 ? dt : Math.min(0.05, (blitNow - this.lastBlit) / 1000);
 
-      // Hand the render confluence its browser resources: the framebuffer/canvas backing store, the worker
-      // pool (seeded with the initial zone's geometry), the governor, the dev perf ring, the async WebGPU
-      // backend. From here the host is the SOLE owner of the pool/GPU/config/textures/framebuffer/telemetry.
-      this.renderHost.bootstrap({
-        context,
-        canvas: canvasEl,
-        zoneKey: this.zoneRuntime.currentKey,
-        mapSource: this.zoneRuntime.world.mapSource,
-        neighborSources: this.zoneRuntime.neighborSources,
-        perfRing: this.params.perfRing,
-        noGovernor: this.params.noGovernor,
-        forceCpu: this.params.renderer === 'cpu',
-        camera: this.camera,
-        perfState: () => ({
-          camera: this.camera,
-          spriteCount: this.zoneRuntime.world.targets.reduce((n, t) => n + (t.alive ? 1 : 0), 0),
-          projectileCount: this.projectiles.length,
-          stressEnemyCount: this.combatRuntime.stressEnemyCount,
-          aiMs: this.combatRuntime.aiMs,
-        }),
-      });
-
-      this.combatRuntime.climbView.preload(); // decode the mantle hands now, so the first vault never shows a blank frame
-      const onDown = (event: KeyboardEvent): void => this.onKey(event, true);
-      const onUp = (event: KeyboardEvent): void => this.onKey(event, false);
-      const onClick = (): void => {
-        if (this.combatRuntime.dead || this.combatRuntime.won) {
-          // game over OR level complete → a click (after the settle delay) restarts the level
-          if (
-            (this.combatRuntime.dead
-              ? this.combatRuntime.deadClock
-              : this.combatRuntime.wonClock) >= RESTART_DELAY
-          ) {
-            this.resetGame();
-          }
-
-          return;
-        }
-        // `requestPointerLock` rejects with a SecurityError when re-locked too soon after an Escape (a browser
-        // rate-limit); it's harmless (the next click locks), so swallow it rather than leak an uncaught rejection.
-        Promise.resolve(canvasEl.requestPointerLock()).catch(() => undefined);
-      };
-      const onMouse = (event: MouseEvent): void => {
-        if (document.pointerLockElement !== canvasEl || this.mantle !== null) {
-          return; // look is frozen mid-mantle so the vault always clears the lip
-        }
-        this.camera.angle -= event.movementX * MOUSE_SENS;
-        this.camera.pitch = clampPitch(
-          this.camera.pitch - event.movementY * MOUSE_SENS,
-          PITCH_DOWN_MAX,
-          PITCH_UP_MAX,
-        );
-      };
-
-      const onResize = (): void => {
-        // (The HUD backing store is sized by its ResizeObserver below; here we only queue the render resolution.)
-        // Fullscreen → render at full 1080p (the canvas fills the screen); windowed → the cheaper res —
-        // always 100% of the tier. The host queues it for its next between-frames window (a live rebuild
-        // mid-render would tear down the pool the frame is still painting into).
-        const tier = document.fullscreenElement !== null ? FULLSCREEN_RENDER : WINDOWED_RENDER;
-
-        this.renderHost.queueResolution(tier.width, tier.height);
-      };
-      const onMousedown = (event: MouseEvent): void => {
-        if (document.pointerLockElement !== canvasEl) {
-          return;
-        }
-        // SECONDARY click — the right button (`button === 2`) or a macOS Ctrl+click — reloads (the desktop
-        // twin of the R key); the primary button (left) fires. Mirrors the grid's mouse handling.
-        if (event.button === 2 || event.ctrlKey) {
-          event.preventDefault();
-          this.combatRuntime.reload();
-
-          return;
-        }
-        if (event.button === 0) {
-          this.combatRuntime.beginFire();
-        }
-      };
-      const onMouseup = (event: MouseEvent): void => {
-        if (event.button === 0) {
-          this.combatRuntime.endFire(); // only the primary (fire) button releases the held auto-fire
-        }
-      };
-      const onContextMenu = (event: Event): void => {
-        event.preventDefault(); // right-click is the in-game reload over the canvas, not a context menu
-      };
-      // Wheel WHILE PLAYING (pointer-locked): cycle the active weapon AND block the page scroll. `passive:false`
-      // is required for `preventDefault` to take on a wheel listener; when not locked we leave the page scroll
-      // untouched (no preventDefault), so the embedded demo only traps the wheel during actual play.
-      const onWheel = (event: WheelEvent): void => {
-        if (document.pointerLockElement !== canvasEl) {
-          return;
-        }
-        if (event.cancelable) {
-          event.preventDefault();
-        }
-        const dir = Math.sign(event.deltaY);
-
-        if (dir !== 0) {
-          // Cycle across OWNED weapons only — with the fists-only start the wheel stays put until pickups
-          // light more of the arms row.
-          this.combatRuntime.cycleWeapon(dir);
-        }
-      };
-
-      window.addEventListener('keydown', onDown);
-      window.addEventListener('keyup', onUp);
-      canvasEl.addEventListener('click', onClick);
-      window.addEventListener('mousemove', onMouse);
-      window.addEventListener('mousedown', onMousedown);
-      window.addEventListener('mouseup', onMouseup);
-      canvasEl.addEventListener('contextmenu', onContextMenu);
-      window.addEventListener('wheel', onWheel, { passive: false });
-      window.addEventListener('resize', onResize);
-      document.addEventListener('fullscreenchange', onResize);
-      this.resizeHud(); // size the HUD bar's backing store now the canvas is laid out
-      // …but on first paint the canvas may not be measurable yet (0-size behind the loading screen), so a
-      // one-shot `resizeHud` can no-op and leave the HUD blank until a manual resize. A ResizeObserver sizes it
-      // the instant it IS laid out, and again on every fullscreen/window resize — a robust single owner.
-      const hudResize = new ResizeObserver(() => this.resizeHud());
-
-      hudResize.observe(this.hudCanvas().nativeElement);
-
-      // The rAF chain is NEVER gated on the workers' frame join (the root of contention stutter: one
-      // descheduled worker used to freeze display AND input for its whole scheduling quantum). The world
-      // advances and the chain re-arms every display frame; a render is KICKED only when the pool is idle,
-      // and its completion blits + releases. A join straggler therefore costs one REPEATED frame on screen —
-      // never a frozen pipeline. Render and blit never overlap (the next kick waits for the release), so the
-      // single shared framebuffer stays safe, as do the host's queued between-frames actuations
-      // (`flushPending` — geometry re-points + a resolution switch) which apply only inside this gate.
-      let renderBusy = false; // a render (kick → join → blit) is in flight
-      let lastBlit = 0; // previous blit's timestamp → the dt stepping the weapon/HUD animations
-
-      const loop = (now: number): void => {
-        const dt = this.lastTime === 0 ? 0 : Math.min(0.05, (now - this.lastTime) / 1000);
-
-        this.lastTime = now;
-        this.advance(dt);
-        this.applyDisplaySnapshot(this.renderHost.measureDisplay(now));
-
-        if (!this.renderHost.disposed && !renderBusy) {
-          renderBusy = true;
-          this.renderHost.flushPending(); // apply queued geometry re-points + resolution — no render in flight
-          const renderStart = performance.now();
-
-          void this.renderHost.renderInto(this.buildRenderRequest()).then(() => {
-            if (this.renderHost.disposed) {
-              return;
-            }
-            context.putImageData(this.renderHost.frame, 0, 0);
-            const blitNow = performance.now();
-            const drawDt = lastBlit === 0 ? dt : Math.min(0.05, (blitNow - lastBlit) / 1000);
-
-            lastBlit = blitNow;
-            this.paintOverlays(context, drawDt);
-            this.renderHost.afterRender(renderStart); // join roll-up + governor re-band (no render in flight)
-            this.threads.set(this.renderHost.activeThreads); // a re-band may have moved the active worker count
-            renderBusy = false; // release AFTER the actuations — the next kick sees a settled pool
-          });
-        }
-        this.frameId = requestAnimationFrame(loop);
-      };
-
-      this.frameId = requestAnimationFrame(loop);
-
-      // Decode the real environment textures off the served WebP and swap them in live (each worker, or the
-      // main thread, reads the map each frame). A failed/SSR load leaves the procedural textures untouched.
-      void loadEnvTextures().then((loaded) => {
-        this.renderHost.applyTextures(loaded);
-        this.texturesLoaded.set(loaded.size > 0);
-      });
-
-      // Decode every enemy's atlases (walk/death/attack/pain + a ranged thrower's spin strip) AND every pickup
-      // sprite (vitals + spinning ammo strips), register them (main + workers), then spawn the enemies + pickups
-      // (so they never flash the magenta MISSING texture).
-      const atlasJobs = buildAtlasJobs();
-
-      void Promise.all(atlasJobs.map((job) => loadAtlasTexture(job.url, job.rows))).then(
-        (textures) => {
-          const loaded = new Map<string, Texture>();
-
-          textures.forEach((texture, i) => {
-            if (texture !== null) {
-              loaded.set(atlasJobs[i].name, texture);
-            }
-          });
-          if (loaded.size === 0) {
-            return;
-          }
-          this.renderHost.applyTextures(loaded); // enemy/pickup atlases join the pool + GPU texel pool too
-          // Flip the atlas gate + spawn the (deferred) active + warm entities in place now the art exists.
-          this.zoneRuntime.markAtlasesReady();
-          this.combatRuntime.seedReserves(); // the NEW-GAME ammo seed — zone transitions never re-run it
-        },
-      );
-
-      destroyRef.onDestroy(() => {
-        this.renderHost.dispose(); // tears down the pool workers + GPU device
-        cancelAnimationFrame(this.frameId);
-        window.removeEventListener('keydown', onDown);
-        window.removeEventListener('keyup', onUp);
-        canvasEl.removeEventListener('click', onClick);
-        window.removeEventListener('mousemove', onMouse);
-        window.removeEventListener('mousedown', onMousedown);
-        window.removeEventListener('mouseup', onMouseup);
-        canvasEl.removeEventListener('contextmenu', onContextMenu);
-        window.removeEventListener('wheel', onWheel);
-        window.removeEventListener('resize', onResize);
-        document.removeEventListener('fullscreenchange', onResize);
-        hudResize.disconnect();
-      });
+      this.lastBlit = blitNow;
+      this.paintOverlays(context, drawDt);
+      this.renderHost.afterRender(renderStart); // join roll-up + governor re-band (no render in flight)
+      this.threads.set(this.renderHost.activeThreads); // a re-band may have moved the active worker count
+      this.renderBusy = false; // release AFTER the actuations — the next kick sees a settled pool
     });
   }
 
@@ -581,56 +553,10 @@ export class BspDemoComponent {
     );
   }
 
-  private onKey(event: KeyboardEvent, down: boolean): void {
-    const key = event.key.toLowerCase();
-
-    if (down && (key === 'h' || key === 'j')) {
-      if (key === 'h') {
-        this.combatRuntime.hurtPlayer(15); // DEBUG: H = take a hit (routes through armour soak + the death check)
-      } else {
-        this.combatRuntime.heal(15); // DEBUG: J = heal
-      }
-      event.preventDefault();
-
-      return;
-    }
-    if (down && key === 'f') {
-      this.toggleFullscreen();
-      event.preventDefault();
-
-      return;
-    }
-    if (down && key >= '1' && key <= '8') {
-      this.combatRuntime.selectWeapon(Number(key) - 1);
-      event.preventDefault();
-
-      return;
-    }
-    if (down && key === 'r') {
-      this.combatRuntime.reload();
-      event.preventDefault();
-
-      return;
-    }
-    if (down && key === 'g') {
-      this.combatRuntime.toggleStress(); // DEBUG: toggle the synthetic-enemy stress load
-      event.preventDefault();
-
-      return;
-    }
-    if (!CONTROLS.has(key)) {
-      return;
-    }
-
-    if (down) {
-      this.held.add(key);
-    } else {
-      this.held.delete(key);
-    }
-    event.preventDefault();
-  }
-
-  /** Integrate the body from the held keys + collisions: forward/back + strafe (turning is mouse-only). */
+  /** Integrate the body from the held keys + collisions: forward/back + strafe (turning is mouse-only). Runs the
+   *  ordered tick — decay FX, the end-state guards, the world step, the objective/doors step, the FX aging, the
+   *  mantle guard, then the player motion — each early-return (dead / won / transition / mantle / crossSeam)
+   *  landing exactly where it did in the monolithic tick. Step order is pixel- and behaviour-load-bearing. */
   private advance(dt: number): void {
     this.combatRuntime.decayFx(dt); // fade the muzzle flash / red hurt flash / BFG discharge flash
     this.pickupRuntime.decayFx(dt); // fade the green pickup flash (runs always, before the end-state returns)
@@ -649,16 +575,41 @@ export class BspDemoComponent {
 
       return;
     }
+    this.stepWorld(dt);
+    this.stepObjectiveAndDoors(dt);
+    this.ageArcsAndImpacts(dt);
+
+    // Mid auto-mantle: the hoist owns the body (no move/look) until it completes — see `stepMantle`.
+    if (this.mantle) {
+      this.stepMantle(dt);
+
+      return;
+    }
+    this.stepPlayerMotion(dt);
+  }
+
+  /** The world step: the stress load-test shots (before projectiles so their shots step this frame), the real
+   *  enemies, the throwers' shots, the warm neighbour's own AI behind the seam, then the player's projectiles. */
+  private stepWorld(dt: number): void {
     this.combatRuntime.stepStress(dt); // DEBUG load test (no-op unless toggled) — runs before projectiles so its shots step now
     stepEnemies(this.combatRuntime.activeFrame(), dt); // real enemies chase / shoot / throw
     stepEnemyShots(this.combatRuntime.activeFrame(), dt); // throwers' projectiles fly at the player
     this.zoneRuntime.stepWarm(dt); // the warm neighbor lives too: its foes think in THEIR map behind the seam
     stepProjectiles(this.combatRuntime.playerCombatFrame(), dt);
+  }
+
+  /** The pickup + objective + door step, in the load-bearing order: collect pickups, drive the objective / zone
+   *  exits, animate doors (after pickups, so this frame's badge state gates them), then the sliding glass. */
+  private stepObjectiveAndDoors(dt: number): void {
     this.pickupRuntime.stepPickups(dt); // spin the ammo boxes + collect anything the player is standing on
     this.pickupRuntime.stepObjective(dt); // collect badges, drive zone exits, win the legacy exit
     this.pickupRuntime.stepDoors(dt); // animate doors (after pickups, so this frame's badge state gates the door)
     this.pickupRuntime.stepSliding(dt); // sliding glass doors: proximity-driven + auto-closing
+  }
 
+  /** Age the transient in-world FX out: advance every plasma arc + impact by `dt` and drop the ones whose
+   *  lifetime elapsed (arcs past {@link ARC_DURATION}, impacts past their effect's full frame span). */
+  private ageArcsAndImpacts(dt: number): void {
     for (const arc of this.arcs) {
       arc.age += dt;
     }
@@ -672,20 +623,13 @@ export class BspDemoComponent {
 
       return effect !== undefined && impact.age < effect.frames * effect.frameDuration_s;
     });
+  }
 
-    // Mid auto-mantle: the hoist owns the body (no move/look) until it completes — see `stepMantle`.
-    if (this.mantle) {
-      this.stepMantle(dt);
-
-      return;
-    }
-    const held = this.held;
-    const forward =
-      (held.has('w') || held.has('z') || held.has('arrowup') ? 1 : 0) -
-      (held.has('s') || held.has('arrowdown') ? 1 : 0);
-    const strafe =
-      (held.has('d') || held.has('arrowright') ? 1 : 0) -
-      (held.has('a') || held.has('q') || held.has('arrowleft') ? 1 : 0);
+  /** Integrate the player's own motion: read the movement axes, advance the walk-bob, resolve the collided
+   *  move, take a seamless zone crossing (early-return — the world swapped under us), else commit the camera +
+   *  ease the eye onto the floor, then probe for a vaultable ledge ahead. Only reached when not mantling. */
+  private stepPlayerMotion(dt: number): void {
+    const { forward, strafe } = this.inputController.movementAxes();
 
     if (forward !== 0 || strafe !== 0) {
       this.bob += dt * 9; // advance the weapon's walk-bob cadence only while moving
@@ -695,7 +639,7 @@ export class BspDemoComponent {
     const sin = Math.sin(this.camera.angle);
     const fromX = this.camera.x;
     const fromY = this.camera.y;
-    const want = movementDelta(this.camera.angle, forward, strafe, reach);
+    const want = this.inputController.movementWant(this.camera.angle, forward, strafe, reach);
     const world = this.zoneRuntime.world;
     const moved = movePlayer(
       world.map,
@@ -727,27 +671,31 @@ export class BspDemoComponent {
     const targetZ = moved.floorZ + EYE_HEIGHT;
 
     this.camera.z += (targetZ - this.camera.z) * Math.min(1, 12 * dt);
+    this.tryClimb(forward, cos, sin, moved.floorZ);
+  }
 
-    // Trigger a climb: pushing FORWARD into a too-tall-but-climbable ledge straight ahead. `movePlayer` has
-    // already blocked the player a radius off it (its rise > STEP_MAX), so the probe just classifies that
-    // obstacle as a vaultable ledge. A normal step (≤ STEP_MAX) is `null` here and was already walked up.
-    if (forward > 0) {
-      const ledge = climbTarget(
-        world.map,
-        this.camera.x,
-        this.camera.y,
-        moved.floorZ,
-        cos,
-        sin,
-        CLIMB_PROBE_REACH,
-        STEP_MAX,
-        CLIMB_MAX,
-        HEADROOM,
-      );
+  /** Trigger a climb: pushing FORWARD into a too-tall-but-climbable ledge straight ahead. `movePlayer` has
+   *  already blocked the player a radius off it (its rise > STEP_MAX), so the probe just classifies that
+   *  obstacle as a vaultable ledge. A normal step (≤ STEP_MAX) is `null` here and was already walked up. */
+  private tryClimb(forward: number, cos: number, sin: number, floorZ: number): void {
+    if (forward <= 0) {
+      return;
+    }
+    const ledge = climbTarget(
+      this.zoneRuntime.world.map,
+      this.camera.x,
+      this.camera.y,
+      floorZ,
+      cos,
+      sin,
+      CLIMB_PROBE_REACH,
+      STEP_MAX,
+      CLIMB_MAX,
+      HEADROOM,
+    );
 
-      if (ledge !== null) {
-        this.mantle = { progress: 0, startZ: moved.floorZ, targetZ: ledge, dirX: cos, dirY: sin };
-      }
+    if (ledge !== null) {
+      this.mantle = { progress: 0, startZ: floorZ, targetZ: ledge, dirX: cos, dirY: sin };
     }
   }
 
