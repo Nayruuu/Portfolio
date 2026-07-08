@@ -1,4 +1,4 @@
-import type { WeaponCombat } from './types';
+import type { WeaponCombat } from '../types';
 
 /**
  * The pure MAGAZINE / fire-rate / reload subsystem for the active weapon — the shared core behind both

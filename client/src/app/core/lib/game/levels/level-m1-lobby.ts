@@ -1,8 +1,8 @@
-import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC } from './enemies';
-import { RoomBuilder } from './room-builder';
-import type { RoomPoint } from './room-builder';
-import type { MapSource } from '../../core/lib/bsp-engine';
-import type { Level } from './level-accueil';
+import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC } from '../enemy';
+import { RoomBuilder } from '../../bsp-engine';
+import type { MapSource } from '../../bsp-engine';
+import type { Level } from '../level';
+import { poly, rect } from './poly';
 
 /**
  * M1 "Lobby / Accueil" — the OPEN SPACE.EXE episode opener: the UAC tower's PREMIUM ground-floor lobby,
@@ -28,19 +28,6 @@ import type { Level } from './level-accueil';
  * y increases DOWN (the entrance is at the SOUTH). Organic geometry (chamfers everywhere); NO side
  * skylines — the ONLY exterior view is the street through the sas glass axis.
  */
-
-/** Pair a flat coordinate list into a polygon: `poly([x0,y0, x1,y1, …])`. */
-function poly(coords: readonly number[]): readonly RoomPoint[] {
-  if (coords.length % 2 !== 0) {
-    throw new Error('poly: odd coordinate count');
-  }
-
-  return Array.from({ length: coords.length / 2 }, (_, i) => [coords[2 * i], coords[2 * i + 1]]);
-}
-
-/** The 4-corner polygon of an axis-aligned rectangle, `(x1,y1)` = NW corner, `(x2,y2)` = SE. */
-const rect = (x1: number, y1: number, x2: number, y2: number): readonly RoomPoint[] =>
-  poly([x1, y1, x1, y2, x2, y2, x2, y1]);
 
 /** The two floor looks: LUX = ground-floor marble under the luminous cornice ceiling; UPPER = the
  *  upstairs marble (z+2.0) under a plain white ceiling. */

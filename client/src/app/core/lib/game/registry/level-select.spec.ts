@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ACCUEIL } from './level-accueil';
-import { DEMO_LEVEL } from './level-demo';
-import { HANGAR } from './level-hangar';
-import { M1_LOBBY } from './level-m1-lobby';
-import { M2_OPENSPACE } from './level-m2-openspace';
+import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE } from '../levels';
 import {
   DEFAULT_LEVEL_KEY,
   LEVELS,
@@ -11,7 +7,11 @@ import {
   resolveZone,
   type LevelParams,
 } from './level-select';
-import { weaponById } from '../../shared/game/weapons';
+import { WEAPON_IDS, type WeaponId } from '../../../../domain';
+
+/** The two MELEE weapon ids (no ammo pool) — every other {@link WeaponId} is a RANGED unlock. Anchored on
+ *  the domain value set so this core spec stays free of the shared weapon runtime. */
+const MELEE_WEAPON_IDS: readonly WeaponId[] = ['fist', 'chainsaw'];
 
 /** A param-less URL (the plain `/bsp` default) — the baseline for the resolveZone placement tests. */
 const NO_PARAMS: LevelParams = {
@@ -73,14 +73,14 @@ describe('level registry', () => {
       for (const [x, y, id] of level.weapons ?? []) {
         expect(Number.isFinite(x), `level "${key}": weapon "${id}" x`).toBe(true);
         expect(Number.isFinite(y), `level "${key}": weapon "${id}" y`).toBe(true);
-        expect(weaponById(id), `level "${key}": unknown weapon id "${id}"`).toBeDefined();
+        expect(WEAPON_IDS, `level "${key}": unknown weapon id "${id}"`).toContain(id);
       }
       if (level.enemies.length === 0) {
         continue; // an enemy-less inspection level owes no armament
       }
-      // The run starts FISTS-ONLY, so a combat level must offer at least one ranged unlock
-      // (`ammoType !== null`) — melee alone cannot answer its ranged pressure.
-      const ranged = (level.weapons ?? []).some(([, , id]) => weaponById(id)?.ammoType != null);
+      // The run starts FISTS-ONLY, so a combat level must offer at least one RANGED unlock (a weapon id
+      // outside the melee pair) — melee alone cannot answer its ranged pressure.
+      const ranged = (level.weapons ?? []).some(([, , id]) => !MELEE_WEAPON_IDS.includes(id));
 
       expect(
         ranged,
@@ -253,6 +253,17 @@ describe('resolveZone', () => {
     expect(resolveZone('m2', undefined, params).at).toEqual(spawn); // the URL level itself
     expect(resolveZone('m1', undefined, params).at).toEqual(M1_LOBBY.spawn); // another zone — untouched
     expect(resolveZone('m2', 'from-m1', params).at).toEqual(M2_OPENSPACE.entries?.['from-m1']); // entry wins
+  });
+
+  it('honors the dev spawn on a junk URL level key — both the key AND urlKey fall back to the default', () => {
+    // `levelKey: 'bogus'` is unknown, so BOTH `resolved` (via the requested key) and `urlKey` (via
+    // `params.levelKey`) collapse to the default — they match, so the dev spawn override still lands.
+    const spawn = { x: 5, y: 6, angle: 1 };
+    const params: LevelParams = { ...NO_PARAMS, levelKey: 'bogus', spawn };
+    const zone = resolveZone('bogus', undefined, params);
+
+    expect(zone.key).toBe(DEFAULT_LEVEL_KEY);
+    expect(zone.at).toEqual(spawn);
   });
 
   it('empties the enemy roster of EVERY zone with noenemies', () => {

@@ -1,12 +1,12 @@
-import type { KeycardColor } from '../../core/lib';
+import type { KeycardColor, ZoneSnapshot } from '../../core/lib';
 import { AMMO_MAX, WEAPON_IDS, requireWeapon, type WeaponId } from '../../shared/game/weapons';
-import type { Level } from './level-accueil';
-import type { ZoneSnapshot } from './zone-state';
+import type { Level } from '../../core/lib';
 
 /**
  * Pickup + objective registry for the BSP demo — VITALS (health / armour), spinning AMMO boxes, the 3-tier
- * access BADGES (keycards), and the EXIT marker — kept LOCAL to the feature (a shared move comes if this
- * grows, exactly like {@link ./enemies.ts `enemies.ts`}).
+ * access BADGES (keycards), and the EXIT marker. This stays a FEATURE file: it imports the weapon runtime
+ * from {@link ../../shared/game/weapons}, and core may not import shared (inward-only), so it cannot move
+ * to `core/lib` the way the enemy roster did.
  *
  * The single source of truth still holds: each ammo box's reserve CAP is read from {@link AMMO_MAX}
  * (`weapons.json` `ammo_types`). Vitals + badges + the exit carry their own served sprites

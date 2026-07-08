@@ -1,4 +1,4 @@
-// core/lib/game/weapon-progression — the pure OWNERSHIP rules of the DOOM weapon progression: the run
+// core/lib/game/weapons/weapon-progression — the pure OWNERSHIP rules of the DOOM weapon progression: the run
 // starts fists-only and every other weapon is a level pickup, so switching must skip unowned slots and a
 // pickup must decide whether it auto-equips. Indexes are ARSENAL positions (the 1..8 key row), matching
 // the HUD arms grid — the fist ⇄ chainsaw slot-1 pair keeps distinct positions there on purpose.

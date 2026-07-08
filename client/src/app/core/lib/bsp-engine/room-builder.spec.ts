@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildBsp, locateSubSector } from '../../core/lib/bsp-engine';
+import { buildBsp, locateSubSector } from './node-builder';
 import { RoomBuilder } from './room-builder';
 import type { RoomPoint, RoomSpec } from './room-builder';
-import type { LineDef, MapSource } from '../../core/lib/bsp-engine';
+import type { LineDef, MapSource } from './types';
 
 /** A plain room spec — geometry is what these tests exercise, the dressing is a constant. */
 const SPEC: RoomSpec = {
@@ -356,5 +356,87 @@ describe('RoomBuilder', () => {
     expect(locateSubSector(root, 6, 10).sector).toBe(corridor);
     expect(locateSubSector(root, 2, 16).sector).toBe(hall); // west of the column
     expect(locateSubSector(root, 2, 2).sector).toBe(dais);
+  });
+
+  it('rejects a degenerate stair base edge (from == to)', () => {
+    const b = new RoomBuilder();
+
+    expect(() =>
+      b.stairs([0, 10], [0, 10], {
+        depth: 2,
+        count: 3,
+        zBase: 0,
+        dz: 0.4,
+        ceilZ: 4,
+        light: 200,
+        wallTex: 'WALL',
+      }),
+    ).toThrow(/base edge is degenerate/);
+  });
+
+  it('treats colinear walls that touch at a single point as no overlap', () => {
+    const b = new RoomBuilder();
+    const a = b.room(rect(0, 0, 4, 4), SPEC);
+    const corner = b.room(rect(4, 4, 8, 8), SPEC); // shares only the corner (4,4): colinear walls meet at a point
+
+    expect(() => b.connect(a, corner)).toThrow(/no colinear boundary overlap/);
+  });
+
+  it("skips a non-colinear overlap when 'at' selects a second shared wall on another line", () => {
+    const b = new RoomBuilder();
+    const a = b.room(rect(0, 0, 8, 8), SPEC);
+    // An L-shaped room wrapping a's SE corner: shares a's south wall (y=8) AND its east wall (x=8).
+    const wrap = b.room(
+      [
+        [8, 0],
+        [12, 0],
+        [12, 12],
+        [0, 12],
+        [0, 8],
+        [8, 8],
+      ],
+      SPEC,
+    );
+
+    // The door is on the EAST wall, so `restrict` must skip the (first-found) south overlap before matching it.
+    b.connect(a, wrap, { at: [8, 2, 8, 6] });
+    const opening = resolve(b.build()).find((l) => l.line.back !== null);
+
+    expect(opening?.x1).toBe(8);
+    expect(opening?.x2).toBe(8);
+    expect([Math.min(opening!.y1, opening!.y2), Math.max(opening!.y1, opening!.y2)]).toEqual([
+      2, 6,
+    ]);
+    expect(opening?.line.front.sector).toBe(a);
+    expect(opening?.line.back?.sector).toBe(wrap);
+  });
+
+  it('sorts the cuts when one wall carries two doorways given out of order', () => {
+    const b = new RoomBuilder();
+    const a = b.room(rect(0, 0, 12, 4), SPEC); // one long south wall y=4
+    const west = b.room(rect(1, 4, 3, 8), SPEC);
+    const east = b.room(rect(9, 4, 11, 8), SPEC);
+
+    b.connect(a, east); // east door registered FIRST → the two cuts arrive out of order, so the sort comparator runs
+    b.connect(a, west);
+    const boundary = onY(b.build(), 4);
+    const openings = boundary.filter((l) => l.line.back !== null);
+
+    expect(
+      openings.map((l) => [Math.min(l.x1, l.x2), Math.max(l.x1, l.x2)]).sort((p, q) => p[0] - q[0]),
+    ).toEqual([
+      [1, 3],
+      [9, 11],
+    ]);
+    const aSolids = boundary
+      .filter((l) => l.line.back === null && l.line.front.sector === a)
+      .map((l) => [Math.min(l.x1, l.x2), Math.max(l.x1, l.x2)])
+      .sort((p, q) => p[0] - q[0]);
+
+    expect(aSolids).toEqual([
+      [0, 1],
+      [3, 9],
+      [11, 12],
+    ]); // solid / door / solid / door / solid
   });
 });

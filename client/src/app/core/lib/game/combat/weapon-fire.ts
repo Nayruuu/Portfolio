@@ -6,7 +6,7 @@
 // The engine deps (`castRay` / `castFloorCeil` / `nearestTargetHit`) are core → core.
 
 import { castFloorCeil, castRay, nearestTargetHit } from '../../bsp-engine';
-import { MUZZLE_CLEAR, PROJECTILE_SPAWN_AHEAD } from '../combat-constants';
+import { MUZZLE_CLEAR, PROJECTILE_SPAWN_AHEAD } from './combat-constants';
 import type { WeaponCombat } from '../types';
 import { collectHittables } from './hittables';
 import type { PlayerCombatFrame } from './player-combat-frame';

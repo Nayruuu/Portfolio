@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBsp, climbTarget, locateSubSector, movePlayer } from '../../core/lib/bsp-engine';
+import { buildBsp, climbTarget, locateSubSector, movePlayer } from '../../bsp-engine';
 import { DEMO_MAP } from './demo-map';
 
 describe('DEMO_MAP', () => {

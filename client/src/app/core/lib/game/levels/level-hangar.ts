@@ -1,7 +1,7 @@
-import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC } from './enemies';
-import { MapBuilder } from './level-builder';
-import type { MapSource } from '../../core/lib/bsp-engine';
-import type { Level } from './level-accueil';
+import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC } from '../enemy';
+import { MapBuilder } from '../../bsp-engine';
+import type { MapSource } from '../../bsp-engine';
+import type { Level } from '../level';
 
 /**
  * L1 "Hangar" — a LARGE original techbase for OPEN SPACE.EXE: a multi-room open-space the player explores for

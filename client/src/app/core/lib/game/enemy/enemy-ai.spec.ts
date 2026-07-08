@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildBsp } from '../../bsp-engine';
 import type { LineDef, MapSource, SideDef } from '../../bsp-engine';
-import { ENEMY_SEP_DIST, PLAYER_HIT_RADIUS } from '../combat-constants';
-import type { CombatFrame } from '../combat';
+import { ENEMY_SEP_DIST, PLAYER_HIT_RADIUS, type CombatFrame } from '../combat';
 import type { CombatEnemy, EnemyShot } from './combat-enemy';
 import type { EnemyCombat, EnemyProjectile } from './enemy-spec';
 import {

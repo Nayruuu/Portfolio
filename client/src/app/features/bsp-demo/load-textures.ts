@@ -10,7 +10,7 @@ import {
   type Texture,
 } from '../../core/lib/bsp-engine';
 import { projectileEffect } from '../../shared/game/effects';
-import { ENEMY_SPECS } from './enemies';
+import { ENEMY_SPECS } from '../../core/lib';
 import { PICKUP_TEXTURE_JOBS } from './pickups';
 
 /** A placeholder DECOR billboard (a potted plant) — a "bidon" stand-in until real prop art lands. Transparent

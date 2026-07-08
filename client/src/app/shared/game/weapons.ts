@@ -1,4 +1,5 @@
 import { AIM_CONE, AMMO_START, MELEE_CONE, MELEE_RANGE, type WeaponCombat } from '../../core/lib';
+import { WEAPON_IDS, type WeaponId } from '../../domain';
 import { weaponEffects } from './effects';
 import registry from './weapons.json';
 
@@ -361,22 +362,11 @@ export function startingAmmo(): Record<string, number> {
   );
 }
 
-/** Every weapon id the registry declares, in registry (arsenal) order — the DOOM-archetype value set the
- *  level placements + ownership progression key off (no enum; `WEAPONS` is checked against it below, so
- *  the union and the JSON can never drift silently). */
-export const WEAPON_IDS = [
-  'fist',
-  'chainsaw',
-  'pistol',
-  'shotgun',
-  'chaingun',
-  'rocket',
-  'plasma',
-  'bfg',
-] as const;
-
-/** One weapon id (derived from the tuple — no enum). */
-export type WeaponId = (typeof WEAPON_IDS)[number];
+/** The weapon-id value set + derived union live in `domain/game/weapon-id` (a core-bound value set with no
+ *  UI/runtime deps); re-exported here so every existing consumer keeps resolving through the weapons barrel.
+ *  `WEAPONS` is kept in lockstep with `WEAPON_IDS` (the spec asserts it), so the union and the JSON can
+ *  never drift silently. */
+export { WEAPON_IDS, type WeaponId };
 
 /** The DOOM progression's starting loadout: FISTS ONLY. Every other weapon — the chainsaw included — is a
  *  level pickup (`Level.weapons`), unlocked when collected; ownership is player INVENTORY (it travels

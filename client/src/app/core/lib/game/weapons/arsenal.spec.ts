@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { stepArsenal, type ArsenalState } from './arsenal';
-import type { WeaponCombat } from './types';
+import type { WeaponCombat } from '../types';
 
 const COMBAT: WeaponCombat = {
   damage: 10,

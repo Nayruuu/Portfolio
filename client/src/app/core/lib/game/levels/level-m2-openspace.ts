@@ -1,8 +1,8 @@
-import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC } from './enemies';
-import { RoomBuilder } from './room-builder';
-import type { RoomPoint } from './room-builder';
-import type { MapSource } from '../../core/lib/bsp-engine';
-import type { Level } from './level-accueil';
+import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC } from '../enemy';
+import { RoomBuilder } from '../../bsp-engine';
+import type { MapSource } from '../../bsp-engine';
+import type { Level } from '../level';
+import { poly, rect } from './poly';
 
 /**
  * M2 "Open-space" — the employee floor above the lobby: an endless carpet-and-partition grind,
@@ -31,19 +31,6 @@ import type { Level } from './level-accueil';
  * CARPET floors, dimmer than M1 (140–210 vs 210–246); the print room goes SCREEN+METAL+TECHNICAL,
  * the nook KITCHEN+TILE, the pit a broken-NEON hazard bay.
  */
-
-/** Pair a flat coordinate list into a polygon: `poly([x0,y0, x1,y1, …])`. */
-function poly(coords: readonly number[]): readonly RoomPoint[] {
-  if (coords.length % 2 !== 0) {
-    throw new Error('poly: odd coordinate count');
-  }
-
-  return Array.from({ length: coords.length / 2 }, (_, i) => [coords[2 * i], coords[2 * i + 1]]);
-}
-
-/** The 4-corner polygon of an axis-aligned rectangle, `(x1,y1)` = NW corner, `(x2,y2)` = SE. */
-const rect = (x1: number, y1: number, x2: number, y2: number): readonly RoomPoint[] =>
-  poly([x1, y1, x1, y2, x2, y2, x2, y1]);
 
 /** The two storey looks: GROUND = the z0 open-space carpet; UPPER = the z+2.8 mezzanine/offices. */
 const GROUND = { floorZ: 0, floorTex: 'CARPET', ceilTex: 'CONCRETE' };

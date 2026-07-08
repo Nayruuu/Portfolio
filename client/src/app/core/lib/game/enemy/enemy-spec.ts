@@ -1,7 +1,7 @@
 // core/lib/game/enemy/enemy-spec — the ART-FREE combat spec of an enemy kind + its two attack sub-specs.
 // Pure data shapes (hp / speed / reach / attack tuning), zero DOM and zero art fields: the atlas/animation
-// half lives feature-side as `EnemyArt` (features/bsp-demo/enemies.ts), which composes with this into the
-// full `EnemySpec`. The AI/combat/hitscan steps read only these numbers.
+// half is `EnemyArt` (./enemy-art), which composes with this into the full `EnemySpec`. The AI/combat/hitscan
+// steps read only these numbers.
 
 /** A ranged enemy's HITSCAN shotgun: an INSTANT blast within `range` — no projectile, no separate burst
  *  sprite (the firing tell is the enemy's own attack animation). */

@@ -1,4 +1,4 @@
-import type { LineDef, MapSource, SideDef } from '../../core/lib/bsp-engine';
+import type { LineDef, MapSource, SideDef } from '../../bsp-engine';
 
 /**
  * The BSP demo's playable showcase map — richer than the engine's `SAMPLE_MAP` test fixture (which stays

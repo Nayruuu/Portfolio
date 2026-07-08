@@ -1,4 +1,4 @@
-// core/lib/game/combat-constants — pure combat tuning constants shared across the game shell + renderer.
+// core/lib/game/combat/combat-constants — pure combat tuning constants shared across the game shell + renderer.
 
 /** Per-type reserve seed: each ammo type starts at min(AMMO_START, its max) — see `startingAmmo()` in weapons.ts. */
 export const AMMO_START = 50;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { AMMO_MAX, WEAPON_IDS, requireWeapon } from '../../shared/game/weapons';
-import { ACCUEIL, type Level } from './level-accueil';
-import type { ZoneSnapshot } from './zone-state';
+import type { ZoneSnapshot, Level } from '../../core/lib';
+import { ACCUEIL } from '../../core/lib';
 import {
   AMMO_BOX_SPECS,
   buildPickups,

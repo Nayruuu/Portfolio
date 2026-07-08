@@ -18,6 +18,7 @@ export * from './contact/contact-kind';
 export * from './contact/contact-method';
 export * from './contact/form-labels';
 export * from './content';
+export * from './game/weapon-id';
 export * from './i18n/lang';
 export * from './i18n/theme';
 export * from './player/chapter';

@@ -1,7 +1,7 @@
-import type { Level } from './level-accueil';
+import type { Level } from '../level';
 import { DEMO_MAP } from './demo-map';
 // NOTE: enemies are TEMP-disabled below; re-add `import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC }
-// from './enemies';` when restoring the enemy list.
+// from '../enemy';` when restoring the enemy list.
 
 /**
  * The engine-showcase courtyard (`demo-map.ts`) wrapped as a {@link Level} — a known-good worked-example map.

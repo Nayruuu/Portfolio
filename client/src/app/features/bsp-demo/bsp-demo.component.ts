@@ -38,9 +38,13 @@ import {
   type Texture,
   type ZoneNeighbor,
 } from '../../core/lib/bsp-engine';
-import type { Level } from './level-accueil';
-import { LEVELS, parseLevelParams, resolveZone, type LevelParams } from './level-select';
-import { zoneStates, type ZoneSnapshot } from './zone-state';
+import {
+  LEVELS,
+  parseLevelParams,
+  resolveZone,
+  type Level,
+  type LevelParams,
+} from '../../core/lib';
 import {
   buildAtlasJobs,
   loadAtlasTexture,
@@ -102,6 +106,7 @@ import {
   stepProjectiles,
   stepRenderGovernor,
   stepSlideOpenness,
+  zoneStates,
   type Arc,
   type Barrel,
   type CombatEnemy,
@@ -112,6 +117,7 @@ import {
   type PlayerCombatFrame,
   type Projectile,
   type RenderGovernorState,
+  type ZoneSnapshot,
 } from '../../core/lib';
 
 /** Keys we react to (lower-cased), covering both QWERTY (WASD) and AZERTY (ZQSD) + arrows. */
@@ -164,7 +170,7 @@ const IMPACT_MAX_HEIGHT_FRACTION = 0.5; // cap a point-blank burst at this fract
 // Internal render resolution per display mode: 720p when the canvas is embedded in the ~960px viewport (a
 // near-free quality match, ~2× cheaper), full 1080p when it fills the screen in fullscreen (native, no
 // upscale blur). Each mode ALWAYS renders at 100% of its tier — sharpness is part of the product. Under
-// contention the RENDER GOVERNOR (core/lib/game/render-governor.ts) trades the pool's ACTIVE WORKER COUNT
+// contention the RENDER GOVERNOR (core/lib/game/telemetry/render-governor.ts) trades the pool's ACTIVE WORKER COUNT
 // only (join stalls shrink it, proven calm grows it back); it never touches the resolution.
 const WINDOWED_RENDER = { width: 1280, height: 720 } as const;
 const FULLSCREEN_RENDER = { width: 1920, height: 1080 } as const;
@@ -287,7 +293,7 @@ export class BspDemoComponent {
   private lastTime = 0;
   private frameId = 0;
   // The pure per-window roll-up (fps / mean / max / worst-stall) behind the HUD signals + perf beacon — it
-  // ingests each completed render's cost and distils the window ~4×/second (core/lib/game/frame-stats.ts).
+  // ingests each completed render's cost and distils the window ~4×/second (core/lib/game/telemetry/frame-stats.ts).
   private readonly frameStats = new FrameStats();
   private lastRenderMs = 0; // the last completed render's measurements — the ring's render columns
   private lastStallMs = 0;

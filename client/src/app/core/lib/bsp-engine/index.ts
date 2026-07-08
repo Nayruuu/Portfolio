@@ -12,3 +12,5 @@ export * from './voxel-carve';
 export * from './voxel-ao';
 export * from './vox-parse';
 export * from './frame-commands';
+export * from './level-builder';
+export * from './room-builder';

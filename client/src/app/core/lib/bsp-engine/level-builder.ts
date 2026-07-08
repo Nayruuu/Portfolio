@@ -1,12 +1,4 @@
-import type {
-  LineDef,
-  MapSource,
-  Sector,
-  SideDef,
-  Thing,
-  Vertex,
-  ZonePortalDef,
-} from '../../core/lib/bsp-engine';
+import type { LineDef, MapSource, Sector, SideDef, Thing, Vertex, ZonePortalDef } from './types';
 
 /**
  * A coordinate-based authoring builder for BSP {@link MapSource}s. You author in WORLD COORDINATES; it dedups

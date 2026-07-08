@@ -6,8 +6,7 @@
 // `movePlayer` + the player-body constants) are core → core.
 
 import { castRay, HEADROOM, movePlayer, PLAYER_RADIUS, STEP_MAX } from '../../bsp-engine';
-import type { CombatFrame } from '../combat';
-import { ENEMY_SEP_DIST, PLAYER_HIT_RADIUS, STANDOFF_BAND } from '../combat-constants';
+import { ENEMY_SEP_DIST, PLAYER_HIT_RADIUS, STANDOFF_BAND, type CombatFrame } from '../combat';
 import type { CombatEnemy } from './combat-enemy';
 
 /** Real-enemy AI (per-spec), over one zone's {@link CombatFrame} — the active zone or the warm neighbor.

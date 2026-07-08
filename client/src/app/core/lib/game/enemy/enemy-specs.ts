@@ -1,40 +1,8 @@
-import type { EnemyCombat } from '../../core/lib';
-
-/**
- * Enemy specs for the BSP demo — atlas layout + world sizing + combat tuning per kind, kept LOCAL to the
- * feature (the grid's `enemy-sprite.ts` is feature-coupled; a shared move comes if this grows). Four kinds:
- * the melee Corporate Husk, the hitscan-shotgun Security Guard, the projectile-lobbing Junior Office Drone,
- * and the fast melee-lunging Remote Consultant Husk.
- *
- * The art-free combat half ({@link EnemyCombat}, + its `EnemyShotgun` / `EnemyProjectile` sub-specs) lives in
- * `core/lib/game`; this file owns only the atlas/animation half ({@link EnemyArt}) and composes the two into
- * the full {@link EnemySpec}.
- */
-
-/** The atlas layout + animation cadence of an enemy kind — the art half of {@link EnemySpec} (its combat +
- *  world-sizing half is {@link EnemyCombat}, in core). */
-export interface EnemyArt {
-  readonly texName: string; // walk atlas key
-  readonly atlasUrl: string; // served walk atlas (a `walkCols`×`walkRows` grid)
-  readonly walkCols: number;
-  readonly walkRows: number; // angle rows (front · ¾front · side · ¾back · back)
-  readonly deathTexName: string;
-  readonly deathUrl: string;
-  readonly deathFrames: number;
-  readonly deathFps: number;
-  readonly attackTexName: string;
-  readonly attackUrl: string;
-  readonly attackFrames: number;
-  readonly attackFps: number; // plays once across the wind-up
-  readonly attackAspect?: number; // cell width/height of the attack atlas if it differs from `aspect`
-  readonly painTexName: string;
-  readonly painUrl: string;
-  readonly aspect: number; // cell width / height → billboard width : height
-  readonly walkStepRate: number; // walk frames advanced per world cell travelled
-}
-
-/** A full enemy kind = its art ({@link EnemyArt}) + its combat/physics tuning ({@link EnemyCombat}). */
-export interface EnemySpec extends EnemyArt, EnemyCombat {}
+// core/lib/game/enemy/enemy-specs — the enemy ROSTER: the per-kind full specs (art + combat) and the
+// `ENEMY_SPECS` list the loader/spawner iterate. Pure data: four kinds — the melee Corporate Husk, the
+// hitscan-shotgun Security Guard, the projectile-lobbing Junior Office Drone, and the fast melee-lunging
+// Remote Consultant Husk.
+import type { EnemySpec } from './enemy-art';
 
 /** The "Corporate Husk" — a melee rusher. Walk cell 512×716, feet-anchored. */
 export const PINKY_SPEC: EnemySpec = {

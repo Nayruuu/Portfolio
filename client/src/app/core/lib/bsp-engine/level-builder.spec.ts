@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBsp, locateSubSector } from '../../core/lib/bsp-engine';
+import { buildBsp, locateSubSector } from './node-builder';
 import { MapBuilder } from './level-builder';
 
 describe('MapBuilder', () => {

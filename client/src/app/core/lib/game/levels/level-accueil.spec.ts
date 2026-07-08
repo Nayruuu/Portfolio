@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBsp, locateSubSector, movePlayer, type CompiledMap } from '../../core/lib/bsp-engine';
+import { buildBsp, locateSubSector, movePlayer, type CompiledMap } from '../../bsp-engine';
 import { ACCUEIL } from './level-accueil';
 
 const RADIUS = 0.3;

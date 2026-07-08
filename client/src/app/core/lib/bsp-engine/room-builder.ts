@@ -1,5 +1,5 @@
 import { MapBuilder } from './level-builder';
-import type { MapSource, Sector, Thing, ZonePortalDef } from '../../core/lib/bsp-engine';
+import type { MapSource, Sector, Thing, ZonePortalDef } from './types';
 
 /** A world-coordinate point `[x, y]` — y grows DOWN, as everywhere in the engine. */
 export type RoomPoint = readonly [number, number];
