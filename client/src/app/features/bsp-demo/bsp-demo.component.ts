@@ -22,7 +22,6 @@ import {
   mapObstacles,
   mapSprites,
   movePlayer,
-  orientSprite,
   PLAYER_RADIUS,
   renderFrame,
   isPassableSeam,
@@ -51,15 +50,13 @@ import {
   loadEnvTextures,
   proceduralTextures,
   projectileWidth,
-} from './load-textures';
+} from './render/load-textures';
 import type { Foe } from './enemy-runtime';
 import type { Door, SeamEdge, WarmZone, ZoneExit } from './zone-world';
 import {
   buildPickups,
   EXIT_RADIUS,
-  EXIT_SPEC,
   PICKUP_RADIUS,
-  pickupFrame,
   takenFlags,
   VITAL_MAX,
   weaponAmmoDose,
@@ -70,10 +67,9 @@ import {
   type WeaponPickup,
   type WeaponPickupSpec,
 } from './pickups';
-import { createGpuRenderer, type GpuRenderer } from './gpu-renderer';
-import { createRenderPool, type RenderPool } from './render-pool';
+import { createGpuRenderer, type GpuRenderer } from './render/gpu-renderer';
+import { createRenderPool, type RenderPool } from './render/render-pool';
 import { DoomHud } from '../../shared/game/doom-hud';
-import { gazeForTurn, smoothTurnRate } from '../../shared/game/gaze';
 import {
   AMMO_MAX,
   ARSENAL,
@@ -85,8 +81,24 @@ import {
 } from '../../shared/game/weapons';
 import { WeaponView } from '../../shared/game/weapon-view';
 import { ClimbView } from '../../shared/game/climb-view';
-import { impactEffect, projectileEffect } from '../../shared/game/effects';
+import { impactEffect } from '../../shared/game/effects';
 import { IconComponent } from '../../shared/icon/icon.component';
+import { WorldFxPainter } from './painters/world-fx-painter';
+import { HudPainter } from './painters/hud-painter';
+import { buildLiveSprites, buildWarmSprites, HIT_FLASH_DURATION } from './sprites/sprite-builder';
+import {
+  drawChargeFx,
+  drawCrosshair,
+  drawGameOver,
+  drawHint,
+  drawHurtFx,
+  drawPickupFx,
+  drawWinScreen,
+  drawZoneFade,
+  HURT_FX_DURATION,
+  PICKUP_FX_DURATION,
+  SHOT_FX_DURATION,
+} from './painters/overlay-painter';
 import {
   ARC_DURATION,
   DOOR_TRIGGER_RADIUS,
@@ -148,10 +160,6 @@ const CLIMB_LEDGE_MAX = 0.72; // the lip near the top, then slide down it as the
 const MOUSE_SENS = 0.0035; // radians per pixel of mouse motion (turning is mouse-only)
 const PITCH_UP_MAX = 0.85; // look-up limit (the camera pitch is a vertical y-shear, not a true rotation)
 const PITCH_DOWN_MAX = 2.0; // look-DOWN limit — much deeper than up (aim down at enemies below a platform); the renderer handles the off-screen horizon, so this can exceed 1.0 (walls stay vertical, as in any sheared-frustum tilt)
-const HIT_FLASH_DURATION = 0.12; // seconds an enemy flashes white after a hit (mirrors the grid)
-const ENEMY_RECOIL = 0.18; // world units an enemy flinches UP at full hit-flash (the grid's recoil, in world z)
-const HURT_FX_DURATION = 0.35; // seconds the player's red damage flash lingers after taking a hit
-const PICKUP_FX_DURATION = 0.3; // seconds the player's green pickup flash lingers after collecting an item
 const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the rest hits health) — DOOM green armour
 const RESERVE_START = 50; // starting reserve per ammo type at spawn (then clamped to each type's cap) — pickups top up
 const RESTART_DELAY = 1.2; // seconds after death/win before a click restarts (lets the end feedback settle)
@@ -159,14 +167,6 @@ const ZONE_FADE = 0.35; // seconds each side of a zone swap fades (to black, swa
 const HINT_DURATION = 1.8; // seconds a transient objective hint lingers (e.g. "badge requis" at a locked exit)
 const INSPECT_PICKUPS: boolean = false; // when true, ammo boxes spin but are never collected (art-inspection mode)
 const SPAWN_ENEMIES: boolean = true; // spawn the level's enemies (the live game in the player); /bsp shares the same scene
-// Screen-space projectile painting, mirroring the grid's blitEffect so a shot reads as leaving the weapon:
-const PROJECTILE_SCREEN_SCALE = 0.42; // on-screen height = this × effects size, relative to a same-distance wall
-const PROJECTILE_MAX_HEIGHT_FRACTION = 0.28; // cap a close shot's height at this fraction of the canvas (no screen-fill)
-const PROJECTILE_MAX_DROP_FRACTION = 0.28; // cap how far below the crosshair a close shot rides (toward the weapon)
-const PROJECTILE_CROSSHAIR_BLEND = 2; // cells: within this a shot is pulled to the crosshair, so it leaves from centre
-const SHOT_FX_DURATION = 0.09; // seconds the muzzle flash + impact spark linger after a shot
-const IMPACT_SCREEN_SCALE = 0.9; // on-screen size of an impact burst vs a same-distance wall (mirrors the grid)
-const IMPACT_MAX_HEIGHT_FRACTION = 0.5; // cap a point-blank burst at this fraction of the canvas height
 // Internal render resolution per display mode: 720p when the canvas is embedded in the ~960px viewport (a
 // near-free quality match, ~2× cheaper), full 1080p when it fills the screen in fullscreen (native, no
 // upscale blur). Each mode ALWAYS renders at 100% of its tier — sharpness is part of the product. Under
@@ -175,7 +175,6 @@ const IMPACT_MAX_HEIGHT_FRACTION = 0.5; // cap a point-blank burst at this fract
 const WINDOWED_RENDER = { width: 1280, height: 720 } as const;
 const FULLSCREEN_RENDER = { width: 1920, height: 1080 } as const;
 const CHARGE_GLOW_PEAK = 0.7; // peak green charge-buildup tint at full BFG spin-up (mirrors the grid)
-const CHARGE_FLASH_PEAK = 0.92; // peak green discharge flash opacity (near-blinding ultimate)
 const CHARGE_FLASH_DECAY_PER_S = 3; // how fast the green discharge flash fades
 const HUD_NATIVE_WIDTH = 2117; // x1.0 status-bar art width (biggest tier) — only the aspect source now
 const HUD_NATIVE_HEIGHT = 404; // …its height, so the backing store keeps the bar's 5.24:1 aspect
@@ -269,7 +268,6 @@ export class BspDemoComponent {
   private projectiles: Projectile[] = []; // launched shots in flight (projectile weapons), stepped each frame
   private arcs: Arc[] = []; // short-lived plasma chain-lightning visuals, aged out each frame
   private impacts: Impact[] = []; // burst-strip animations playing at hit points, aged out each frame
-  private readonly impactImages = new Map<string, HTMLImageElement>(); // impact strip sheets, lazily decoded
   // Real enemies (per-spec: melee Husk + ranged Guard). Spawned once the atlases decode. `walkDist` drives the
   // walk frame; `dying` → death atlas (`deathTime` advancing it); `hitFlash` is the pain pop.
   private enemies: Foe[] = [];
@@ -288,7 +286,6 @@ export class BspDemoComponent {
     dirX: number;
     dirY: number;
   } | null = null;
-  private readonly projectileImages = new Map<string, HTMLImageElement>(); // projectile sprite art, lazily decoded
   private readonly held = new Set<string>();
   private lastTime = 0;
   private frameId = 0;
@@ -355,8 +352,10 @@ export class BspDemoComponent {
   private doors: Door[] = []; // animated doors (the badge-locked annex gate); their ceilZ is driven each frame
   private slides: number[] = []; // per-linedef sliding-door openness (0 shut … 1 retracted); fed to render + physics
   private slidingDoors: { readonly line: number; readonly mx: number; readonly my: number }[] = [];
-  private prevAngle = 0; // last frame's camera angle → the turn rate that aims the HUD face's gaze
-  private turnEMA = 0; // smoothed turn rate → a steady gaze through a turn (no per-frame repaint flicker)
+  // The in-world transient FX painter (projectiles / impacts / arcs) — owns its lazily-decoded sprite caches.
+  private readonly worldFxPainter = new WorldFxPainter();
+  // The DOOM status-bar sync painter — owns the turn-rate EMA that aims the HUD face's gaze through a turn.
+  private readonly hudPainter = new HudPainter();
   // The DOOM weapon PROGRESSION: the ids the player has unlocked. A new game starts FISTS-ONLY
   // (STARTING_WEAPON_IDS) and every other weapon is a level pickup; ownership is INVENTORY — it travels
   // across zones/seam swaps untouched and resets only in {@link resetGame}.
@@ -671,19 +670,38 @@ export class BspDemoComponent {
             const drawDt = lastBlit === 0 ? dt : Math.min(0.05, (blitNow - lastBlit) / 1000);
 
             lastBlit = blitNow;
-            this.drawProjectiles(context);
-            this.drawImpacts(context);
-            this.drawArcs(context);
+            this.worldFxPainter.drawProjectiles(
+              context,
+              this.config,
+              this.camera,
+              this.projectiles,
+              this.weaponView,
+              this.bob,
+            );
+            this.worldFxPainter.drawImpacts(context, this.config, this.camera, this.impacts);
+            this.worldFxPainter.drawArcs(context, this.config, this.camera, this.arcs);
             this.drawWeapon(drawDt, context);
-            this.drawHurtFx(context);
-            this.drawPickupFx(context);
-            this.drawChargeFx(context);
-            this.drawCrosshair(context);
-            this.drawHint(context);
-            this.drawZoneFade(context);
-            this.drawHud(drawDt);
-            this.drawGameOver(context);
-            this.drawWinScreen(context);
+            drawHurtFx(context, this.hurtFx);
+            drawPickupFx(context, this.pickupFx);
+            drawChargeFx(context, this.chargeGlow, this.dischargeFlash);
+            drawCrosshair(context, this.shotFx);
+            drawHint(context, this.hint);
+            drawZoneFade(context, this.transition, ZONE_FADE);
+            this.hudPainter.draw({
+              hud: this.hud,
+              canvas: this.hudCanvas().nativeElement,
+              dt: drawDt,
+              weaponIndex: this.weaponIndex,
+              reserve: this.reserve,
+              hp: this.hp,
+              armor: this.armor,
+              mag: this.mag,
+              ownedWeapons: this.ownedWeapons,
+              weaponView: this.weaponView,
+              cameraAngle: this.camera.angle,
+            });
+            drawGameOver(context, this.dead, this.deadClock, this.deadClock >= RESTART_DELAY);
+            drawWinScreen(context, this.won, this.wonClock, this.wonClock >= RESTART_DELAY);
             // GPU frames have no worker join — their stats stay out of the stall/governor loop entirely.
             const join = pool === null || this.gpu !== null ? null : pool.stats;
 
@@ -1030,9 +1048,10 @@ export class BspDemoComponent {
   }
 
   /** The world billboards still alive this frame — the render's per-frame sprite list (culled barrels drop
-   *  out). Projectiles are NOT here: they are painted screen-space over the frame by `drawProjectiles`. */
+   *  out). Projectiles are NOT here: they are painted screen-space over the frame by `drawProjectiles`.
+   *  Sources the active zone's live state for the pure {@link buildLiveSprites}. */
   private liveSprites(): Sprite[] {
-    const sprites = this.worldSprites(
+    return buildLiveSprites(
       {
         targets: this.targets,
         enemies: this.enemies,
@@ -1045,208 +1064,17 @@ export class BspDemoComponent {
       },
       this.camera.x,
       this.camera.y,
+      this.atlasesReady,
+      this.zoneExits,
+      this.stressEnemies,
     );
-
-    if (this.atlasesReady) {
-      // Each zone-graph exit shows the same exit sign (its art decodes with the pickup atlases). Active
-      // zone only — a warm neighbor's graph exits stay signless behind the window.
-      for (const e of this.zoneExits) {
-        sprites.push({
-          x: e.x,
-          y: e.y,
-          z: e.z,
-          tex: EXIT_SPEC.texName,
-          width: EXIT_SPEC.worldHeight * EXIT_SPEC.aspect,
-          height: EXIT_SPEC.worldHeight,
-        });
-      }
-    }
-    for (const e of this.stressEnemies) {
-      sprites.push({ x: e.x, y: e.y, z: e.z, tex: 'BARREL', width: 0.8, height: 1.7 }); // synthetic enemy billboard
-    }
-
-    return sprites;
   }
 
   /** The WARM neighbor's billboards for the render's neighbor-sprites channel, in ITS own coordinates —
    *  directional props oriented for the camera translated through the seam (the same ghost point the warm
    *  AI tracks in {@link stepWarm}), so a totem seen through the window turns exactly like a local one. */
   private warmSprites(warm: WarmZone): Sprite[] {
-    const seam = this.seams.find((s) => s.zone === warm.key);
-
-    return this.worldSprites(
-      warm,
-      this.camera.x - (seam?.dx ?? 0),
-      this.camera.y - (seam?.dy ?? 0),
-    );
-  }
-
-  /** ONE zone's entity billboards — the active zone's (inside {@link liveSprites}) or the WARM neighbor's,
-   *  whose list feeds the render's neighbor-sprites channel in its own coordinates. (`viewX`,`viewY`) is
-   *  the camera IN THAT ZONE'S coordinates — it picks each directional prop's rotation cell per frame. */
-  private worldSprites(
-    world: Pick<
-      WarmZone,
-      | 'targets'
-      | 'enemies'
-      | 'enemyShots'
-      | 'vitals'
-      | 'ammoBoxes'
-      | 'keycards'
-      | 'weaponPickups'
-      | 'exit'
-    >,
-    viewX: number,
-    viewY: number,
-  ): Sprite[] {
-    const sprites = world.targets
-      .filter((t) => t.alive)
-      .map((t) => orientSprite(t.sprite, viewX, viewY));
-
-    for (const e of world.enemies) {
-      const s = e.spec;
-      // The hit-flash decays over its duration (0→1 additive brighten); the body flinches UP with it. A dying
-      // enemy carries no flash — the death animation owns its feedback.
-      const flash = e.dying ? 0 : e.hitFlash / HIT_FLASH_DURATION;
-      const base = {
-        x: e.x,
-        y: e.y,
-        z: e.z + flash * ENEMY_RECOIL,
-        width: s.worldHeight * s.aspect,
-        height: s.worldHeight,
-        flash,
-      };
-
-      if (e.dying) {
-        // Death atlas (front-only strip): advance by deathTime, then freeze on the last frame — a corpse.
-        const col = Math.min(s.deathFrames - 1, Math.floor(e.deathTime * s.deathFps));
-
-        sprites.push({ ...base, tex: s.deathTexName, cols: s.deathFrames, rows: 1, col, row: 0 });
-      } else if (e.windup > 0) {
-        // Attack atlas (front-only): the wind-up animation plays once across the telegraph. Its cell may have a
-        // different aspect than the walk cell, so override the billboard width for this state.
-        const col = Math.min(s.attackFrames - 1, Math.floor((s.windup - e.windup) * s.attackFps));
-
-        sprites.push({
-          ...base,
-          width: s.worldHeight * (s.attackAspect ?? s.aspect),
-          tex: s.attackTexName,
-          cols: s.attackFrames,
-          rows: 1,
-          col,
-          row: 0,
-        });
-      } else if (e.hitFlash > 0) {
-        // Pain: a single front-only flinch frame while the hit-flash lasts (priority: attack → pain → walk).
-        sprites.push({ ...base, tex: s.painTexName, cols: 1, rows: 1, col: 0, row: 0 });
-      } else {
-        // Walk frame from cumulative travel (legs tied to motion); front row — a foe faces the player in combat.
-        const col = Math.floor(e.walkDist * s.walkStepRate) % s.walkCols;
-
-        sprites.push({ ...base, tex: s.texName, cols: s.walkCols, rows: s.walkRows, col, row: 0 });
-      }
-    }
-    for (const shot of world.enemyShots) {
-      // The thrown projectile: a spinning front strip billboard at its world point.
-      const col = Math.floor(shot.traveled * shot.proj.spinRate) % shot.proj.frames;
-
-      sprites.push({
-        x: shot.x,
-        y: shot.y,
-        z: shot.z,
-        tex: shot.proj.texName,
-        width: shot.proj.worldHeight * shot.proj.aspect,
-        height: shot.proj.worldHeight,
-        cols: shot.proj.frames,
-        rows: 1,
-        col,
-        row: 0,
-      });
-    }
-    for (const v of world.vitals) {
-      // A grounded vitals billboard (health medkit/plant · mental figurine/card) — a turntable when `spin`,
-      // else a static frame-0 billboard; depth-occluded by the z-buffer pass.
-      const col = pickupFrame(v.age, v.spec.frameMs, v.spec.frames, v.spec.spin);
-
-      sprites.push({
-        x: v.x,
-        y: v.y,
-        z: v.z,
-        tex: v.spec.texName,
-        width: v.spec.worldHeight * v.spec.aspect,
-        height: v.spec.worldHeight,
-        cols: v.spec.frames,
-        rows: 1,
-        col,
-        row: 0,
-      });
-    }
-    for (const b of world.ammoBoxes) {
-      // A spinning ammo box: advance the turntable frame from its age (the quad never rotates).
-      const col = pickupFrame(b.age, b.spec.frameMs, b.spec.frames);
-
-      sprites.push({
-        x: b.x,
-        y: b.y,
-        z: b.z,
-        tex: b.spec.texName,
-        width: b.spec.worldHeight * b.spec.aspect,
-        height: b.spec.worldHeight,
-        cols: b.spec.frames,
-        rows: 1,
-        col,
-        row: 0,
-      });
-    }
-    for (const k of world.keycards) {
-      // A spinning access badge (blue employee / yellow manager / red director): advance its turntable frame
-      // from its age (the quad never rotates) — mirrors the vitals/ammo turntables; drops once collected.
-      const col = pickupFrame(k.age, k.spec.frameMs, k.spec.frames);
-
-      sprites.push({
-        x: k.x,
-        y: k.y,
-        z: k.z,
-        tex: k.spec.texName,
-        width: k.spec.worldHeight * k.spec.aspect,
-        height: k.spec.worldHeight,
-        cols: k.spec.frames,
-        rows: 1,
-        col,
-        row: 0,
-      });
-    }
-    for (const p of world.weaponPickups) {
-      // A weapon unlock on the floor — the same turntable contract as the ammo boxes (advance the frame
-      // from its age; the v1 single-frame placeholder art always resolves cell 0); drops once collected.
-      const col = pickupFrame(p.age, p.spec.frameMs, p.spec.frames);
-
-      sprites.push({
-        x: p.x,
-        y: p.y,
-        z: p.z,
-        tex: p.spec.texName,
-        width: p.spec.worldHeight * p.spec.aspect,
-        height: p.spec.worldHeight,
-        cols: p.spec.frames,
-        rows: 1,
-        col,
-        row: 0,
-      });
-    }
-    if (world.exit !== null) {
-      // The legacy exit sign — a grounded single-frame billboard (the level goal).
-      sprites.push({
-        x: world.exit.x,
-        y: world.exit.y,
-        z: world.exit.z,
-        tex: world.exit.spec.texName,
-        width: world.exit.spec.worldHeight * world.exit.spec.aspect,
-        height: world.exit.spec.worldHeight,
-      });
-    }
-
-    return sprites;
+    return buildWarmSprites(warm, this.camera.x, this.camera.y, this.seams);
   }
 
   /** Spawn the active zone's enemies (once the atlases have decoded) — see {@link buildEnemies}. */
@@ -2095,284 +1923,12 @@ export class BspDemoComponent {
     }
   }
 
-  /** Paint the in-flight projectiles SCREEN-SPACE, mirroring the grid's `blitEffect`: the sprite face-cameras
-   *  at the shot's world point — projected at its actual HEIGHT `z` so it climbs/dives with the firing pitch —
-   *  distance-scaled (height capped so a close shot doesn't fill the screen), pulled to the crosshair near the
-   *  muzzle, and DROPPED below the aim line (depth-attenuated + capped) so it reads as leaving the weapon. No
-   *  wall occlusion (a shot detonates on contact, so it is never behind the wall it heads for). */
-  private drawProjectiles(ctx: CanvasRenderingContext2D): void {
-    if (this.projectiles.length === 0) {
-      return;
-    }
-    const { width, height, fov } = this.config;
-    const focal = width / 2 / Math.tan(fov / 2);
-    const horizon = height / 2 + this.camera.pitch * (height / 2);
-    const cos = Math.cos(this.camera.angle);
-    const sin = Math.sin(this.camera.angle);
-    // The gun's current walk-bob offset — near the muzzle a fresh shot is anchored to the SWAYING barrel tip
-    // (centre + this), not the screen centre, so it leaves from where the weapon actually is.
-    const sway = this.weaponView.bobOffset(height, this.bob);
-    const muzzleX = width / 2 + sway.x;
-
-    for (const p of this.projectiles) {
-      const effect = projectileEffect(p.kind);
-      const image = this.projectileImage(p.kind, effect?.sprite);
-
-      if (effect === undefined || image === undefined) {
-        continue; // unmapped kind or not decoded yet
-      }
-      const rx = p.x - this.camera.x;
-      const ry = p.y - this.camera.y;
-      const depth = rx * cos + ry * sin;
-
-      if (depth <= 0.1) {
-        continue; // behind the camera
-      }
-      const side = -rx * sin + ry * cos;
-      const drawHeight = Math.min(
-        (height / depth) * (PROJECTILE_SCREEN_SCALE * effect.size),
-        height * (PROJECTILE_MAX_HEIGHT_FRACTION * effect.size),
-      );
-      const drawWidth = drawHeight * (effect.width / effect.height);
-      const worldScreenX = width / 2 - (side / depth) * focal;
-      const blend = Math.max(0, 1 - depth / PROJECTILE_CROSSHAIR_BLEND);
-      const screenX = worldScreenX + (muzzleX - worldScreenX) * blend; // near the muzzle → the swaying barrel tip
-      const left = screenX - drawWidth * effect.anchorX; // align the sprite's CONTENT centre to the firing line
-      const drop = Math.min(height * PROJECTILE_MAX_DROP_FRACTION, (height * effect.drop) / depth);
-      const centerY = horizon - ((p.z - this.camera.z) * focal) / depth; // the shot's actual height on screen
-
-      ctx.drawImage(
-        image,
-        left,
-        centerY - drawHeight / 2 + drop + sway.y * blend,
-        drawWidth,
-        drawHeight,
-      );
-    }
-  }
-
-  /** The decoded projectile sprite for a kind, lazily kicking off the load (one `Image` per kind, reused);
-   *  `undefined` until it has decoded (SSR / first frames), where the caller simply draws nothing. */
-  private projectileImage(kind: string, src: string | undefined): HTMLImageElement | undefined {
-    if (src === undefined || typeof Image === 'undefined') {
-      return undefined;
-    }
-    let image = this.projectileImages.get(kind);
-
-    if (image === undefined) {
-      image = new Image();
-      image.src = src;
-      this.projectileImages.set(kind, image);
-    }
-
-    return image.complete && image.naturalWidth > 0 ? image : undefined;
-  }
-
-  /** Paint each live impact as a WORLD billboard at its hit point: face-camera, distance-scaled, the strip
-   *  cell chosen from the impact's `age`. Like the barrels it sits at a true world (x,y,z), so a burst on a
-   *  far wall reads small and one on a near barrel large. Drawn on top of the scene (brief bright flashes). */
-  private drawImpacts(ctx: CanvasRenderingContext2D): void {
-    if (this.impacts.length === 0) {
-      return;
-    }
-    const { width, height, fov } = this.config;
-    const focal = width / 2 / Math.tan(fov / 2);
-    const horizon = height / 2 + this.camera.pitch * (height / 2);
-    const cos = Math.cos(this.camera.angle);
-    const sin = Math.sin(this.camera.angle);
-
-    for (const impact of this.impacts) {
-      const effect = impactEffect(impact.kind);
-      const image = this.impactImage(impact.kind, effect?.sheet);
-
-      if (effect === undefined || image === undefined) {
-        continue; // unmapped kind or not decoded yet
-      }
-      const rx = impact.x - this.camera.x;
-      const ry = impact.y - this.camera.y;
-      const depth = rx * cos + ry * sin;
-
-      if (depth <= 0.1) {
-        continue; // behind the camera
-      }
-      const side = -rx * sin + ry * cos;
-      const drawHeight = Math.min(
-        (height / depth) * (IMPACT_SCREEN_SCALE * effect.size),
-        height * IMPACT_MAX_HEIGHT_FRACTION,
-      );
-      const drawWidth = drawHeight * (effect.frameWidth / effect.frameHeight) * effect.widthScale;
-      const screenX = width / 2 - (side / depth) * focal;
-      const frame = Math.min(Math.floor(impact.age / effect.frameDuration_s), effect.frames - 1);
-      const centerY = horizon - ((impact.z - this.camera.z) * focal) / depth;
-
-      ctx.drawImage(
-        image,
-        frame * effect.frameWidth, // source cell — the strip frame for this age
-        0,
-        effect.frameWidth,
-        effect.frameHeight,
-        screenX - drawWidth / 2,
-        centerY - drawHeight / 2,
-        drawWidth,
-        drawHeight,
-      );
-    }
-  }
-
-  /** The decoded impact strip sheet for a kind, lazily loaded (one `Image` per kind, reused); `undefined`
-   *  until decoded (SSR / first frames), where the caller draws nothing. */
-  private impactImage(kind: string, src: string | undefined): HTMLImageElement | undefined {
-    if (src === undefined || typeof Image === 'undefined') {
-      return undefined;
-    }
-    let image = this.impactImages.get(kind);
-
-    if (image === undefined) {
-      image = new Image();
-      image.src = src;
-      this.impactImages.set(kind, image);
-    }
-
-    return image.complete && image.naturalWidth > 0 ? image : undefined;
-  }
-
-  /** Draw the live chain-lightning arcs, each endpoint projected to the barrel's mid-body. Screen-space, no
-   *  wall occlusion — they are brief bright flashes, so an arc crossing a wall edge is acceptable. */
-  private drawArcs(ctx: CanvasRenderingContext2D): void {
-    if (this.arcs.length === 0) {
-      return;
-    }
-    const { width, height, fov } = this.config;
-    const focal = width / 2 / Math.tan(fov / 2);
-    const horizon = height / 2 + this.camera.pitch * (height / 2);
-    const cos = Math.cos(this.camera.angle);
-    const sin = Math.sin(this.camera.angle);
-    const project = (x: number, y: number, z: number): { sx: number; sy: number } | null => {
-      const rx = x - this.camera.x;
-      const ry = y - this.camera.y;
-      const forward = rx * cos + ry * sin;
-
-      if (forward <= 0.1) {
-        return null; // behind the camera
-      }
-      const side = -rx * sin + ry * cos;
-
-      return {
-        sx: width / 2 - (side / forward) * focal,
-        sy: horizon - ((z - this.camera.z) * focal) / forward,
-      };
-    };
-
-    for (const arc of this.arcs) {
-      const a = project(arc.ax, arc.ay, arc.az);
-      const b = project(arc.bx, arc.by, arc.bz);
-
-      if (a === null || b === null) {
-        continue;
-      }
-      this.strokeArc(ctx, a.sx, a.sy, b.sx, b.sy, Math.max(0, 1 - arc.age / ARC_DURATION));
-    }
-  }
-
-  /** Stroke one jagged blue lightning segment (a 3-segment polyline kinked at the thirds, a soft glow under a
-   *  bright core, additive), faded by `fade`. Mirrors the grid's plasma arc. */
-  private strokeArc(
-    ctx: CanvasRenderingContext2D,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number,
-    fade: number,
-  ): void {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const length = Math.hypot(dx, dy) || 1;
-    const perpX = -dy / length;
-    const perpY = dx / length;
-    const jag = Math.min(22, length * 0.16); // perpendicular kink (px), capped on a long segment
-    const firstX = ax + dx / 3 + perpX * jag;
-    const firstY = ay + dy / 3 + perpY * jag;
-    const secondX = ax + (dx * 2) / 3 - perpX * jag;
-    const secondY = ay + (dy * 2) / 3 - perpY * jag;
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(firstX, firstY);
-    ctx.lineTo(secondX, secondY);
-    ctx.lineTo(bx, by);
-    ctx.strokeStyle = '#2f6bff'; // outer blue glow
-    ctx.globalAlpha = fade * 0.4;
-    ctx.lineWidth = 7;
-    ctx.stroke();
-    ctx.strokeStyle = '#cfe0ff'; // bright inner core
-    ctx.globalAlpha = fade * 0.9;
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.restore();
-  }
-
   /** Vertical climb of the aim line per cell of forward depth, from the camera pitch (a screen y-shear): the
    *  crosshair points at `camera.z + slope·depth`, so looking up raises where a hitscan lands downrange. */
   private aimVerticalSlope(): number {
     const focal = this.config.width / 2 / Math.tan(this.config.fov / 2);
 
     return (this.camera.pitch * (this.config.height / 2)) / focal;
-  }
-
-  /** The centre reticle (always on) + a muzzle flash / impact spark while a shot is fresh + a debug readout. */
-  private drawCrosshair(ctx: CanvasRenderingContext2D): void {
-    const cx = ctx.canvas.width / 2;
-    const cy = ctx.canvas.height / 2;
-    const fx = this.shotFx / SHOT_FX_DURATION; // 1 → 0 over the flash (0 when idle)
-    const gap = 10; // clear centre so a distant target stays visible between the arms
-    const len = 22; // arm length
-
-    ctx.save();
-
-    // Muzzle flash at the gun + an expanding impact spark at the reticle the instant a shot lands.
-    if (fx > 0) {
-      const muzzleY = ctx.canvas.height * 0.72;
-      const glowR = 170 - 60 * fx;
-      const glow = ctx.createRadialGradient(cx, muzzleY, 0, cx, muzzleY, glowR);
-
-      glow.addColorStop(0, `rgba(255, 226, 130, ${0.55 * fx})`);
-      glow.addColorStop(1, 'rgba(255, 226, 130, 0)');
-      ctx.fillStyle = glow;
-      ctx.fillRect(cx - glowR, muzzleY - glowR, glowR * 2, glowR * 2);
-
-      ctx.strokeStyle = `rgba(255, 240, 150, ${fx})`;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 6 + 34 * (1 - fx), 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // a dark casing pass, then a bright pass on top → readable over any wall colour
-    for (const [stroke, lineWidth] of [
-      ['rgba(0, 0, 0, 0.55)', 6],
-      ['rgba(120, 255, 140, 0.95)', 2.5],
-    ] as const) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = lineWidth;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - gap - len);
-      ctx.lineTo(cx, cy - gap);
-      ctx.moveTo(cx, cy + gap);
-      ctx.lineTo(cx, cy + gap + len);
-      ctx.moveTo(cx - gap - len, cy);
-      ctx.lineTo(cx - gap, cy);
-      ctx.moveTo(cx + gap, cy);
-      ctx.lineTo(cx + gap + len, cy);
-      ctx.stroke();
-    }
-    ctx.fillStyle = 'rgba(120, 255, 140, 0.95)';
-    ctx.fillRect(cx - 2, cy - 2, 4, 4); // centre dot
-
-    ctx.restore();
   }
 
   /** Advance + draw the held weapon. Mirrors the grid's three fire paths: the viewmodel is driven FIRST, then
@@ -2477,164 +2033,6 @@ export class BspDemoComponent {
     );
 
     this.climbView.draw(ctx, width, height, m.progress, ledgeY);
-  }
-
-  /** A red full-screen wash when the player just took a hit, fading over HURT_FX_DURATION (the grid's hurt flash). */
-  private drawHurtFx(ctx: CanvasRenderingContext2D): void {
-    if (this.hurtFx <= 0) {
-      return;
-    }
-    ctx.save();
-    ctx.fillStyle = `rgba(190, 0, 0, ${0.45 * (this.hurtFx / HURT_FX_DURATION)})`;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.restore();
-  }
-
-  /** A brief faint-green wash when the player collects a pickup (the inverse of the red hurt flash). */
-  private drawPickupFx(ctx: CanvasRenderingContext2D): void {
-    if (this.pickupFx <= 0) {
-      return;
-    }
-    ctx.save();
-    ctx.fillStyle = `rgba(70, 230, 120, ${0.22 * (this.pickupFx / PICKUP_FX_DURATION)})`;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.restore();
-  }
-
-  /** The game-over screen: a dark wash that fades in over the frozen scene + the satirical "you're fired"
-   *  title, then a pulsing restart prompt once a click can restart (after RESTART_DELAY). */
-  private drawGameOver(ctx: CanvasRenderingContext2D): void {
-    if (!this.dead) {
-      return;
-    }
-    const { width, height } = ctx.canvas;
-
-    ctx.save();
-    ctx.fillStyle = `rgba(8, 0, 0, ${Math.min(0.72, this.deadClock * 0.9)})`;
-    ctx.fillRect(0, 0, width, height);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#d23b2e';
-    ctx.font = `900 ${Math.round(height * 0.12)}px system-ui, sans-serif`;
-    ctx.fillText('VOUS ÊTES VIRÉ', width / 2, height * 0.42);
-    if (this.deadClock >= RESTART_DELAY) {
-      // a slow blink so the prompt reads as interactive
-      ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(this.deadClock * 3));
-      ctx.fillStyle = '#e8e2d2';
-      ctx.font = `600 ${Math.round(height * 0.038)}px system-ui, sans-serif`;
-      ctx.fillText('Cliquez pour repointer', width / 2, height * 0.56);
-    }
-    ctx.restore();
-  }
-
-  /** The level-complete screen: a dark-green wash fading in over the frozen scene + the "mission accomplished"
-   *  title, then a pulsing restart prompt once a click can restart (after RESTART_DELAY). The win twin of
-   *  {@link drawGameOver}. */
-  private drawWinScreen(ctx: CanvasRenderingContext2D): void {
-    if (!this.won) {
-      return;
-    }
-    const { width, height } = ctx.canvas;
-
-    ctx.save();
-    ctx.fillStyle = `rgba(0, 14, 6, ${Math.min(0.72, this.wonClock * 0.9)})`;
-    ctx.fillRect(0, 0, width, height);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#39d27a';
-    ctx.font = `900 ${Math.round(height * 0.1)}px system-ui, sans-serif`;
-    ctx.fillText('SORTIE ATTEINTE', width / 2, height * 0.42);
-    if (this.wonClock >= RESTART_DELAY) {
-      ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(this.wonClock * 3));
-      ctx.fillStyle = '#e8e2d2';
-      ctx.font = `600 ${Math.round(height * 0.038)}px system-ui, sans-serif`;
-      ctx.fillText('Cliquez pour rejouer', width / 2, height * 0.56);
-    }
-    ctx.restore();
-  }
-
-  /** The zone-swap wash: black at the floor swap, ramping in/out over {@link ZONE_FADE} on either side —
-   *  the brief blackout that sells moving through the building (the HUD bar stays, DOOM-style). */
-  private drawZoneFade(ctx: CanvasRenderingContext2D): void {
-    const t = this.transition;
-
-    if (t === null) {
-      return;
-    }
-    const alpha = t.swapped
-      ? Math.max(0, 1 - (t.clock - ZONE_FADE) / ZONE_FADE)
-      : Math.min(1, t.clock / ZONE_FADE);
-
-    ctx.save();
-    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.restore();
-  }
-
-  /** A transient objective hint near the centre (e.g. "BADGE REQUIS" at a locked exit), fading over its life. */
-  private drawHint(ctx: CanvasRenderingContext2D): void {
-    if (this.hint <= 0) {
-      return;
-    }
-    const { width, height } = ctx.canvas;
-
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, this.hint / 0.4); // hold, then fade out over the last 0.4s
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffcf4d';
-    ctx.font = `800 ${Math.round(height * 0.045)}px system-ui, sans-serif`;
-    ctx.fillText('BADGE REQUIS', width / 2, height * 0.7);
-    ctx.restore();
-  }
-
-  /** The BFG's green screen tint: the live charge-buildup while it spins up, and a decaying flash on the
-   *  discharge — a full-frame green wash (mirrors the grid's `chargeGlow` + green discharge flash). */
-  private drawChargeFx(ctx: CanvasRenderingContext2D): void {
-    const alpha = Math.max(this.chargeGlow, this.dischargeFlash * CHARGE_FLASH_PEAK);
-
-    if (alpha <= 0) {
-      return;
-    }
-    ctx.save();
-    ctx.fillStyle = `rgba(60, 255, 90, ${alpha})`;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.restore();
-  }
-
-  /** Push the player state into the DOOM status bar + repaint it onto its own canvas over the 3D frame:
-   *  health, armour (the "mental" bay), the active weapon's ammo + icon, and the owned-weapon arms row. */
-  private drawHud(dt: number): void {
-    const weapon = ARSENAL[this.weaponIndex];
-    // Ammo readout: a magazine weapon shows "loaded / reserve" (e.g. 1/50); a flat-pool weapon shows that
-    // reserve; a melee weapon passes `null` so the bay draws the icon only (mirrors the grid's `syncHud`).
-    const ammoType = weapon.ammoType;
-    const reserve = ammoType !== null ? (this.reserve.get(ammoType) ?? 0) : 0;
-
-    this.hud.setHealth(this.hp);
-    this.hud.setMental(this.armor);
-    if (weapon.magSize) {
-      this.hud.setAmmo(this.mag[this.weaponIndex], reserve);
-    } else if (ammoType !== null) {
-      this.hud.setAmmo(reserve);
-    } else {
-      this.hud.setAmmo(null);
-    }
-    // Light the arms row by ARSENAL POSITION (1..8 = the number key that selects it), not the DOOM `slot`:
-    // the fist + chainsaw share slot 1, so a slot-based row left "8" permanently grey and misaligned the
-    // numbers with the keys (key 2 = chainsaw, not the slot-2 weapon). Only OWNED weapons light up — the
-    // run starts fists-only ("1") and each weapon pickup lights its number.
-    this.hud.setArms(
-      ARSENAL.flatMap((weapon, index) => (this.ownedWeapons.has(weapon.id) ? [index + 1] : [])),
-    );
-    this.hud.setWeapon(this.weaponView.icon() ?? null);
-
-    const turnRate = dt > 0 ? -(this.camera.angle - this.prevAngle) / dt : 0; // + = turning right
-
-    this.prevAngle = this.camera.angle;
-    this.turnEMA = smoothTurnRate(this.turnEMA, turnRate, dt); // smooth → the gaze holds steady mid-turn
-    this.hud.lookAt(gazeForTurn(this.turnEMA));
-    this.hud.render(this.hudCanvas().nativeElement, dt);
   }
 
   /** Record one COMPLETED render (called per join, not per rAF): its cost + join-stall measurements feed

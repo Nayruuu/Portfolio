@@ -23,7 +23,7 @@ import {
   type Sprite,
   type Texture,
   type ZoneNeighbor,
-} from '../../core/lib/bsp-engine';
+} from '../../../core/lib/bsp-engine';
 
 /**
  * The WEBGPU COMPUTE render backend — the DEFAULT when WebGPU is available (`?renderer=cpu` forces the CPU

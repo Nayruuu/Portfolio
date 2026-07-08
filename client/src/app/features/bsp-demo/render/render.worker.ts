@@ -8,7 +8,7 @@ import {
   type Sprite,
   type Texture,
   type ZoneNeighbor,
-} from '../../core/lib/bsp-engine';
+} from '../../../core/lib/bsp-engine';
 import { proceduralTextures } from './load-textures';
 
 /**

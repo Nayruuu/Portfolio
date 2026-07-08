@@ -1,4 +1,4 @@
-import type { Camera, MapSource, Sprite, Texture } from '../../core/lib/bsp-engine';
+import type { Camera, MapSource, Sprite, Texture } from '../../../core/lib/bsp-engine';
 
 /** Per-frame live sector heights (animated doors mutate `ceilZ`); forwarded to each worker each render. */
 type SectorHeights = readonly { readonly floorZ: number; readonly ceilZ: number }[];
