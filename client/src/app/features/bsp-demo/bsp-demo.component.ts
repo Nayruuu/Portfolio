@@ -12,7 +12,6 @@ import {
 } from '@angular/core';
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import {
-  castRay,
   clampPitch,
   climbTarget,
   HEADROOM,
@@ -31,36 +30,20 @@ import {
   loadAtlasTexture,
   loadEnvTextures,
   proceduralTextures,
-  projectileWidth,
 } from './render/load-textures';
 import type { WarmZone } from './zone-world';
 import { ZoneRuntime, EYE_HEIGHT, ZONE_FADE } from './world/zone-runtime';
-import {
-  EXIT_RADIUS,
-  PICKUP_RADIUS,
-  VITAL_MAX,
-  weaponAmmoDose,
-  type WeaponPickupSpec,
-} from './pickups';
+import { CombatRuntime } from './world/combat-runtime';
+import { PickupRuntime } from './world/pickup-runtime';
 import { createGpuRenderer, type GpuRenderer } from './render/gpu-renderer';
 import { createRenderPool, type RenderPool } from './render/render-pool';
 import { DoomHud } from '../../shared/game/doom-hud';
-import {
-  AMMO_MAX,
-  ARSENAL,
-  STARTING_WEAPON_IDS,
-  ammoTypeMax,
-  reloadViewConfig,
-  weaponCombat,
-  weaponViewConfig,
-} from '../../shared/game/weapons';
-import { WeaponView } from '../../shared/game/weapon-view';
-import { ClimbView } from '../../shared/game/climb-view';
 import { impactEffect } from '../../shared/game/effects';
 import { IconComponent } from '../../shared/icon/icon.component';
 import { WorldFxPainter } from './painters/world-fx-painter';
 import { HudPainter } from './painters/hud-painter';
-import { buildLiveSprites, buildWarmSprites, HIT_FLASH_DURATION } from './sprites/sprite-builder';
+import { WeaponPainter } from './painters/weapon-painter';
+import { buildLiveSprites, buildWarmSprites } from './sprites/sprite-builder';
 import {
   drawChargeFx,
   drawCrosshair,
@@ -70,34 +53,19 @@ import {
   drawPickupFx,
   drawWinScreen,
   drawZoneFade,
-  HURT_FX_DURATION,
-  PICKUP_FX_DURATION,
-  SHOT_FX_DURATION,
 } from './painters/overlay-painter';
 import {
   ARC_DURATION,
-  DOOR_TRIGGER_RADIUS,
   FRAME_STATS_WINDOW_MS,
   FrameStats,
-  SLIDE_TRIGGER_RADIUS,
-  fireWeapon,
   initialRenderGovernor,
   movementDelta,
-  nextOwnedIndex,
-  shouldAutoEquip,
-  stepArsenal,
-  stepDoorOpenness,
   stepEnemies,
   stepEnemyShots,
   stepProjectiles,
   stepRenderGovernor,
-  stepSlideOpenness,
   type Arc,
-  type CombatEnemy,
-  type CombatFrame,
   type Impact,
-  type KeycardColor,
-  type PlayerCombatFrame,
   type Projectile,
   type RenderGovernorState,
 } from '../../core/lib';
@@ -123,17 +91,10 @@ const CLIMB_MAX = 2.4; // tallest ledge you can vault (above this it stays a sol
 const CLIMB_PROBE_REACH = 0.45; // cells ahead the climb probe samples — just past the radius, into the ledge cell
 const MANTLE_DURATION = 0.4; // seconds the hoist takes
 const CLIMB_VAULT_ADVANCE = 0.5; // cells the hoist glides the player forward, so it clears the lip and stands on top
-const CLIMB_LEDGE_DEPTH = 0.3; // arm's-reach depth the ledge top is projected at, to pin the hands' grip line
-const CLIMB_LEDGE_MIN = 0.22; // hold the grip line within this band (fractions of screen height): the hands grip
-const CLIMB_LEDGE_MAX = 0.72; // the lip near the top, then slide down it as the hoist raises the camera past it
 const MOUSE_SENS = 0.0035; // radians per pixel of mouse motion (turning is mouse-only)
 const PITCH_UP_MAX = 0.85; // look-up limit (the camera pitch is a vertical y-shear, not a true rotation)
 const PITCH_DOWN_MAX = 2.0; // look-DOWN limit — much deeper than up (aim down at enemies below a platform); the renderer handles the off-screen horizon, so this can exceed 1.0 (walls stay vertical, as in any sheared-frustum tilt)
-const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the rest hits health) — DOOM green armour
-const RESERVE_START = 50; // starting reserve per ammo type at spawn (then clamped to each type's cap) — pickups top up
 const RESTART_DELAY = 1.2; // seconds after death/win before a click restarts (lets the end feedback settle)
-const HINT_DURATION = 1.8; // seconds a transient objective hint lingers (e.g. "badge requis" at a locked exit)
-const INSPECT_PICKUPS: boolean = false; // when true, ammo boxes spin but are never collected (art-inspection mode)
 // Internal render resolution per display mode: 720p when the canvas is embedded in the ~960px viewport (a
 // near-free quality match, ~2× cheaper), full 1080p when it fills the screen in fullscreen (native, no
 // upscale blur). Each mode ALWAYS renders at 100% of its tier — sharpness is part of the product. Under
@@ -141,18 +102,9 @@ const INSPECT_PICKUPS: boolean = false; // when true, ammo boxes spin but are ne
 // only (join stalls shrink it, proven calm grows it back); it never touches the resolution.
 const WINDOWED_RENDER = { width: 1280, height: 720 } as const;
 const FULLSCREEN_RENDER = { width: 1920, height: 1080 } as const;
-const CHARGE_GLOW_PEAK = 0.7; // peak green charge-buildup tint at full BFG spin-up (mirrors the grid)
-const CHARGE_FLASH_DECAY_PER_S = 3; // how fast the green discharge flash fades
 const HUD_NATIVE_WIDTH = 2117; // x1.0 status-bar art width (biggest tier) — only the aspect source now
 const HUD_NATIVE_HEIGHT = 404; // …its height, so the backing store keeps the bar's 5.24:1 aspect
 const HUD_MAX_WIDTH = 1024; // cap the HUD backing store here → a cheap repaint even fullscreen (still crisp)
-// DEBUG stress mode (toggle G): a load test for the MAIN-THREAD budget under a real fight — synthetic enemies
-// run a per-frame AI cost (line-of-sight castRay + collision chase) and fire projectiles, ramping in number.
-const STRESS_MAX = 64; // peak synthetic enemies the ramp climbs to
-const STRESS_RAMP_STEP = 8; // enemies added per ramp tick
-const STRESS_RAMP_INTERVAL = 2; // seconds between ramp ticks
-const ENEMY_SPEED = 2; // chase speed (world units / second)
-const ENEMY_FIRE_INTERVAL = 1.5; // seconds between an enemy's shots while it can see the player
 const PERF_RING_SIZE = 4096; // frames the dev perf ring (`?perflog=1`) holds — a power of two (index masks)
 
 /**
@@ -216,11 +168,6 @@ export class BspDemoComponent {
   private projectiles: Projectile[] = []; // launched shots in flight (projectile weapons), stepped each frame
   private arcs: Arc[] = []; // short-lived plasma chain-lightning visuals, aged out each frame
   private impacts: Impact[] = []; // burst-strip animations playing at hit points, aged out each frame
-  // DEBUG stress mode (toggle G): synthetic chasing enemies + their projectiles, to load-test the main thread.
-  private stress = false;
-  private stressEnemies: { x: number; y: number; z: number; cooldown: number }[] = [];
-  private stressClock = 0; // ramp timer
-  private aiMs = 0; // measured per-frame AI cost (LOS + chase) — logged to telemetry to isolate it from render
   // Non-null = mid auto-mantle: hoisting up over a too-tall-but-climbable ledge (movement/look frozen, gliding
   // forward along the captured heading). `progress` 0→1 drives both the z-lerp and the (future) hands overlay.
   private mantle: {
@@ -264,47 +211,30 @@ export class BspDemoComponent {
   } | null = null;
   private perfRingLast = 0; // previous frame's rAF timestamp (0 = no previous frame yet)
   private readonly hud = new DoomHud();
-  private hp = 100; // player health — drained by enemy strikes/blasts/clips, refilled by coffee pickups
-  private armor = 0; // player armour — soaks a fraction of each hit, refilled by RAM-stick pickups
-  private dead = false; // hp hit 0 → the world freezes under a game-over wash until a click restarts
-  private deadClock = 0; // seconds since death (gates the restart + fades the game-over wash in)
-  private pickupFx = 0; // seconds left on the green pickup flash (collected an item)
-  private readonly heldCards = new Set<KeycardColor>(); // badge colours collected → unlock the matching doors
+  // The PLAYER-COMBAT boundary. {@link CombatRuntime} owns the player's combat + inventory state (health,
+  // armour, the death/win latch, the magazine + reserve pools, the weapon progression + viewmodel, the fire /
+  // reload edges, and the screen-feedback timers) and every method that mutates it; it operates on the zone
+  // world + the transient FX (below) by reference. Assigned in the constructor so it can close over them.
+  private readonly combatRuntime: CombatRuntime;
+  // The PICKUP-OBJECTIVE boundary. {@link PickupRuntime} owns the pickup / objective / door STEPPING — it reads
+  // the zone world's floor items + doors + slides by reference, grants collected items through the combat
+  // runtime's grant API + lights HUD badge cards, and drives the zone-exit transition. It owns the collected
+  // badge set + the two collect-feedback timers (the green flash + the "badge requis" hint). Assigned in the
+  // constructor so it can close over the combat + zone runtimes.
+  private readonly pickupRuntime: PickupRuntime;
   private pool: RenderPool | null = null; // the worker render pool (null = single-threaded fallback / pre-init)
   // The WebGPU compute backend (the DEFAULT; `?renderer=cpu` forces the CPU path — see gpu-renderer.ts).
   // Null until its async init lands, and again after any GPU failure: the CPU path (pool or main thread)
   // is ALWAYS the running fallback.
   private gpu: GpuRenderer | null = null;
-  private won = false; // reached the exit → the level-complete wash, frozen until a click restarts
-  private wonClock = 0; // seconds since the win (gates the restart + fades the wash in)
-  private hint = 0; // seconds left on a transient HUD hint (e.g. "badge requis" at a locked door)
   // The in-world transient FX painter (projectiles / impacts / arcs) — owns its lazily-decoded sprite caches.
   private readonly worldFxPainter = new WorldFxPainter();
   // The DOOM status-bar sync painter — owns the turn-rate EMA that aims the HUD face's gaze through a turn.
   private readonly hudPainter = new HudPainter();
-  // The DOOM weapon PROGRESSION: the ids the player has unlocked. A new game starts FISTS-ONLY
-  // (STARTING_WEAPON_IDS) and every other weapon is a level pickup; ownership is INVENTORY — it travels
-  // across zones/seam swaps untouched and resets only in {@link resetGame}.
-  private readonly ownedWeapons = new Set<string>(STARTING_WEAPON_IDS);
-  private weaponIndex = 0;
-  private weaponView = new WeaponView(
-    ARSENAL[0],
-    weaponViewConfig(ARSENAL[0]),
-    reloadViewConfig(ARSENAL[0]),
-  );
-  private readonly climbView = new ClimbView(); // the two-handed mantle pull, shown over the weapon mid-vault
-  private readonly mag = ARSENAL.map((weapon) => weapon.magSize ?? 0); // loaded rounds per weapon
+  // The weapon VIEWMODEL painter — the screen-space overlay half of the old drawWeapon (the fire STEP lives in
+  // the combat runtime). Stateless; drew each blit just after the runtime's weapon step (step-before-draw).
+  private readonly weaponPainter = new WeaponPainter();
   private bob = 0; // weapon idle-bob phase, advanced while moving
-  private fireHeld = false; // mouse held → automatic fire
-  private fireEdge = false; // mousedown landed this frame → one semi-auto shot
-  private reloadEdge = false; // R pressed this frame → start a reload
-  private fireCooldown = 0; // seconds until the active weapon can fire again
-  private reloadClock = 0; // seconds left on the active weapon's reload
-  private readonly reserve = new Map<string, number>(); // ammo-type → reserve pool (lazily seeded)
-  private shotFx = 0; // seconds left on the muzzle-flash + impact-spark feedback
-  private hurtFx = 0; // seconds left on the red damage flash (player took a hit)
-  private chargeGlow = 0; // 0..1 live green charge-buildup tint while the BFG spins up
-  private dischargeFlash = 0; // 0..1 green discharge flash on a BFG shot, decayed each frame
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -341,6 +271,27 @@ export class BspDemoComponent {
           by: arc.by - dy,
         }));
       },
+    });
+    // Wire the player-combat boundary over the zone world + the transient FX (all by reference — the FX pools
+    // are read through accessors because a zone reset / seam crossing reassigns them). The runtime reads the
+    // shared camera's firing pose + the render config; it makes the shared HUD face react on a landed hit.
+    this.combatRuntime = new CombatRuntime({
+      camera: this.camera,
+      config: this.config,
+      hud: this.hud,
+      world: () => this.zoneRuntime.world,
+      projectiles: () => this.projectiles,
+      impacts: () => this.impacts,
+      arcs: () => this.arcs,
+    });
+    // Wire the pickup-objective boundary over the zone world + the combat grant API + the HUD. It reads the
+    // shared camera for proximity, mutates the zone world's pickup / door / slide arrays by reference, and owns
+    // the collected badge set + the two collect-feedback timers the overlay painter reads.
+    this.pickupRuntime = new PickupRuntime({
+      camera: this.camera,
+      hud: this.hud,
+      combat: this.combatRuntime,
+      zone: this.zoneRuntime,
     });
     // The initial zone load — the SAME code path as every open-building transition (URL level or default).
     // Pure map/data work, so it is prerender-safe; enemies/pickups spawn once the atlases decode below.
@@ -381,13 +332,17 @@ export class BspDemoComponent {
       canvasEl.width = this.config.width; // backing store = the internal render resolution (CSS upscales it)
       canvasEl.height = this.config.height;
 
-      this.climbView.preload(); // decode the mantle hands now, so the first vault never shows a blank frame
+      this.combatRuntime.climbView.preload(); // decode the mantle hands now, so the first vault never shows a blank frame
       const onDown = (event: KeyboardEvent): void => this.onKey(event, true);
       const onUp = (event: KeyboardEvent): void => this.onKey(event, false);
       const onClick = (): void => {
-        if (this.dead || this.won) {
+        if (this.combatRuntime.dead || this.combatRuntime.won) {
           // game over OR level complete → a click (after the settle delay) restarts the level
-          if ((this.dead ? this.deadClock : this.wonClock) >= RESTART_DELAY) {
+          if (
+            (this.combatRuntime.dead
+              ? this.combatRuntime.deadClock
+              : this.combatRuntime.wonClock) >= RESTART_DELAY
+          ) {
             this.resetGame();
           }
 
@@ -428,18 +383,17 @@ export class BspDemoComponent {
         // twin of the R key); the primary button (left) fires. Mirrors the grid's mouse handling.
         if (event.button === 2 || event.ctrlKey) {
           event.preventDefault();
-          this.reload();
+          this.combatRuntime.reload();
 
           return;
         }
         if (event.button === 0) {
-          this.fireHeld = true;
-          this.fireEdge = true;
+          this.combatRuntime.beginFire();
         }
       };
       const onMouseup = (event: MouseEvent): void => {
         if (event.button === 0) {
-          this.fireHeld = false; // only the primary (fire) button releases the held auto-fire
+          this.combatRuntime.endFire(); // only the primary (fire) button releases the held auto-fire
         }
       };
       const onContextMenu = (event: Event): void => {
@@ -460,7 +414,7 @@ export class BspDemoComponent {
         if (dir !== 0) {
           // Cycle across OWNED weapons only — with the fists-only start the wheel stays put until pickups
           // light more of the arms row.
-          this.selectWeapon(nextOwnedIndex(this.ownedFlags(), this.weaponIndex, dir));
+          this.combatRuntime.cycleWeapon(dir);
         }
       };
 
@@ -637,33 +591,55 @@ export class BspDemoComponent {
               this.config,
               this.camera,
               this.projectiles,
-              this.weaponView,
+              this.combatRuntime.weaponView,
               this.bob,
             );
             this.worldFxPainter.drawImpacts(context, this.config, this.camera, this.impacts);
             this.worldFxPainter.drawArcs(context, this.config, this.camera, this.arcs);
-            this.drawWeapon(drawDt, context);
-            drawHurtFx(context, this.hurtFx);
-            drawPickupFx(context, this.pickupFx);
-            drawChargeFx(context, this.chargeGlow, this.dischargeFlash);
-            drawCrosshair(context, this.shotFx);
-            drawHint(context, this.hint);
+            // The weapon COMBAT STEP runs on the blit's drawDt (NOT the advance dt), then the viewmodel is
+            // PAINTED — step-before-draw, exactly as the monolithic drawWeapon did, so the step's shotFx feeds
+            // this same frame's crosshair below.
+            this.combatRuntime.stepWeapon(drawDt, this.mantle !== null);
+            this.weaponPainter.draw({
+              ctx: context,
+              weaponView: this.combatRuntime.weaponView,
+              climbView: this.combatRuntime.climbView,
+              mantle: this.mantle,
+              camera: this.camera,
+              fov: this.config.fov,
+              bob: this.bob,
+            });
+            drawHurtFx(context, this.combatRuntime.hurtFx);
+            drawPickupFx(context, this.pickupRuntime.pickupFx);
+            drawChargeFx(context, this.combatRuntime.chargeGlow, this.combatRuntime.dischargeFlash);
+            drawCrosshair(context, this.combatRuntime.shotFx);
+            drawHint(context, this.pickupRuntime.hint);
             drawZoneFade(context, this.zoneRuntime.transition, ZONE_FADE);
             this.hudPainter.draw({
               hud: this.hud,
               canvas: this.hudCanvas().nativeElement,
               dt: drawDt,
-              weaponIndex: this.weaponIndex,
-              reserve: this.reserve,
-              hp: this.hp,
-              armor: this.armor,
-              mag: this.mag,
-              ownedWeapons: this.ownedWeapons,
-              weaponView: this.weaponView,
+              weaponIndex: this.combatRuntime.weaponIndex,
+              reserve: this.combatRuntime.reserve,
+              hp: this.combatRuntime.hp,
+              armor: this.combatRuntime.armor,
+              mag: this.combatRuntime.mag,
+              ownedWeapons: this.combatRuntime.ownedWeapons,
+              weaponView: this.combatRuntime.weaponView,
               cameraAngle: this.camera.angle,
             });
-            drawGameOver(context, this.dead, this.deadClock, this.deadClock >= RESTART_DELAY);
-            drawWinScreen(context, this.won, this.wonClock, this.wonClock >= RESTART_DELAY);
+            drawGameOver(
+              context,
+              this.combatRuntime.dead,
+              this.combatRuntime.deadClock,
+              this.combatRuntime.deadClock >= RESTART_DELAY,
+            );
+            drawWinScreen(
+              context,
+              this.combatRuntime.won,
+              this.combatRuntime.wonClock,
+              this.combatRuntime.wonClock >= RESTART_DELAY,
+            );
             // GPU frames have no worker join — their stats stay out of the stall/governor loop entirely.
             const join = pool === null || this.gpu !== null ? null : pool.stats;
 
@@ -733,7 +709,7 @@ export class BspDemoComponent {
           this.gpu?.setTextures(this.textures); // the enemy/pickup atlases join the GPU texel pool too
           // Flip the atlas gate + spawn the (deferred) active + warm entities in place now the art exists.
           this.zoneRuntime.markAtlasesReady();
-          this.seedReserves(); // the NEW-GAME ammo seed — zone transitions never re-run it
+          this.combatRuntime.seedReserves(); // the NEW-GAME ammo seed — zone transitions never re-run it
         },
       );
 
@@ -764,9 +740,9 @@ export class BspDemoComponent {
 
     if (down && (key === 'h' || key === 'j')) {
       if (key === 'h') {
-        this.hurtPlayer(15); // DEBUG: H = take a hit (routes through armour soak + the death check)
+        this.combatRuntime.hurtPlayer(15); // DEBUG: H = take a hit (routes through armour soak + the death check)
       } else {
-        this.hp = Math.min(100, this.hp + 15); // DEBUG: J = heal
+        this.combatRuntime.heal(15); // DEBUG: J = heal
       }
       event.preventDefault();
 
@@ -779,24 +755,19 @@ export class BspDemoComponent {
       return;
     }
     if (down && key >= '1' && key <= '8') {
-      this.selectWeapon(Number(key) - 1);
+      this.combatRuntime.selectWeapon(Number(key) - 1);
       event.preventDefault();
 
       return;
     }
     if (down && key === 'r') {
-      this.reload();
+      this.combatRuntime.reload();
       event.preventDefault();
 
       return;
     }
     if (down && key === 'g') {
-      this.stress = !this.stress; // DEBUG: toggle the synthetic-enemy stress load
-      if (!this.stress) {
-        this.stressEnemies = [];
-        this.stressClock = 0;
-        this.aiMs = 0;
-      }
+      this.combatRuntime.toggleStress(); // DEBUG: toggle the synthetic-enemy stress load
       event.preventDefault();
 
       return;
@@ -815,17 +786,15 @@ export class BspDemoComponent {
 
   /** Integrate the body from the held keys + collisions: forward/back + strafe (turning is mouse-only). */
   private advance(dt: number): void {
-    this.shotFx = Math.max(0, this.shotFx - dt); // fade the muzzle flash / impact spark
-    this.hurtFx = Math.max(0, this.hurtFx - dt); // fade the red damage flash
-    this.pickupFx = Math.max(0, this.pickupFx - dt); // fade the green pickup flash
-    this.dischargeFlash = Math.max(0, this.dischargeFlash - CHARGE_FLASH_DECAY_PER_S * dt); // fade the BFG flash
-    if (this.dead) {
-      this.deadClock += dt; // world frozen under the game-over wash; a click restarts after RESTART_DELAY
+    this.combatRuntime.decayFx(dt); // fade the muzzle flash / red hurt flash / BFG discharge flash
+    this.pickupRuntime.decayFx(dt); // fade the green pickup flash (runs always, before the end-state returns)
+    if (this.combatRuntime.dead) {
+      this.combatRuntime.tickDeadClock(dt); // world frozen under the game-over wash; a click restarts after RESTART_DELAY
 
       return;
     }
-    if (this.won) {
-      this.wonClock += dt; // world frozen under the level-complete wash; a click restarts after RESTART_DELAY
+    if (this.combatRuntime.won) {
+      this.combatRuntime.tickWonClock(dt); // world frozen under the level-complete wash; a click restarts after RESTART_DELAY
 
       return;
     }
@@ -834,13 +803,15 @@ export class BspDemoComponent {
 
       return;
     }
-    this.stepStress(dt); // DEBUG load test (no-op unless toggled) — runs before projectiles so its shots step now
-    stepEnemies(this.activeFrame(), dt); // real enemies chase / shoot / throw
-    stepEnemyShots(this.activeFrame(), dt); // throwers' projectiles fly at the player
+    this.combatRuntime.stepStress(dt); // DEBUG load test (no-op unless toggled) — runs before projectiles so its shots step now
+    stepEnemies(this.combatRuntime.activeFrame(), dt); // real enemies chase / shoot / throw
+    stepEnemyShots(this.combatRuntime.activeFrame(), dt); // throwers' projectiles fly at the player
     this.zoneRuntime.stepWarm(dt); // the warm neighbor lives too: its foes think in THEIR map behind the seam
-    stepProjectiles(this.playerCombatFrame(), dt);
-    this.stepPickups(dt); // spin the ammo boxes + collect anything the player is standing on
-    this.stepDoors(dt); // animate doors (after pickups, so this frame's badge state gates the door) before moving
+    stepProjectiles(this.combatRuntime.playerCombatFrame(), dt);
+    this.pickupRuntime.stepPickups(dt); // spin the ammo boxes + collect anything the player is standing on
+    this.pickupRuntime.stepObjective(dt); // collect badges, drive zone exits, win the legacy exit
+    this.pickupRuntime.stepDoors(dt); // animate doors (after pickups, so this frame's badge state gates the door)
+    this.pickupRuntime.stepSliding(dt); // sliding glass doors: proximity-driven + auto-closing
 
     for (const arc of this.arcs) {
       arc.age += dt;
@@ -982,35 +953,6 @@ export class BspDemoComponent {
     }
   }
 
-  /** Per-arsenal-position owned flags (the 1..8 key row) — the shape the pure cycling/HUD logic reads. */
-  private ownedFlags(): boolean[] {
-    return ARSENAL.map((weapon) => this.ownedWeapons.has(weapon.id));
-  }
-
-  /** Switch to an arsenal slot (0-based) — rebuilds the viewmodel for the new weapon. An UNOWNED slot is
-   *  inert (the DOOM progression: a number key does nothing until its weapon has been picked up). */
-  private selectWeapon(index: number): void {
-    if (
-      index < 0 ||
-      index >= ARSENAL.length ||
-      index === this.weaponIndex ||
-      !this.ownedWeapons.has(ARSENAL[index].id)
-    ) {
-      return;
-    }
-    this.weaponIndex = index;
-    this.fireCooldown = 0;
-    this.reloadClock = 0;
-    const weapon = ARSENAL[index];
-
-    this.weaponView = new WeaponView(weapon, weaponViewConfig(weapon), reloadViewConfig(weapon));
-  }
-
-  /** Request a reload — `stepArsenal` stages it (reserve → mag over the weapon's reloadTime) next frame. */
-  private reload(): void {
-    this.reloadEdge = true;
-  }
-
   /** The world billboards still alive this frame — the render's per-frame sprite list (culled barrels drop
    *  out). Projectiles are NOT here: they are painted screen-space over the frame by `drawProjectiles`.
    *  Sources the active zone's live state for the pure {@link buildLiveSprites}. */
@@ -1022,7 +964,7 @@ export class BspDemoComponent {
       this.camera.y,
       this.zoneRuntime.atlasesReady,
       this.zoneRuntime.exits,
-      this.stressEnemies,
+      this.combatRuntime.stressEnemies,
     );
   }
 
@@ -1033,482 +975,14 @@ export class BspDemoComponent {
     return buildWarmSprites(warm, this.camera.x, this.camera.y, this.zoneRuntime.seams);
   }
 
-  /** Seed every ammo type's reserve at spawn — RESERVE_START, clamped to each type's cap (so a low-cap type
-   *  like batteries never starts over-full). The fight then runs on this + what the floor boxes top up. */
-  private seedReserves(): void {
-    for (const [type, max] of Object.entries(AMMO_MAX)) {
-      this.reserve.set(type, Math.min(max, RESERVE_START));
-    }
-  }
-
-  /** Spin the ammo boxes + collect any pickup the player overlaps: coffee/RAM refill health/armour (capped at
-   *  VITAL_MAX), a box tops up its OWN ammo type's reserve (capped, KEPT if the type is already full), and a
-   *  weapon pickup unlocks its weapon (see {@link collectWeapon}). */
-  private stepPickups(dt: number): void {
-    const world = this.zoneRuntime.world;
-
-    world.vitals = world.vitals.filter((v) => {
-      v.age += dt; // advance the turntable spin whether or not it is collected
-      if (Math.hypot(v.x - this.camera.x, v.y - this.camera.y) >= PICKUP_RADIUS) {
-        return true; // out of reach — keep it
-      }
-      if (v.spec.kind === 'health') {
-        this.hp = Math.min(VITAL_MAX, this.hp + v.spec.amount);
-      } else {
-        this.armor = Math.min(VITAL_MAX, this.armor + v.spec.amount);
-      }
-      this.pickupFx = PICKUP_FX_DURATION;
-
-      return false; // collected — drop it
-    });
-
-    world.ammoBoxes = world.ammoBoxes.filter((b) => {
-      b.age += dt; // advance its spin clock whether or not it is collected
-
-      if (INSPECT_PICKUPS) {
-        return true; // TEMP: keep every box (spinning) so the ammo art can be inspected up close
-      }
-      const reserve = this.reserve.get(b.spec.ammoType) ?? 0;
-
-      if (
-        Math.hypot(b.x - this.camera.x, b.y - this.camera.y) >= PICKUP_RADIUS ||
-        reserve >= b.spec.max
-      ) {
-        return true; // out of reach, or this type is already full → keep the box
-      }
-      this.reserve.set(b.spec.ammoType, Math.min(b.spec.max, reserve + b.spec.amount));
-      this.pickupFx = PICKUP_FX_DURATION;
-
-      return false; // collected — drop it
-    });
-
-    world.weaponPickups = world.weaponPickups.filter((p) => {
-      p.age += dt; // advance its (future) turntable spin whether or not it is collected
-      if (Math.hypot(p.x - this.camera.x, p.y - this.camera.y) >= PICKUP_RADIUS) {
-        return true; // out of reach — keep it
-      }
-      this.collectWeapon(p.spec); // always collectible — a repeat pickup is still an ammo top-up
-
-      return false; // collected — drop it
-    });
-
-    this.stepObjective(dt);
-  }
-
-  /** Unlock a collected weapon (the DOOM progression): own it for the rest of the run, grant its starter
-   *  ammo dose (ONE standard box of its type — {@link weaponAmmoDose} — capped at the reserve max), and
-   *  AUTO-EQUIP it when it is a FIRST pickup into a strictly better arsenal position (finding a pistol
-   *  while holding the shotgun never downgrades; a repeat pickup only tops the reserve up). */
-  private collectWeapon(spec: WeaponPickupSpec): void {
-    const index = ARSENAL.findIndex((weapon) => weapon.id === spec.id);
-    const alreadyOwned = this.ownedWeapons.has(spec.id);
-
-    this.ownedWeapons.add(spec.id);
-    const dose = weaponAmmoDose(spec.ammoType);
-
-    if (spec.ammoType !== null && dose > 0) {
-      const held = this.reserve.get(spec.ammoType) ?? 0;
-
-      this.reserve.set(spec.ammoType, Math.min(ammoTypeMax(spec.ammoType), held + dose));
-    }
-    if (shouldAutoEquip(alreadyOwned)) {
-      this.selectWeapon(index);
-    }
-    this.pickupFx = PICKUP_FX_DURATION;
-  }
-
-  /** The level objective: spin + collect each access badge on proximity (→ the HUD card bay; each unlocks its
-   *  colour-matched DOOR), and finish the level on reaching the exit. The badge gate is the locked door, so the
-   *  exit itself just wins. */
-  private stepObjective(dt: number): void {
-    const world = this.zoneRuntime.world;
-
-    this.hint = Math.max(0, this.hint - dt);
-    world.keycards = world.keycards.filter((k) => {
-      k.age += dt; // advance the badge turntable spin whether or not it is collected
-      if (Math.hypot(k.x - this.camera.x, k.y - this.camera.y) >= PICKUP_RADIUS) {
-        return true; // out of reach — keep it
-      }
-      this.heldCards.add(k.spec.color);
-      this.hud.addCard(k.spec.color); // light its card in the HUD bay
-      this.pickupFx = PICKUP_FX_DURATION;
-
-      return false; // collected — drop it
-    });
-    // OPEN-BUILDING transition: walking into an `exits[]` point swaps the zone behind a short fade. The
-    // arrival side stays LOCKED until the player has left every exit radius — no instant bounce-back
-    // through the reciprocal exit next to the entry point.
-    if (this.zoneRuntime.transition === null) {
-      const inside = this.zoneRuntime.exits.find(
-        (e) => Math.hypot(e.x - this.camera.x, e.y - this.camera.y) < EXIT_RADIUS,
-      );
-
-      if (this.zoneRuntime.exitsLocked) {
-        this.zoneRuntime.exitsLocked = inside !== undefined;
-      } else if (inside !== undefined) {
-        this.zoneRuntime.beginTransition(inside.to, inside.entry);
-        this.fireHeld = false;
-      }
-    }
-    // The legacy single exit (levels outside the graph): reaching it wins, exactly as before.
-    if (
-      world.exit !== null &&
-      Math.hypot(world.exit.x - this.camera.x, world.exit.y - this.camera.y) < EXIT_RADIUS
-    ) {
-      this.won = true;
-      this.wonClock = 0;
-      this.fireHeld = false;
-    }
-  }
-
-  /** Drive each door's animation: a player in trigger range (holding the badge, for a locked door) opens it; a
-   *  locked door with no badge just flashes the "badge requis" hint. Once open it stays open (a permanent unlock). */
-  private stepDoors(dt: number): void {
-    const world = this.zoneRuntime.world;
-
-    for (const door of world.doors) {
-      const near =
-        Math.hypot(door.triggerX - this.camera.x, door.triggerY - this.camera.y) <
-        DOOR_TRIGGER_RADIUS;
-      const mayOpen = door.requiresCard === null || this.heldCards.has(door.requiresCard);
-
-      door.openness = stepDoorOpenness(door.openness, dt, near, mayOpen);
-      if (near && !mayOpen && door.openness === 0) {
-        this.hint = HINT_DURATION; // locked — the badge is needed
-      }
-    }
-    this.zoneRuntime.applyDoors(world.doors, world.sectors);
-    this.stepSliding(dt);
-  }
-
-  /** Sliding glass doors: proximity-driven + AUTO-CLOSING (a real automatic door). Each animates toward open
-   *  when the player is within range and back toward shut when they leave; the world's `slides` feed render + physics. */
-  private stepSliding(dt: number): void {
-    const world = this.zoneRuntime.world;
-
-    for (const s of this.zoneRuntime.slidingDoors) {
-      const near = Math.hypot(s.mx - this.camera.x, s.my - this.camera.y) < SLIDE_TRIGGER_RADIUS;
-
-      world.slides[s.line] = stepSlideOpenness(world.slides[s.line], dt, near);
-    }
-  }
-
-  /** The ACTIVE zone's {@link CombatFrame}: the live map/foes, the real player, the real hurt. */
-  private activeFrame(): CombatFrame {
-    const world = this.zoneRuntime.world;
-
-    return {
-      map: world.map,
-      slides: world.slides,
-      obstacles: world.obstacles,
-      enemies: world.enemies,
-      shots: world.enemyShots,
-      px: this.camera.x,
-      py: this.camera.y,
-      hurt: (dmg) => this.hurtPlayer(dmg),
-    };
-  }
-
-  /** The active zone's {@link PlayerCombatFrame}: the live map/barrels/foes + shared projectile pool + the
-   *  camera's firing pose, with the shell's side-effect callbacks (hurt a foe, queue an impact/arc, resolve a
-   *  projectile kind's width). The pure hitscan / projectile steppers read + mutate the shared arrays. */
-  private playerCombatFrame(): PlayerCombatFrame {
-    const world = this.zoneRuntime.world;
-
-    return {
-      map: world.map,
-      slides: world.slides,
-      targets: world.targets,
-      enemies: world.enemies,
-      projectiles: this.projectiles,
-      cameraX: this.camera.x,
-      cameraY: this.camera.y,
-      cameraZ: this.camera.z,
-      angle: this.camera.angle,
-      vSlope: this.aimVerticalSlope(),
-      hurtEnemy: (enemy, dmg) => this.hurtEnemy(enemy, dmg),
-      addImpact: (kind, x, y, z) => this.spawnImpact(kind, x, y, z),
-      addArc: (arc) => this.arcs.push(arc),
-      projectileWidth,
-    };
-  }
-
-  /** A landed enemy strike: armour soaks a fraction of the hit (the rest drains hp), fire the red damage flash,
-   *  make the HUD face react, and on hp 0 enter the game-over state. */
-  private hurtPlayer(dmg: number): void {
-    if (this.dead) {
-      return;
-    }
-    const soak = Math.min(this.armor, Math.floor(dmg * ARMOR_ABSORB));
-
-    this.armor -= soak;
-    this.hp = Math.max(0, this.hp - (dmg - soak));
-    this.hurtFx = HURT_FX_DURATION;
-    this.hud.onHit();
-    if (this.hp === 0) {
-      this.die();
-    }
-  }
-
-  /** hp hit 0: freeze the world under a game-over wash. A click after RESTART_DELAY runs {@link resetGame}. */
-  private die(): void {
-    this.dead = true;
-    this.deadClock = 0;
-    this.fireHeld = false;
-  }
-
-  /** Restart the run — a NEW GAME: restore vitals + the starting loadout, then reload the current zone
-   *  `fresh` (the whole building's zone state resets, every enemy + pickup + door respawns). */
+  /** Restart the run — a NEW GAME: the combat runtime restores vitals + the starting loadout + the seeded
+   *  reserves, the pickup runtime drops every badge + clears the HUD bay + the collect-feedback timers, then the
+   *  current zone reloads `fresh` (the whole building's zone state resets, every enemy + pickup + door respawns). */
   private resetGame(): void {
-    this.dead = false;
-    this.deadClock = 0;
-    this.won = false;
-    this.wonClock = 0;
+    this.combatRuntime.resetPlayer();
     this.zoneRuntime.cancelTransition();
-    this.heldCards.clear();
-    this.hint = 0;
-    this.hud.clearCards();
-    this.hp = 100;
-    this.armor = 0;
-    this.hurtFx = 0;
-    this.pickupFx = 0;
-    // Back to the FISTS-ONLY loadout: every picked-up weapon is lost with the run (its floor pickups
-    // respawn with the fresh building below). The fist is ARSENAL[0], so the equip below stays owned.
-    this.ownedWeapons.clear();
-    for (const id of STARTING_WEAPON_IDS) {
-      this.ownedWeapons.add(id);
-    }
-    this.weaponIndex = 0;
-    this.weaponView = new WeaponView(
-      ARSENAL[0],
-      weaponViewConfig(ARSENAL[0]),
-      reloadViewConfig(ARSENAL[0]),
-    );
-    ARSENAL.forEach((weapon, i) => (this.mag[i] = weapon.magSize ?? 0));
-    this.seedReserves();
+    this.pickupRuntime.reset();
     this.zoneRuntime.loadZone(this.zoneRuntime.currentKey, undefined, true); // fresh: resets the building + respawns everything
-  }
-
-  /** DEBUG stress mode (toggle G): ramp synthetic enemies and run a realistic per-frame AI cost — a line-of-
-   *  sight `castRay` for EVERY enemy + a collision-aware chase + a projectile flux — to load-test the MAIN
-   *  thread (where AI + projectile stepping live, serial, while the workers render in parallel). `aiMs` is
-   *  measured so the telemetry separates the AI cost from the render cost. No-op until toggled. */
-  private stepStress(dt: number): void {
-    if (!this.stress) {
-      return;
-    }
-    this.stressClock += dt;
-    const want = Math.min(
-      STRESS_MAX,
-      STRESS_RAMP_STEP * (1 + Math.floor(this.stressClock / STRESS_RAMP_INTERVAL)),
-    );
-
-    while (this.stressEnemies.length < want) {
-      this.stressEnemies.push({
-        x: 1 + Math.random() * 13,
-        y: 1 + Math.random() * 10,
-        z: 0,
-        cooldown: Math.random() * ENEMY_FIRE_INTERVAL,
-      });
-    }
-
-    const t0 = performance.now();
-    const reach = ENEMY_SPEED * dt;
-    const world = this.zoneRuntime.world;
-
-    for (const e of this.stressEnemies) {
-      const dx = this.camera.x - e.x;
-      const dy = this.camera.y - e.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const nx = dx / dist;
-      const ny = dy / dist;
-
-      // Line of sight = the per-enemy cost that scales the main thread. On LOS: chase (collision-aware) + fire.
-      if (castRay(world.map, e.x, e.y, nx, ny, dist) === null) {
-        const moved = movePlayer(
-          world.map,
-          e.x,
-          e.y,
-          nx * reach,
-          ny * reach,
-          PLAYER_RADIUS,
-          STEP_MAX,
-          HEADROOM,
-          world.slides,
-          false,
-          world.obstacles,
-        );
-
-        e.x = moved.x;
-        e.y = moved.y;
-        e.z = moved.floorZ;
-        e.cooldown -= dt;
-        if (e.cooldown <= 0) {
-          e.cooldown = ENEMY_FIRE_INTERVAL;
-          this.fireEnemyShot(e.x, e.y, e.z, nx, ny);
-        }
-      }
-    }
-    this.aiMs = performance.now() - t0;
-  }
-
-  /** A synthetic enemy shot toward the player — reuses the player projectile system (stepped + collided each
-   *  frame), so it loads `stepProjectiles`. Capped so a runaway flux can't lock the loop. */
-  private fireEnemyShot(x: number, y: number, z: number, nx: number, ny: number): void {
-    if (this.projectiles.length > 150) {
-      return;
-    }
-    const width = projectileWidth('nail') ?? 0.45;
-
-    this.projectiles.push({
-      x,
-      y,
-      z: z + 1,
-      dx: nx,
-      dy: ny,
-      vSlope: 0,
-      speed: 7,
-      kind: 'nail',
-      impactKind: 'impact_metal',
-      damage: 0, // debug stress shots don't damage the real enemies
-      radius: width / 2,
-      splashR: 0,
-      chain: null,
-      traveled: 0,
-      alive: true,
-    });
-  }
-
-  /** Apply `dmg` to a living enemy: flash it, and on hp ≤ 0 switch it to the death animation. The BSP-game's
-   *  {@link PlayerCombatFrame} routes every foe hit (direct + splash) through here — the flash/kill timing
-   *  stays in the shell, off the pure combat math. */
-  private hurtEnemy(enemy: CombatEnemy, dmg: number): void {
-    enemy.hp -= dmg;
-    enemy.hitFlash = HIT_FLASH_DURATION;
-    if (enemy.hp <= 0) {
-      enemy.dying = true;
-      enemy.deathTime = 0;
-    }
-  }
-
-  /** Queue an impact burst (`kind` from `effects.json`) at a world point — drawn + aged out by the impact
-   *  system. An empty kind (a weapon with no mapped impact) spawns nothing. */
-  private spawnImpact(kind: string, x: number, y: number, z: number): void {
-    if (kind !== '') {
-      this.impacts.push({ kind, x, y, z, age: 0 });
-    }
-  }
-
-  /** Vertical climb of the aim line per cell of forward depth, from the camera pitch (a screen y-shear): the
-   *  crosshair points at `camera.z + slope·depth`, so looking up raises where a hitscan lands downrange. */
-  private aimVerticalSlope(): number {
-    const focal = this.config.width / 2 / Math.tan(this.config.fov / 2);
-
-    return (this.camera.pitch * (this.config.height / 2)) / focal;
-  }
-
-  /** Advance + draw the held weapon. Mirrors the grid's three fire paths: the viewmodel is driven FIRST, then
-   *  the fire edge it reports feeds the shared core {@link stepArsenal} (which spends the mag) — AUTO fires off
-   *  the held trigger, SEMI on the swing's strike, CHARGE (the BFG) on the discharge after its spin-up. */
-  private drawWeapon(dt: number, ctx: CanvasRenderingContext2D): void {
-    // Mid-mantle, both hands are on the ledge: the two-handed climb pull REPLACES the weapon viewmodel for
-    // the brief hoist. Drop any queued fire/reload edges so nothing discharges the instant the vault ends.
-    if (this.mantle !== null) {
-      this.drawClimb(ctx);
-      this.fireEdge = false;
-      this.reloadEdge = false;
-
-      return;
-    }
-    const weapon = ARSENAL[this.weaponIndex];
-    const combat = weaponCombat(weapon);
-    const mode = weapon.fireMode ?? 'semi';
-    const ammoType = combat.ammoType;
-    const reserve = ammoType !== null ? (this.reserve.get(ammoType) ?? RESERVE_START) : 0;
-    const mag = this.mag[this.weaponIndex];
-    const ready = this.reloadClock <= 0;
-    let fireIntent: boolean;
-
-    if (mode === 'auto') {
-      // Held trigger → continuous fire; the loop cadences the swing off the core's fireCooldown.
-      const firing = this.fireHeld && (combat.magSize === 0 || (mag > 0 && ready));
-
-      if (this.fireHeld && combat.magSize > 0 && !firing) {
-        this.weaponView.dryFire(); // held but empty / mid-reload → a dry click, no loop
-      }
-      this.weaponView.setFiring(firing);
-      this.weaponView.tick(dt);
-      fireIntent = firing;
-    } else {
-      // SEMI / CHARGE: a press starts the swing (or the BFG spin-up, if not already engaged); the shot fires on
-      // the strike / discharge edge `tick` reports — the BFG holds its charge frame for `chargeTime` first.
-      const loaded = combat.magSize === 0 || (mag >= combat.ammoPerShot && ready);
-
-      if (this.fireEdge && !(mode === 'charge' && this.weaponView.swinging())) {
-        if (loaded) {
-          this.weaponView.tryTrigger();
-        } else if (combat.magSize > 0) {
-          this.weaponView.dryFire();
-        }
-      }
-      fireIntent = this.weaponView.tick(dt);
-    }
-
-    const result = stepArsenal(
-      combat,
-      { fireCooldown: this.fireCooldown, mag, reserve, reloadClock: this.reloadClock },
-      { fire: fireIntent, reload: this.reloadEdge },
-      dt,
-    );
-
-    this.fireCooldown = result.fireCooldown;
-    this.mag[this.weaponIndex] = result.mag;
-    this.reloadClock = result.reloadClock;
-    if (ammoType !== null) {
-      this.reserve.set(ammoType, result.reserve);
-    }
-    if (result.fired) {
-      this.shotFx = SHOT_FX_DURATION; // muzzle flash either way
-      fireWeapon(this.playerCombatFrame(), combat); // launch a projectile or resolve a hitscan
-    }
-
-    // The BFG's live green charge-buildup tint while spinning up, and a bright green flash on the discharge.
-    this.chargeGlow = this.weaponView.charging()
-      ? this.weaponView.chargeProgress() * CHARGE_GLOW_PEAK
-      : 0;
-    if (mode === 'charge' && result.fired) {
-      this.dischargeFlash = 1;
-    }
-    this.fireEdge = false;
-    this.reloadEdge = false;
-
-    this.weaponView.setReloadProgress(
-      combat.reloadTime > 0 && result.reloadClock > 0
-        ? 1 - result.reloadClock / combat.reloadTime
-        : null,
-    );
-    this.weaponView.draw(ctx, ctx.canvas.width, ctx.canvas.height, this.bob);
-  }
-
-  /** Draw the two-handed mantle pull mid-vault: project the ledge's top edge (world height `targetZ`) at
-   *  arm's-reach depth to get its screen-Y, hold it in a visible band, and feed it + the hoist `progress` to
-   *  {@link ClimbView}. As the camera rises past the lip the grip slides down it — the pull-up traction. */
-  private drawClimb(ctx: CanvasRenderingContext2D): void {
-    const m = this.mantle;
-
-    if (m === null) {
-      return;
-    }
-    const { width, height } = ctx.canvas;
-    const focal = width / 2 / Math.tan(this.config.fov / 2);
-    const horizon = height / 2 + this.camera.pitch * (height / 2);
-    const rawLedgeY = horizon + ((this.camera.z - m.targetZ) * focal) / CLIMB_LEDGE_DEPTH;
-    const ledgeY = Math.max(
-      height * CLIMB_LEDGE_MIN,
-      Math.min(height * CLIMB_LEDGE_MAX, rawLedgeY),
-    );
-
-    this.climbView.draw(ctx, width, height, m.progress, ledgeY);
   }
 
   /** Record one COMPLETED render (called per join, not per rAF): its cost + join-stall measurements feed
@@ -1590,8 +1064,8 @@ export class BspDemoComponent {
       p: r2(this.camera.pitch),
       spr: this.zoneRuntime.world.targets.reduce((n, t) => n + (t.alive ? 1 : 0), 0),
       proj: this.projectiles.length,
-      en: this.stressEnemies.length, // stress-mode enemy count → correlate frame time with load
-      ai: Math.round(this.aiMs * 100) / 100, // per-frame AI cost (ms) → main-thread cost isolated from render
+      en: this.combatRuntime.stressEnemyCount, // stress-mode enemy count → correlate frame time with load
+      ai: Math.round(this.combatRuntime.aiMs * 100) / 100, // per-frame AI cost (ms) → main-thread cost isolated from render
     };
 
     navigator.sendBeacon('/perf', JSON.stringify(sample));
