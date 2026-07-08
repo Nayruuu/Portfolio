@@ -19,6 +19,7 @@ import {
   resolveZone,
   stepEnemies,
   stepEnemyShots,
+  ZONE_FADE,
   zoneStates,
   type CombatFrame,
   type Level,
@@ -33,10 +34,6 @@ import type { Door, SeamEdge, SlidingDoor, WarmZone, ZoneExit } from './zone-wor
 /** Camera eye height above the floor — the world-vs-camera constant the runtime seats the player at on every
  *  load; the component reads it too (the eased step-up + the mantle hoist stand the eye this far off a floor). */
 export const EYE_HEIGHT = 1.4;
-
-/** Seconds each side of a FADE zone swap (fade to black, load the new floor at black, fade back in). The
- *  runtime drives the clock; the component's overlay painter reads it to draw the wash. */
-export const ZONE_FADE = 0.35;
 
 /** Spawn each level's enemy roster (the live game). A single lever mirrored from the component's old flag —
  *  flip to strip every zone's foes for an art-inspection capture without touching the runtime otherwise. */

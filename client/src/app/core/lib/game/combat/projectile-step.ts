@@ -5,7 +5,7 @@
 // deps (`castRay` / `castFloorCeil` / `nearestTargetHit`) are core → core.
 
 import { castFloorCeil, castRay, nearestTargetHit } from '../../bsp-engine';
-import { MAX_SHOT_RANGE, MUZZLE_CLEAR } from './combat-constants';
+import { MAX_SHOT_RANGE, MUZZLE_CLEAR } from '../game-tuning';
 import type { ChainSpec } from '../types';
 import { collectHittables } from './hittables';
 import type { PlayerCombatFrame } from './player-combat-frame';

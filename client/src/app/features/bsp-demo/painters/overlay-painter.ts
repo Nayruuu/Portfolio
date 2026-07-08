@@ -1,9 +1,11 @@
-// Presentation-timing durations for the full-screen washes. Kept here with the painters that consume them; the
-// component imports the ones it also arms on its own timers (e.g. `this.shotFx = SHOT_FX_DURATION`).
-export const SHOT_FX_DURATION = 0.09; // seconds the muzzle flash + impact spark linger after a shot
-export const HURT_FX_DURATION = 0.35; // seconds the player's red damage flash lingers after taking a hit
-export const PICKUP_FX_DURATION = 0.3; // seconds the player's green pickup flash lingers after collecting an item
-const CHARGE_FLASH_PEAK = 0.92; // peak green discharge flash opacity (near-blinding ultimate)
+// Full-screen wash painters — the presentation-timing durations they consume (SHOT/HURT/PICKUP flash, the
+// CHARGE flash peak) live in the central gameplay balance sheet (core/lib/game/game-tuning.ts).
+import {
+  CHARGE_FLASH_PEAK,
+  HURT_FX_DURATION,
+  PICKUP_FX_DURATION,
+  SHOT_FX_DURATION,
+} from '../../../core/lib';
 
 /** The centre reticle (always on) + a muzzle flash / impact spark while a shot is fresh. `shotFx` is the seconds
  *  left on the shot feedback (0 when idle). */

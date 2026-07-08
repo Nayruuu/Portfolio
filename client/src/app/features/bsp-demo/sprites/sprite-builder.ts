@@ -10,13 +10,10 @@
  * the distance/aliveness culling, and the atlas gating here mirror the render contract exactly.
  */
 import { orientSprite, type Sprite } from '../../../core/lib/bsp-engine';
-import type { EnemyShot } from '../../../core/lib';
+import { ENEMY_RECOIL, HIT_FLASH_DURATION, type EnemyShot } from '../../../core/lib';
 import type { Foe } from '../world/enemy-runtime';
 import type { WarmZone, ZoneExit } from '../world/zone-world';
 import { EXIT_SPEC, pickupFrame, type Marker } from '../world/pickups';
-
-export const HIT_FLASH_DURATION = 0.12; // seconds an enemy flashes white after a hit (mirrors the grid)
-const ENEMY_RECOIL = 0.18; // world units an enemy flinches UP at full hit-flash (the grid's recoil, in world z)
 
 /** The subset of a zone's live state the world-sprite build reads — the active zone (assembled at the call
  *  site) or a {@link WarmZone} neighbour both satisfy it. */

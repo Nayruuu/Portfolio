@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HURT_FX_DURATION, PICKUP_FX_DURATION } from '../../../core/lib';
 import {
   drawChargeFx,
   drawGameOver,
@@ -6,8 +7,6 @@ import {
   drawPickupFx,
   drawWinScreen,
   drawZoneFade,
-  HURT_FX_DURATION,
-  PICKUP_FX_DURATION,
 } from './overlay-painter';
 
 interface FillCall {

@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapSource } from '../../../core/lib/bsp-engine';
-import { parseLevelParams, zoneStates } from '../../../core/lib';
-import {
-  EYE_HEIGHT,
-  ZONE_FADE,
-  ZoneRuntime,
-  type MutableCamera,
-  type ZoneRuntimeHooks,
-} from './zone-runtime';
+import { parseLevelParams, ZONE_FADE, zoneStates } from '../../../core/lib';
+import { EYE_HEIGHT, ZoneRuntime, type MutableCamera, type ZoneRuntimeHooks } from './zone-runtime';
 
 /**
  * Characterization of the zone/world lifecycle — the behaviour the seam-crossing / zone-swap / warm-neighbour

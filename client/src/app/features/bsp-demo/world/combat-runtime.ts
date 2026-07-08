@@ -6,8 +6,18 @@ import {
   STEP_MAX,
 } from '../../../core/lib/bsp-engine';
 import {
+  ARMOR_ABSORB,
+  CHARGE_FLASH_DECAY_PER_S,
+  CHARGE_GLOW_PEAK,
+  ENEMY_FIRE_INTERVAL,
+  ENEMY_SPEED,
   fireWeapon,
+  HIT_FLASH_DURATION,
+  HURT_FX_DURATION,
   nextOwnedIndex,
+  PLAYER_MAX_HEALTH,
+  RESERVE_START,
+  SHOT_FX_DURATION,
   stepArsenal,
   type CombatEnemy,
   type CombatFrame,
@@ -24,25 +34,18 @@ import {
 import { WeaponView } from '../../../shared/game/weapon-view';
 import { ClimbView } from '../../../shared/game/climb-view';
 import { DoomHud } from '../../../shared/game/doom-hud';
-import { HURT_FX_DURATION, SHOT_FX_DURATION } from '../painters/overlay-painter';
-import { HIT_FLASH_DURATION } from '../sprites/sprite-builder';
 import { projectileWidth } from '../render/load-textures';
 import type { ViewState } from '../render/view-state';
 import type { FxPools } from './fx-pools';
 import type { WarmZone } from './zone-world';
 
-const ARMOR_ABSORB = 1 / 3; // fraction of an incoming hit armour soaks (the rest hits health) — DOOM green armour
-const RESERVE_START = 50; // starting reserve per ammo type at spawn (then clamped to each type's cap) — pickups top up
-const CHARGE_GLOW_PEAK = 0.7; // peak green charge-buildup tint at full BFG spin-up (mirrors the grid)
-const CHARGE_FLASH_DECAY_PER_S = 3; // how fast the green discharge flash fades
-const PLAYER_MAX_HEALTH = 100; // the player's full-health ceiling (the new-game / debug-heal cap)
 // DEBUG stress mode (toggle G): a load test for the MAIN-THREAD budget under a real fight — synthetic enemies
 // run a per-frame AI cost (line-of-sight castRay + collision chase) and fire projectiles, ramping in number.
+// (The gameplay-feel knobs the synthetic fight reuses — ENEMY_SPEED / ENEMY_FIRE_INTERVAL — live in the
+// central balance sheet; these STRESS_* dials are a dev harness, not player-facing feel, so they stay here.)
 const STRESS_MAX = 64; // peak synthetic enemies the ramp climbs to
 const STRESS_RAMP_STEP = 8; // enemies added per ramp tick
 const STRESS_RAMP_INTERVAL = 2; // seconds between ramp ticks
-const ENEMY_SPEED = 2; // chase speed (world units / second)
-const ENEMY_FIRE_INTERVAL = 1.5; // seconds between an enemy's shots while it can see the player
 const STRESS_SHOT_CAP = 150; // hard ceiling on synthetic shots in flight, so a runaway flux can't lock the loop
 
 /** One synthetic stress-mode enemy: a world pose + its fire cooldown. Read by the renderer as a billboard. */

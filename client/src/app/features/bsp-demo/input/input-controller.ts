@@ -1,5 +1,12 @@
 import { clampPitch } from '../../../core/lib/bsp-engine';
-import { movementDelta, type MovementDelta } from '../../../core/lib';
+import {
+  movementDelta,
+  MOUSE_SENS,
+  PITCH_DOWN_MAX,
+  PITCH_UP_MAX,
+  RESTART_DELAY,
+  type MovementDelta,
+} from '../../../core/lib';
 import type { MutableCamera } from '../world/zone-runtime';
 
 /** Keys we react to (lower-cased), covering both QWERTY (WASD) and AZERTY (ZQSD) + arrows. */
@@ -16,13 +23,6 @@ const CONTROLS = new Set([
   'arrowright',
 ]);
 
-const MOUSE_SENS = 0.0035; // radians per pixel of mouse motion (turning is mouse-only)
-const PITCH_UP_MAX = 0.85; // look-up limit (the camera pitch is a vertical y-shear, not a true rotation)
-const PITCH_DOWN_MAX = 2.0; // look-DOWN limit — much deeper than up (aim down at enemies below a platform); the renderer handles the off-screen horizon, so this can exceed 1.0 (walls stay vertical, as in any sheared-frustum tilt)
-
-/** Seconds after death/win before a click restarts (lets the end feedback settle). Exported: the game-over /
- *  win overlays gate their "click to restart" prompt on the same threshold. */
-export const RESTART_DELAY = 1.2;
 // Internal render resolution per display mode: 720p when the canvas is embedded in the ~960px viewport (a
 // near-free quality match, ~2× cheaper), full 1080p when it fills the screen in fullscreen (native, no
 // upscale blur). Each mode ALWAYS renders at 100% of its tier — sharpness is part of the product.

@@ -8,16 +8,19 @@ import {
   type CompiledMap,
   type Obstacle,
 } from '../../../core/lib/bsp-engine';
-import type { MovementDelta } from '../../../core/lib';
+import {
+  CLIMB_MAX,
+  CLIMB_PROBE_REACH,
+  CLIMB_VAULT_ADVANCE,
+  MANTLE_DURATION,
+  MOVE_SPEED,
+  type MovementDelta,
+} from '../../../core/lib';
 import { EYE_HEIGHT, type MutableCamera } from './zone-runtime';
 
-const MOVE_SPEED = 4; // world units / second
-// Auto-mantle: a ledge whose rise is in (STEP_MAX, CLIMB_MAX] is too tall to step but climbable — walking
-// into it hoists the player up over MANTLE_DURATION while gliding CLIMB_VAULT_ADVANCE forward over the lip.
-const CLIMB_MAX = 2.4; // tallest ledge you can vault (above this it stays a solid wall)
-const CLIMB_PROBE_REACH = 0.45; // cells ahead the climb probe samples — just past the radius, into the ledge cell
-const MANTLE_DURATION = 0.4; // seconds the hoist takes
-const CLIMB_VAULT_ADVANCE = 0.5; // cells the hoist glides the player forward, so it clears the lip and stands on top
+// Auto-mantle (tuning in core/lib/game/game-tuning.ts): a ledge whose rise is in (STEP_MAX, CLIMB_MAX] is too
+// tall to step but climbable — walking into it hoists the player up over MANTLE_DURATION while gliding
+// CLIMB_VAULT_ADVANCE forward over the lip.
 
 /** Non-null = mid auto-mantle: hoisting up over a too-tall-but-climbable ledge (movement/look frozen, gliding
  *  forward along the captured heading). `progress` 0→1 drives both the z-lerp and the hands overlay; the

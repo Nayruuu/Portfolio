@@ -4,7 +4,7 @@
 // the projectile stepper. bsp-engine `Target` is core → core (legal).
 
 import type { Target } from '../../bsp-engine';
-import { BARREL_HIT_RADIUS } from './combat-constants';
+import { BARREL_HIT_RADIUS } from '../game-tuning';
 import type { PlayerCombatFrame } from './player-combat-frame';
 
 /** One shootable this frame: its {@link Target} silhouette for the ray test, the world point an impact plays

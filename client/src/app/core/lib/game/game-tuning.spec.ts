@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { AIM_CONE, AMMO_START, ARC_DURATION, MELEE_CONE, MELEE_RANGE } from './combat-constants';
+import { AIM_CONE, AMMO_START, ARC_DURATION, MELEE_CONE, MELEE_RANGE } from './game-tuning';
 
-describe('combat constants', () => {
+describe('game tuning', () => {
   it('pins the shared combat tuning (a change here must be deliberate)', () => {
     expect(AMMO_START).toBe(50);
     expect(MELEE_RANGE).toBe(1.4);

@@ -15,7 +15,7 @@ import { type Camera, type Sprite } from '../../core/lib/bsp-engine';
 import { parseLevelParams, type LevelParams } from '../../core/lib';
 import { AssetLoader, type AssetLoaderHooks } from './boot/asset-loader';
 import type { WarmZone } from './world/zone-world';
-import { ZoneRuntime, EYE_HEIGHT, ZONE_FADE, type ZoneRuntimeHooks } from './world/zone-runtime';
+import { ZoneRuntime, EYE_HEIGHT, type ZoneRuntimeHooks } from './world/zone-runtime';
 import { CombatRuntime, type CombatRuntimeHooks } from './world/combat-runtime';
 import { PickupRuntime, type PickupRuntimeHooks } from './world/pickup-runtime';
 import { PlayerMotion, type PlayerMotionHooks } from './world/player-motion';
@@ -39,12 +39,15 @@ import {
   drawWinScreen,
   drawZoneFade,
 } from './painters/overlay-painter';
-import { ARC_DURATION, stepEnemies, stepEnemyShots, stepProjectiles } from '../../core/lib';
 import {
-  InputController,
+  ARC_DURATION,
   RESTART_DELAY,
-  type InputControllerHooks,
-} from './input/input-controller';
+  stepEnemies,
+  stepEnemyShots,
+  stepProjectiles,
+  ZONE_FADE,
+} from '../../core/lib';
+import { InputController, type InputControllerHooks } from './input/input-controller';
 
 const HUD_NATIVE_WIDTH = 2117; // x1.0 status-bar art width (biggest tier) — only the aspect source now
 const HUD_NATIVE_HEIGHT = 404; // …its height, so the backing store keeps the bar's 5.24:1 aspect

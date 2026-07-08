@@ -1,4 +1,10 @@
-import type { KeycardColor, ZoneSnapshot } from '../../../core/lib';
+import {
+  PICKUP_SPIN_MS,
+  VITAL_LARGE,
+  VITAL_SMALL,
+  type KeycardColor,
+  type ZoneSnapshot,
+} from '../../../core/lib';
 import { AMMO_MAX, WEAPON_IDS, requireWeapon, type WeaponId } from '../../../shared/game/weapons';
 import type { Level } from '../../../core/lib';
 
@@ -17,13 +23,6 @@ import type { Level } from '../../../core/lib';
 export type VitalKind = 'health' | 'armor';
 export type VitalSize = 'large' | 'small';
 
-/** Walk this close (world units) to collect any pickup — mirrors the grid's `PICKUP_RADIUS`. */
-export const PICKUP_RADIUS = 0.6;
-/** Grants: a SMALL vital tops up +25, a LARGE one +50; both cap at 100 (the grid's vitals tuning). */
-export const VITAL_SMALL = 25;
-export const VITAL_LARGE = 50;
-export const VITAL_MAX = 100;
-
 /** A vitals pickup's rotating-turntable billboard + grant. Health = a first-aid medkit (large) / desk plant
  *  (small); MENTAL = a desk figurine (large) / morale card (small) — the office-satire re-theme. */
 export interface VitalSpec {
@@ -38,10 +37,6 @@ export interface VitalSpec {
   readonly amount: number; // hp/mental granted on collect
   readonly spin: boolean; // animate the turntable (false = hold frame 0, a static billboard)
 }
-
-/** Shared spin cadence for EVERY rotating floor pickup — vitals AND ammo boxes — so they turn coherently
- *  (400 ms/frame ≈ 2.4–2.8 s per full turn depending on the strip's frame count). Single source of truth. */
-const PICKUP_SPIN_MS = 400;
 
 export const HEALTH_LARGE_SPEC: VitalSpec = {
   kind: 'health',
@@ -404,8 +399,6 @@ export const EXIT_SPEC: MarkerSpec = {
   worldHeight: 1.6,
   aspect: 240 / 320,
 };
-/** Walk this close to the exit sign to trigger the finish (it sits flush against the hall's far wall). */
-export const EXIT_RADIUS = 1.5;
 
 /** Every pickup/marker texture to decode (vitals + ammo strips + weapon pickups + the 3 badge turntables
  *  + exit) — each a single-row sheet. */

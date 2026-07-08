@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MutableCamera } from '../world/zone-runtime';
-import {
-  InputController,
-  RESTART_DELAY,
-  type InputCombat,
-  type InputControllerHooks,
-} from './input-controller';
+import { RESTART_DELAY } from '../../../core/lib';
+import { InputController, type InputCombat, type InputControllerHooks } from './input-controller';
 
 /**
  * Characterization of the INPUT boundary — the keyboard / mouse / wheel / resize routing the component wires to

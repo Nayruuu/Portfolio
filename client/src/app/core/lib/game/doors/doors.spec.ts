@@ -4,10 +4,8 @@ import {
   DOOR_TRIGGER_RADIUS,
   SLIDE_OPEN_SPEED,
   SLIDE_TRIGGER_RADIUS,
-  doorCeilZ,
-  stepDoorOpenness,
-  stepSlideOpenness,
-} from './index';
+} from '../game-tuning';
+import { doorCeilZ, stepDoorOpenness, stepSlideOpenness } from './index';
 
 describe('door tuning constants', () => {
   it('pins the authored door + slide tuning (a flip must ripple to a red test)', () => {

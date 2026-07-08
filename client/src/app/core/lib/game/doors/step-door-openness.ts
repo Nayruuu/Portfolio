@@ -1,4 +1,4 @@
-import { DOOR_OPEN_SPEED } from './door-constants';
+import { DOOR_OPEN_SPEED } from '../game-tuning';
 
 /**
  * Advance one animated door's openness for a frame. A player within trigger range who may open it (holds

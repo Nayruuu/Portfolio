@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildBsp } from '../../../core/lib/bsp-engine';
 import type { Camera, LineDef, MapSource, SideDef } from '../../../core/lib/bsp-engine';
-import type { Arc, CombatEnemy, EnemyCombat, Impact, Projectile } from '../../../core/lib';
+import {
+  HIT_FLASH_DURATION,
+  HURT_FX_DURATION,
+  SHOT_FX_DURATION,
+  type Arc,
+  type CombatEnemy,
+  type EnemyCombat,
+  type Impact,
+  type Projectile,
+} from '../../../core/lib';
 import { DoomHud } from '../../../shared/game/doom-hud';
 import { ARSENAL, ammoTypeMax } from '../../../shared/game/weapons';
-import { HURT_FX_DURATION, SHOT_FX_DURATION } from '../painters/overlay-painter';
-import { HIT_FLASH_DURATION } from '../sprites/sprite-builder';
 import type { WarmZone } from './zone-world';
 import { CombatRuntime, type CombatRuntimeHooks } from './combat-runtime';
 

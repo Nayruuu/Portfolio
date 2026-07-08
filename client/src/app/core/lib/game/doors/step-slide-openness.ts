@@ -1,4 +1,4 @@
-import { SLIDE_OPEN_SPEED } from './door-constants';
+import { SLIDE_OPEN_SPEED } from '../game-tuning';
 
 /**
  * Advance one sliding-glass panel's openness for a frame — proximity-driven and AUTO-CLOSING (a real

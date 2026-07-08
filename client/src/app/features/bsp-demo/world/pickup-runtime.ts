@@ -1,20 +1,21 @@
 import type { Camera, MutableSector } from '../../../core/lib/bsp-engine';
 import {
   DOOR_TRIGGER_RADIUS,
+  EXIT_RADIUS,
+  HINT_DURATION,
+  PICKUP_FX_DURATION,
+  PICKUP_RADIUS,
   SLIDE_TRIGGER_RADIUS,
   shouldAutoEquip,
   stepDoorOpenness,
   stepSlideOpenness,
   type KeycardColor,
 } from '../../../core/lib';
-import { EXIT_RADIUS, PICKUP_RADIUS, weaponAmmoDose, type WeaponPickupSpec } from './pickups';
+import { weaponAmmoDose, type WeaponPickupSpec } from './pickups';
 import { ARSENAL, ammoTypeMax } from '../../../shared/game/weapons';
-import { PICKUP_FX_DURATION } from '../painters/overlay-painter';
 import type { DoomHud } from '../../../shared/game/doom-hud';
 import type { Door, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
 
-/** Seconds a transient objective hint lingers (e.g. "badge requis" flashed at a locked door). */
-const HINT_DURATION = 1.8;
 /** When true, ammo boxes spin but are never collected (art-inspection mode) — mirrors the old component flag. */
 const INSPECT_PICKUPS: boolean = false;
 
