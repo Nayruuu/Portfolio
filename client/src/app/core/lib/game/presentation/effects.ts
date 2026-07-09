@@ -110,6 +110,26 @@ export function projectileEffect(kind: string): ProjectileEffect | undefined {
   return PROJECTILE_EFFECTS.get(kind);
 }
 
+const PROJECTILE_SCALE = 0.42; // the grid's PROJECTILE_EFFECT_SCALE — reused so the BSP matches the grid
+
+/** A projectile kind's world WIDTH in cells (height = PROJECTILE_SCALE × size, width follows the art aspect);
+ *  `undefined` for an unknown kind. */
+export function projectileWidth(kind: string): number | undefined {
+  const effect = projectileEffect(kind);
+
+  if (effect === undefined) {
+    return undefined;
+  }
+
+  return PROJECTILE_SCALE * effect.size * (effect.width / effect.height);
+}
+
+/** A projectile kind's world width, or `fallback` for an unknown kind — the total-lookup form callers reach
+ *  for when they need a concrete number (a missing kind can't leave the billboard un-sized). */
+export function projectileWidthOr(kind: string, fallback: number): number {
+  return projectileWidth(kind) ?? fallback;
+}
+
 /** The impact animation for a kind (`impact_metal` … `explosion_bfg`), or `undefined` for an unknown kind. */
 export function impactEffect(kind: string): ImpactEffect | undefined {
   return IMPACT_EFFECTS.get(kind);

@@ -4,25 +4,23 @@ import {
   movePlayer,
   PLAYER_RADIUS,
   STEP_MAX,
-} from '../../../core/lib/bsp-engine';
+  type Camera,
+} from '../../bsp-engine';
 import {
   ARMOR_ABSORB,
   CHARGE_FLASH_DECAY_PER_S,
   CHARGE_GLOW_PEAK,
   ENEMY_FIRE_INTERVAL,
   ENEMY_SPEED,
-  fireWeapon,
   HIT_FLASH_DURATION,
   HURT_FX_DURATION,
-  nextOwnedIndex,
   PLAYER_MAX_HEALTH,
   RESERVE_START,
   SHOT_FX_DURATION,
-  stepArsenal,
-  type CombatEnemy,
-  type CombatFrame,
-  type PlayerCombatFrame,
-} from '../../../core/lib';
+} from '../game-tuning';
+import { fireWeapon, type CombatFrame, type PlayerCombatFrame } from '../combat';
+import type { CombatEnemy } from '../enemy';
+import { nextOwnedIndex, stepArsenal } from '../weapons';
 import {
   AMMO_MAX,
   ARSENAL,
@@ -30,14 +28,20 @@ import {
   reloadViewConfig,
   weaponCombat,
   weaponViewConfig,
-} from '../../../core/lib/game/presentation/weapons';
-import { WeaponView } from '../../../core/lib/game/presentation/weapon-view';
-import { ClimbView } from '../../../core/lib/game/presentation/climb-view';
-import { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
-import { projectileWidth } from '../render/load-textures';
-import type { ViewState } from '../render/view-state';
+} from '../presentation/weapons';
+import { WeaponView } from '../presentation/weapon-view';
+import { ClimbView } from '../presentation/climb-view';
+import { DoomHud } from '../presentation/doom-hud';
+import { projectileWidth, projectileWidthOr } from '../presentation/effects';
 import type { FxPools } from './fx-pools';
 import type { WarmZone } from './zone-world';
+
+/** The read-only view slice combat needs: the shared camera plus the viewport geometry (for the aim →
+ *  vertical-slope projection). The feature's `ViewState` satisfies it structurally. */
+export interface CombatViewState {
+  readonly camera: Camera;
+  readonly config: { readonly width: number; readonly height: number; readonly fov: number };
+}
 
 // DEBUG stress harness (toggle G): dev-only load-test dials, kept here rather than in the player-facing
 // balance sheet. The gameplay-feel knobs it reuses (ENEMY_SPEED / ENEMY_FIRE_INTERVAL) live centrally.
@@ -54,7 +58,7 @@ export interface StressEnemy {
 }
 
 export interface CombatRuntimeHooks {
-  readonly view: ViewState;
+  readonly view: CombatViewState;
   readonly fx: FxPools;
   readonly hud: DoomHud;
   world(): WarmZone;
@@ -474,7 +478,9 @@ export class CombatRuntime {
     if (this.edge && !(mode === 'charge' && this.view.swinging())) {
       if (loaded) {
         this.view.tryTrigger();
-      } else if (combat.magSize > 0) {
+      } else {
+        // `!loaded` implies a non-empty-capacity weapon (a magazine-less melee is always `loaded`), so this
+        // is the empty-chamber dry-click — no `magSize > 0` re-test needed.
         this.view.dryFire();
       }
     }
@@ -533,7 +539,7 @@ export class CombatRuntime {
     if (projectiles.length > STRESS_SHOT_CAP) {
       return;
     }
-    const width = projectileWidth('nail') ?? 0.45;
+    const width = projectileWidthOr('nail', 0.45);
 
     projectiles.push({
       x,

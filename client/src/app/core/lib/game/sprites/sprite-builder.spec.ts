@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Sprite } from '../../../core/lib/bsp-engine';
+import type { Sprite } from '../../bsp-engine';
+import { ENEMY_RECOIL, HIT_FLASH_DURATION } from '../game-tuning';
 import { EXIT_SPEC } from '../world/pickups';
 import type { WarmZone } from '../world/zone-world';
 import type { Foe } from '../world/enemy-runtime';
@@ -102,6 +103,93 @@ describe('buildWorldSprites', () => {
     const sprites = buildWorldSprites({ world, viewX: 0, viewY: 0 });
 
     expect(sprites.some((s) => s.tex === 'EXIT_MARKER')).toBe(false);
+  });
+});
+
+function statefulFoe(over: Partial<Record<string, unknown>>): Foe {
+  return {
+    x: 3,
+    y: 3,
+    z: 0,
+    dying: false,
+    deathTime: 0,
+    hitFlash: 0,
+    windup: 0,
+    walkDist: 0,
+    spec: {
+      texName: 'WALK',
+      painTexName: 'PAIN',
+      attackTexName: 'ATTACK',
+      deathTexName: 'DEATH',
+      worldHeight: 1.7,
+      aspect: 0.5,
+      attackAspect: 0.8,
+      walkStepRate: 1,
+      walkCols: 4,
+      walkRows: 1,
+      windup: 1,
+      attackFrames: 3,
+      attackFps: 4,
+      deathFrames: 5,
+      deathFps: 10,
+    },
+    ...over,
+  } as unknown as Foe;
+}
+
+describe('enemySprite animation states', () => {
+  it('draws the death sheet (no recoil flash) for a dying foe', () => {
+    const [s] = buildWorldSprites({
+      world: {
+        ...fixtureWorld(),
+        enemies: [statefulFoe({ dying: true, deathTime: 0.25, hitFlash: 5 })],
+      },
+      viewX: 0,
+      viewY: 0,
+    }).slice(1, 2);
+
+    expect(s.tex).toBe('DEATH');
+    expect(s.cols).toBe(5);
+    expect(s.flash).toBe(0); // a dying enemy carries no flash → no z recoil
+    expect(s.z).toBe(0);
+  });
+
+  it('draws the attack sheet with its own aspect during wind-up', () => {
+    const [s] = buildWorldSprites({
+      world: { ...fixtureWorld(), enemies: [statefulFoe({ windup: 0.5 })] },
+      viewX: 0,
+      viewY: 0,
+    }).slice(1, 2);
+
+    expect(s.tex).toBe('ATTACK');
+    expect(s.cols).toBe(3);
+    expect(s.width).toBeCloseTo(1.7 * 0.8); // worldHeight × attackAspect
+  });
+
+  it('falls back to the walk aspect when the attack cell declares none', () => {
+    const foe = statefulFoe({ windup: 0.5 });
+
+    (foe.spec as unknown as { attackAspect?: number }).attackAspect = undefined;
+
+    const [s] = buildWorldSprites({
+      world: { ...fixtureWorld(), enemies: [foe] },
+      viewX: 0,
+      viewY: 0,
+    }).slice(1, 2);
+
+    expect(s.width).toBeCloseTo(1.7 * 0.5); // worldHeight × walk aspect
+  });
+
+  it('draws the pain frame and applies the hit-flash recoil for a flashing foe', () => {
+    const [s] = buildWorldSprites({
+      world: { ...fixtureWorld(), enemies: [statefulFoe({ hitFlash: HIT_FLASH_DURATION })] },
+      viewX: 0,
+      viewY: 0,
+    }).slice(1, 2);
+
+    expect(s.tex).toBe('PAIN');
+    expect(s.flash).toBe(1);
+    expect(s.z).toBeCloseTo(ENEMY_RECOIL); // z shifted by flash × ENEMY_RECOIL
   });
 });
 

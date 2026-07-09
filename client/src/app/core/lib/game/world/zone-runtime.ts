@@ -12,29 +12,19 @@ import {
   type MutableSector,
   type Sprite,
   type ZoneNeighbor,
-} from '../../../core/lib/bsp-engine';
-import {
-  doorCeilZ,
-  LEVELS,
-  resolveZone,
-  stepEnemies,
-  stepEnemyShots,
-  ZONE_FADE,
-  zoneStates,
-  type CombatFrame,
-  type Level,
-  type LevelParams,
-  type ZoneLoad,
-  type ZoneSnapshot,
-} from '../../../core/lib';
+} from '../../bsp-engine';
+import { doorCeilZ } from '../doors';
+import { LEVELS, resolveZone, type LevelParams, type ZoneLoad } from '../registry';
+import { stepEnemies, stepEnemyShots } from '../enemy';
+import { ZONE_FADE } from '../game-tuning';
+import { zoneStates, type ZoneSnapshot } from '../zone';
+import type { CombatFrame } from '../combat';
+import type { Level } from '../level';
 import { buildPickups, takenFlags } from './pickups';
 import type { Foe } from './enemy-runtime';
 import type { Door, SeamEdge, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
 
 export const EYE_HEIGHT = 1.4;
-
-// Flip to strip every zone's foes for an art-inspection capture.
-const SPAWN_ENEMIES = true;
 
 function emptyPickups(): Pick<
   WarmZone,
@@ -69,6 +59,7 @@ export class ZoneRuntime {
   private slidingDoorIndex: SlidingDoor[] = [];
   private arrivalLocked = false;
   private atlasesDecoded = false;
+  private spawnEnemies = true; // false = strip every zone's foes for an art-inspection capture
   private pendingTransition: {
     readonly to: string;
     readonly entry: string;
@@ -151,6 +142,10 @@ export class ZoneRuntime {
     this.refreshWarm();
   }
 
+  public setSpawnEnemies(on: boolean): void {
+    this.spawnEnemies = on;
+  }
+
   public markAtlasesReady(): void {
     this.atlasesDecoded = true;
     const world = this.activeWorld;
@@ -223,11 +218,9 @@ export class ZoneRuntime {
     for (const card of warm.keycards) {
       card.age += dt;
     }
-    const seam = this.seamEdges.find((edge) => edge.zone === warm.key);
-
-    if (seam === undefined) {
-      return; // defensive — warm zones are seam-derived
-    }
+    // A warm neighbour is ALWAYS seam-derived (`refreshWarm`/`swapZones` build it FROM a seam edge, and a
+    // crossing re-derives the reverse seam), so its key is guaranteed to index one — assert rather than guard.
+    const seam = this.seamEdges.find((edge) => edge.zone === warm.key)!;
     const camera = this.hooks.camera;
     const frame: CombatFrame = {
       map: warm.map,
@@ -271,6 +264,7 @@ export class ZoneRuntime {
 
     zoneStates.snapshot(this.activeWorld.key, this.snapshotWorld(this.activeWorld));
     const outgoing = this.activeWorld; // the old zone STAYS ALIVE — it becomes the warm neighbor
+    // Adopt the warm neighbour when it ALREADY is the target (the common back-and-forth), else build fresh.
     const incoming =
       this.warmNeighbor !== null && this.warmNeighbor.key === seam.zone
         ? this.warmNeighbor
@@ -449,7 +443,7 @@ export class ZoneRuntime {
   }
 
   private buildEnemies(level: Level, map: CompiledMap, snap: ZoneSnapshot | null): Foe[] {
-    if (!SPAWN_ENEMIES) {
+    if (!this.spawnEnemies) {
       return [];
     }
 

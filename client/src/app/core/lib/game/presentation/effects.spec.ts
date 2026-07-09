@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { impactEffect, normalizeWeaponEffect, projectileEffect, weaponEffects } from './effects';
+import {
+  impactEffect,
+  normalizeWeaponEffect,
+  projectileEffect,
+  projectileWidth,
+  projectileWidthOr,
+  weaponEffects,
+} from './effects';
 
 describe('effects bridge', () => {
   it('maps a projectile kind to its served sprite + source dimensions', () => {
@@ -13,6 +20,20 @@ describe('effects bridge', () => {
     });
     expect(projectileEffect('bfg')?.sprite).toBe('/game/weapons/bfg/effects/proj_bfg.webp');
     expect(projectileEffect('nope')).toBeUndefined(); // an unknown kind → no sprite
+  });
+
+  it('derives a projectile kind world width (scale × size × art aspect), undefined for an unknown kind', () => {
+    const staple = projectileEffect('staple')!;
+
+    expect(projectileWidth('staple')).toBeCloseTo(
+      0.42 * staple.size * (staple.width / staple.height),
+    );
+    expect(projectileWidth('nope')).toBeUndefined(); // an unknown kind → no width
+  });
+
+  it('sizes a known projectile kind, or falls back for an unknown one (the total-lookup form)', () => {
+    expect(projectileWidthOr('staple', 0.45)).toBe(projectileWidth('staple'));
+    expect(projectileWidthOr('nope', 0.45)).toBe(0.45); // unknown kind → the caller's fallback
   });
 
   it('maps an impact kind to its served strip + frame layout', () => {

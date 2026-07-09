@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildBsp } from '../../../core/lib/bsp-engine';
-import type { MapSource, SideDef } from '../../../core/lib/bsp-engine';
-import { movementDelta } from '../../../core/lib';
+import { buildBsp } from '../../bsp-engine';
+import type { MapSource, SideDef } from '../../bsp-engine';
+import { movementDelta } from '../controls';
 import { EYE_HEIGHT, type MutableCamera } from './zone-runtime';
 import { PlayerMotion, type MotionWorld, type PlayerMotionHooks } from './player-motion';
 
@@ -192,6 +192,18 @@ describe('PlayerMotion.stepMantle', () => {
 
     expect(camera).toEqual(before);
     expect(motion.isMantling()).toBe(false);
+  });
+
+  it('reset() aborts an armed mantle', () => {
+    const { motion } = harness({ camera: cameraAt(5.5, 4), world: motionWorld(1.5), forward: 1 });
+
+    motion.stepPlayerMotion(0.1);
+    expect(motion.isMantling()).toBe(true);
+
+    motion.reset();
+
+    expect(motion.isMantling()).toBe(false);
+    expect(motion.mantle).toBeNull();
   });
 });
 

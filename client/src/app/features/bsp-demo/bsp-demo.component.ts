@@ -19,12 +19,16 @@ import {
   type LevelParams,
 } from '../../core/lib';
 import { AssetLoader, type AssetLoaderHooks } from './boot/asset-loader';
-import type { WarmZone } from './world/zone-world';
-import { ZoneRuntime, EYE_HEIGHT, type ZoneRuntimeHooks } from './world/zone-runtime';
-import { CombatRuntime, type CombatRuntimeHooks } from './world/combat-runtime';
-import { PickupRuntime, type PickupRuntimeHooks } from './world/pickup-runtime';
-import { PlayerMotion, type PlayerMotionHooks } from './world/player-motion';
-import type { FxPools } from './world/fx-pools';
+import type { WarmZone } from '../../core/lib/game/world/zone-world';
+import {
+  ZoneRuntime,
+  EYE_HEIGHT,
+  type ZoneRuntimeHooks,
+} from '../../core/lib/game/world/zone-runtime';
+import { CombatRuntime, type CombatRuntimeHooks } from '../../core/lib/game/world/combat-runtime';
+import { PickupRuntime, type PickupRuntimeHooks } from '../../core/lib/game/world/pickup-runtime';
+import { PlayerMotion, type PlayerMotionHooks } from '../../core/lib/game/world/player-motion';
+import type { FxPools } from '../../core/lib/game/world/fx-pools';
 import { RenderHost, type DisplaySnapshot, type RenderRequest } from './render/render-host';
 import type { ViewState } from './render/view-state';
 import { DoomHud } from '../../core/lib/game/presentation/doom-hud';
@@ -33,7 +37,7 @@ import { IconComponent } from '../../shared/icon/icon.component';
 import { WorldFxPainter } from './painters/world-fx-painter';
 import { HudPainter } from './painters/hud-painter';
 import { WeaponPainter } from './painters/weapon-painter';
-import { buildLiveSprites, buildWarmSprites } from './sprites/sprite-builder';
+import { buildLiveSprites, buildWarmSprites } from '../../core/lib/game/sprites/sprite-builder';
 import {
   drawChargeFx,
   drawCrosshair,

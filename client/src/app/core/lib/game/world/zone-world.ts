@@ -1,6 +1,8 @@
-import type { Barrel, EnemyShot, KeycardColor } from '../../../core/lib';
-import type { CompiledMap, MapSource, MutableSector, Obstacle } from '../../../core/lib/bsp-engine';
-import type { Level } from '../../../core/lib';
+import type { Barrel } from '../combat';
+import type { EnemyShot } from '../enemy';
+import type { KeycardColor } from '../types';
+import type { CompiledMap, MapSource, MutableSector, Obstacle } from '../../bsp-engine';
+import type { Level } from '../level';
 import type { Foe } from './enemy-runtime';
 import type { AmmoBox, Keycard, Marker, Vital, WeaponPickup } from './pickups';
 

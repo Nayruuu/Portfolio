@@ -9,9 +9,7 @@ import {
   parseVox,
   type Texture,
 } from '../../../core/lib/bsp-engine';
-import { projectileEffect } from '../../../core/lib/game/presentation/effects';
-import { ENEMY_SPECS } from '../../../core/lib';
-import { PICKUP_TEXTURE_JOBS } from '../world/pickups';
+import { ENEMY_SPECS, PICKUP_TEXTURE_JOBS } from '../../../core/lib';
 
 function plantPlaceholder(): Texture {
   const size = 64;
@@ -436,20 +434,6 @@ export function buildAtlasJobs(): AtlasJob[] {
     ]),
     ...PICKUP_TEXTURE_JOBS.map((job) => ({ name: job.name, url: job.url, rows: 1 })),
   ];
-}
-
-const PROJECTILE_SCALE = 0.42; // the grid's PROJECTILE_EFFECT_SCALE — reused so the BSP matches the grid
-
-/** A projectile kind's world WIDTH in cells (height = PROJECTILE_SCALE × size, width follows the art aspect);
- *  `undefined` for an unknown kind. */
-export function projectileWidth(kind: string): number | undefined {
-  const effect = projectileEffect(kind);
-
-  if (effect === undefined) {
-    return undefined;
-  }
-
-  return PROJECTILE_SCALE * effect.size * (effect.width / effect.height);
 }
 
 /** Props whose rotation sheets are CARVED into voxel grids at load (see `voxel-carve.ts`); a failed carve keeps

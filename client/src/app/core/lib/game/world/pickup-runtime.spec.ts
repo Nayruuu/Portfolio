@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Camera } from '../../../core/lib/bsp-engine';
-import { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
-import { ARSENAL } from '../../../core/lib/game/presentation/weapons';
-import { EXIT_RADIUS, PICKUP_FX_DURATION } from '../../../core/lib';
+import type { Camera } from '../../bsp-engine';
+import { DoomHud } from '../presentation/doom-hud';
+import { ARSENAL } from '../presentation/weapons';
+import { EXIT_RADIUS, PICKUP_FX_DURATION } from '../game-tuning';
 import {
   AMMO_BOX_SPECS,
   EXIT_SPEC,
@@ -15,7 +15,7 @@ import {
   type Vital,
   type WeaponPickup,
 } from './pickups';
-import type { MutableSector } from '../../../core/lib/bsp-engine';
+import type { MutableSector } from '../../bsp-engine';
 import type { Door, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
 import { CombatRuntime } from './combat-runtime';
 import { PickupRuntime } from './pickup-runtime';
@@ -39,7 +39,7 @@ function keycard(x: number, y: number, color: 'blue' | 'yellow' | 'red') {
   };
 }
 
-function weaponPickup(x: number, y: number, id: 'shotgun') {
+function weaponPickup(x: number, y: number, id: 'shotgun' | 'chainsaw') {
   return {
     x,
     y,
@@ -180,6 +180,17 @@ describe('PickupRuntime — ammo boxes', () => {
     expect(pr.pickupFx).toBe(PICKUP_FX_DURATION);
   });
 
+  it('spins but never collects an ammo box in art-inspection mode', () => {
+    const { pr, combat, world } = setup({ ammoBoxes: [ammoBox(0, 0)] });
+
+    pr.setInspectMode(true);
+    pr.stepPickups(0.1);
+
+    expect(combat.reserveOf('bullets')).toBe(0);
+    expect(world.ammoBoxes).toHaveLength(1);
+    expect(world.ammoBoxes[0].age).toBeCloseTo(0.1, 5);
+  });
+
   it('keeps the box when the reserve is already full', () => {
     const { pr, combat, world } = setup({ ammoBoxes: [ammoBox(0, 0)] });
 
@@ -217,6 +228,25 @@ describe('PickupRuntime — weapon pickups', () => {
     expect(world.weaponPickups).toHaveLength(0);
   });
 
+  it('grants a melee weapon without dosing any ammo (null ammo type)', () => {
+    const { pr, combat, world } = setup({ weaponPickups: [weaponPickup(0, 0, 'chainsaw')] });
+
+    pr.stepPickups(0.1);
+
+    expect(combat.owns('chainsaw')).toBe(true);
+    expect(world.weaponPickups).toHaveLength(0);
+  });
+
+  it('leaves an out-of-reach weapon pickup in place, still spinning', () => {
+    const { pr, combat, world } = setup({ weaponPickups: [weaponPickup(5, 5, 'shotgun')] });
+
+    pr.stepPickups(0.1);
+
+    expect(combat.owns('shotgun')).toBe(false);
+    expect(world.weaponPickups).toHaveLength(1);
+    expect(world.weaponPickups[0].age).toBeCloseTo(0.1, 5);
+  });
+
   it('does NOT re-equip on a repeat pickup (only tops the reserve up)', () => {
     const { pr, combat } = setup({ weaponPickups: [weaponPickup(0, 0, 'shotgun')] });
 
@@ -243,6 +273,16 @@ describe('PickupRuntime — the objective', () => {
     expect(pr.pickupFx).toBe(PICKUP_FX_DURATION);
   });
 
+  it('leaves an out-of-reach badge on the floor, still spinning', () => {
+    const { pr, world } = setup({ keycards: [keycard(5, 5, 'blue')] });
+
+    pr.stepObjective(0.1);
+
+    expect(world.keycards).toHaveLength(1);
+    expect(world.keycards[0].age).toBeCloseTo(0.1, 5);
+    expect(pr.pickupFx).toBe(0);
+  });
+
   it('begins the zone transition and drops the trigger on walking into a graph exit', () => {
     const { pr, combat, zone } = setup();
     const endFire = vi.spyOn(combat, 'endFire');
@@ -252,6 +292,17 @@ describe('PickupRuntime — the objective', () => {
 
     expect(zone.beginTransition).toHaveBeenCalledWith('m2', 'lobby');
     expect(endFire).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the graph-exit scan entirely while a zone transition is already in flight', () => {
+    const { pr, zone } = setup();
+
+    zone.transition = {}; // a transition is mid-flight → the exit-scan block is skipped
+    zone.exits = [{ x: 0, y: 0, z: 0, to: 'm2', entry: 'lobby' }];
+
+    pr.stepObjective(0.1);
+
+    expect(zone.beginTransition).not.toHaveBeenCalled();
   });
 
   it('holds the arrival guard until the player leaves the exit radius', () => {

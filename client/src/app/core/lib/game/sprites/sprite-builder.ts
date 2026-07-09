@@ -1,7 +1,8 @@
 // The produced array's contents + ORDER are load-bearing (a changed list is a visual diff), so build order,
 // culling, and atlas gating mirror the render contract exactly.
-import { orientSprite, type Sprite } from '../../../core/lib/bsp-engine';
-import { ENEMY_RECOIL, HIT_FLASH_DURATION, type EnemyShot } from '../../../core/lib';
+import { orientSprite, type Sprite } from '../../bsp-engine';
+import { ENEMY_RECOIL, HIT_FLASH_DURATION } from '../game-tuning';
+import type { EnemyShot } from '../enemy';
 import type { Foe } from '../world/enemy-runtime';
 import type { WarmZone, ZoneExit } from '../world/zone-world';
 import { EXIT_SPEC, pickupFrame, type Marker } from '../world/pickups';

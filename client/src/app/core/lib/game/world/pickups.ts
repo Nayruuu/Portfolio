@@ -1,17 +1,8 @@
-import {
-  PICKUP_SPIN_MS,
-  VITAL_LARGE,
-  VITAL_SMALL,
-  type KeycardColor,
-  type ZoneSnapshot,
-} from '../../../core/lib';
-import {
-  AMMO_MAX,
-  WEAPON_IDS,
-  requireWeapon,
-  type WeaponId,
-} from '../../../core/lib/game/presentation/weapons';
-import type { Level } from '../../../core/lib';
+import { PICKUP_SPIN_MS, VITAL_LARGE, VITAL_SMALL } from '../game-tuning';
+import type { KeycardColor } from '../types';
+import type { ZoneSnapshot } from '../zone';
+import { ammoTypeMax, WEAPON_IDS, requireWeapon, type WeaponId } from '../presentation/weapons';
+import type { Level } from '../level';
 
 // 'armor' is shown as MENTAL in the HUD.
 export type VitalKind = 'health' | 'armor';
@@ -126,7 +117,7 @@ function box(
     aspect: cellW / cellH,
     ammoType,
     amount,
-    max: AMMO_MAX[ammoType] ?? 0,
+    max: ammoTypeMax(ammoType),
   };
 }
 

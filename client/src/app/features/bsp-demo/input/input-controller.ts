@@ -7,7 +7,7 @@ import {
   RESTART_DELAY,
   type MovementDelta,
 } from '../../../core/lib';
-import type { MutableCamera } from '../world/zone-runtime';
+import type { MutableCamera } from '../../../core/lib/game/world/zone-runtime';
 
 const CONTROLS = new Set([
   'w',

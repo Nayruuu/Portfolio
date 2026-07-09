@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildAtlasJobs } from './load-textures';
 import { ENEMY_SPECS } from '../../../core/lib';
-import { PICKUP_TEXTURE_JOBS } from '../world/pickups';
+import { PICKUP_TEXTURE_JOBS } from '../../../core/lib/game/world/pickups';
 
 describe('buildAtlasJobs', () => {
   it('emits every enemy atlas (walk/death/attack/pain + a thrower strip) then every pickup sheet, in order', () => {

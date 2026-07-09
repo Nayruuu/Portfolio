@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { AMMO_MAX, WEAPON_IDS, requireWeapon } from '../../../core/lib/game/presentation/weapons';
-import type { ZoneSnapshot, Level } from '../../../core/lib';
-import { ACCUEIL } from '../../../core/lib';
+import { AMMO_MAX, WEAPON_IDS, requireWeapon, type WeaponId } from '../presentation/weapons';
+import type { ZoneSnapshot } from '../zone';
+import type { Level } from '../level';
+import { ACCUEIL } from '../levels';
 import {
   AMMO_BOX_SPECS,
   buildPickups,
@@ -98,6 +99,12 @@ describe('pickups registry', () => {
       WEAPON_PICKUP_SPECS.find((spec) => spec.id === 'pistol'),
     );
     expect(weaponPickupSpec('chainsaw').ammoType).toBeNull();
+  });
+
+  it('throws for a weapon id that has no pickup spec', () => {
+    expect(() => weaponPickupSpec('nonesuch' as WeaponId)).toThrow(
+      /no spec for weapon id "nonesuch"/,
+    );
   });
 
   it('grants exactly ONE standard ammo box of the weapon’s type as the pickup dose (0 for melee)', () => {

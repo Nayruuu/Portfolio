@@ -1,18 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildBsp } from '../../../core/lib/bsp-engine';
-import type { Camera, LineDef, MapSource, SideDef } from '../../../core/lib/bsp-engine';
-import {
-  HIT_FLASH_DURATION,
-  HURT_FX_DURATION,
-  SHOT_FX_DURATION,
-  type Arc,
-  type CombatEnemy,
-  type EnemyCombat,
-  type Impact,
-  type Projectile,
-} from '../../../core/lib';
-import { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
-import { ARSENAL, ammoTypeMax } from '../../../core/lib/game/presentation/weapons';
+import { buildBsp } from '../../bsp-engine';
+import type { Camera, LineDef, MapSource, SideDef } from '../../bsp-engine';
+import { HIT_FLASH_DURATION, HURT_FX_DURATION, SHOT_FX_DURATION } from '../game-tuning';
+import type { Arc, Impact, Projectile } from '../combat';
+import type { CombatEnemy, EnemyCombat } from '../enemy';
+import { DoomHud } from '../presentation/doom-hud';
+import { ARSENAL, ammoTypeMax } from '../presentation/weapons';
 import type { WarmZone } from './zone-world';
 import { CombatRuntime, type CombatRuntimeHooks } from './combat-runtime';
 
@@ -439,6 +432,62 @@ describe('CombatRuntime — the debug stress load', () => {
     expect(cr.aiMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('treats a synthetic enemy sitting on the camera as a unit-distance approach (no divide-by-zero)', () => {
+    // The camera sits ON the mocked spawn point (1 + 0.5 × 13, 1 + 0.5 × 10) → dx = dy = 0 → the `|| 1` guard.
+    const camera = { x: 7.5, y: 6, angle: 0, z: 1.4, pitch: 0 };
+    const world = makeWorld();
+    const cr = new CombatRuntime({
+      view: { camera, config: { width: 1280, height: 720, fov: Math.PI / 2 } },
+      fx: { projectiles: [], impacts: [], arcs: [] },
+      hud: new DoomHud(),
+      world: () => world,
+    });
+
+    cr.toggleStress();
+    cr.stepStress(1);
+
+    expect(cr.stressEnemyCount).toBe(8);
+  });
+
+  it('holds a synthetic enemy’s fire while it is still on cooldown', () => {
+    const { cr, fx } = setup();
+
+    cr.toggleStress();
+    cr.stepStress(0.001); // enemies spawn + approach, but the cooldown never reaches zero this frame
+
+    expect(cr.stressEnemyCount).toBe(8);
+    expect(fx.projectiles).toHaveLength(0);
+  });
+
+  it('leaves a synthetic enemy idle when a wall blocks its line to the player', () => {
+    const camera = { x: 100, y: 100, angle: 0, z: 1.4, pitch: 0 }; // OUTSIDE the 0..60 room
+    const fx = { projectiles: [] as Projectile[], impacts: [] as Impact[], arcs: [] as Arc[] };
+    const cr = new CombatRuntime({
+      view: { camera, config: { width: 1280, height: 720, fov: Math.PI / 2 } },
+      fx,
+      hud: new DoomHud(),
+      world: () => makeWorld(),
+    });
+
+    cr.toggleStress();
+    cr.stepStress(1); // the ray to the out-of-room player hits a wall → no approach, no fire
+
+    expect(cr.stressEnemyCount).toBe(8);
+    expect(fx.projectiles).toHaveLength(0);
+  });
+
+  it('stops queueing synthetic shots once the projectile pool is saturated', () => {
+    const { cr, fx } = setup();
+
+    for (let i = 0; i < 200; i++) {
+      fx.projectiles.push({ kind: 'nail' } as unknown as Projectile);
+    }
+    cr.toggleStress();
+    cr.stepStress(3); // the enemies want to fire, but the cap short-circuits fireEnemyShot
+
+    expect(fx.projectiles).toHaveLength(200);
+  });
+
   it('is inert until toggled and clears the roster when toggled back off', () => {
     const { cr, fx } = setup();
 
@@ -453,6 +502,107 @@ describe('CombatRuntime — the debug stress load', () => {
     cr.toggleStress();
     expect(cr.stressEnemyCount).toBe(0);
     expect(cr.aiMs).toBe(0);
+  });
+});
+
+describe('CombatRuntime — the read-only getters', () => {
+  it('exposes the reserve map, climb view, won clock, glow feedback and the empty stress roster', () => {
+    const { cr } = setup();
+
+    cr.seedReserves();
+
+    expect(cr.reserve.get('bullets')).toBe(cr.reserveOf('bullets'));
+    expect(cr.climbView).toBeDefined();
+    expect(cr.chargeGlow).toBe(0);
+    expect(cr.dischargeFlash).toBe(0);
+    expect(cr.stressEnemies).toEqual([]);
+
+    expect(cr.wonClock).toBe(0);
+    cr.tickWonClock(0.4);
+    expect(cr.wonClock).toBeCloseTo(0.4, 5);
+  });
+
+  it('reads a zero vertical slope when the camera carries no pitch', () => {
+    const camera = { x: 30, y: 30, angle: 0, z: 1.4 }; // pitch omitted → the `?? 0` fallback
+    const world = makeWorld({ enemies: [makeEnemy()] });
+    const cr = new CombatRuntime({
+      view: { camera, config: { width: 1280, height: 720, fov: Math.PI / 2 } },
+      fx: { projectiles: [], impacts: [], arcs: [] },
+      hud: new DoomHud(),
+      world: () => world,
+    });
+
+    expect(cr.playerCombatFrame().vSlope).toBe(0);
+  });
+});
+
+describe('CombatRuntime — the weapon fire modes', () => {
+  const ROCKET = ARSENAL.findIndex((weapon) => weapon.id === 'rocket');
+  const BFG = ARSENAL.findIndex((weapon) => weapon.id === 'bfg');
+
+  it('swings the default melee (semi, magazine-less) on a fire edge, spending no reserve', () => {
+    const { cr } = setup();
+
+    cr.beginFire();
+    cr.stepWeapon(0.2, false); // fist: fireMode undefined → 'semi'; magSize 0 → loaded; ammoType null → 0 reserve
+
+    expect(cr.weaponIndex).toBe(0);
+    expect(cr.shotFx).toBe(SHOT_FX_DURATION);
+  });
+
+  it('dry-clicks a magazine SEMI weapon on an empty chamber', () => {
+    const { cr } = setup();
+
+    cr.grantWeapon('rocket');
+    cr.selectWeapon(ROCKET);
+    cr.beginFire();
+    cr.stepWeapon(0.5, false); // magSize 1 → the single round fires
+    expect(cr.mag[ROCKET]).toBe(0);
+
+    const dryFire = vi.spyOn(cr.weaponView, 'dryFire');
+
+    cr.beginFire();
+    cr.stepWeapon(0.5, false); // empty chamber, magSize > 0 → dry-click
+
+    expect(dryFire).toHaveBeenCalled();
+    expect(cr.mag[ROCKET]).toBe(0);
+  });
+
+  it('dry-clicks an AUTO weapon whose magazine has run dry under a held trigger', () => {
+    const { cr } = setup();
+
+    cr.grantWeapon('chaingun');
+    cr.selectWeapon(CHAINGUN);
+    cr.beginFire();
+    for (let i = 0; i < 120; i++) {
+      cr.stepWeapon(0.1, false); // drain the mag — no reserve seeded, so no auto-reload refills it
+    }
+    expect(cr.mag[CHAINGUN]).toBe(0);
+
+    const dryFire = vi.spyOn(cr.weaponView, 'dryFire');
+
+    cr.stepWeapon(0.1, false);
+
+    expect(dryFire).toHaveBeenCalled();
+  });
+
+  it('spins up the CHARGE weapon (lighting the charge glow) then discharges (the flash)', () => {
+    const { cr } = setup();
+
+    cr.seedReserves();
+    cr.grantWeapon('bfg');
+    cr.selectWeapon(BFG);
+
+    cr.beginFire();
+    cr.stepWeapon(0.1, false); // enters the spin-up
+    expect(cr.chargeGlow).toBeGreaterThan(0);
+
+    cr.beginFire(); // a re-press mid-charge is swallowed (charge + swinging → no re-trigger)
+    for (let i = 0; i < 20 && cr.dischargeFlash === 0; i++) {
+      cr.stepWeapon(0.1, false);
+    }
+
+    expect(cr.dischargeFlash).toBe(1);
   });
 });
 

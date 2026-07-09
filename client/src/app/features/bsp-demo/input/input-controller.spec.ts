@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MutableCamera } from '../world/zone-runtime';
+import type { MutableCamera } from '../../../core/lib/game/world/zone-runtime';
 import { RESTART_DELAY } from '../../../core/lib';
 import { InputController, type InputCombat, type InputControllerHooks } from './input-controller';
 

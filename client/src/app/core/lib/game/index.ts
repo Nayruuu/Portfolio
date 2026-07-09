@@ -11,3 +11,5 @@ export * from './level';
 export * from './levels';
 export * from './registry';
 export * from './presentation';
+export * from './world';
+export * from './sprites';

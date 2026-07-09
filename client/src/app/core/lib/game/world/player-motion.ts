@@ -7,15 +7,15 @@ import {
   STEP_MAX,
   type CompiledMap,
   type Obstacle,
-} from '../../../core/lib/bsp-engine';
+} from '../../bsp-engine';
 import {
   CLIMB_MAX,
   CLIMB_PROBE_REACH,
   CLIMB_VAULT_ADVANCE,
   MANTLE_DURATION,
   MOVE_SPEED,
-  type MovementDelta,
-} from '../../../core/lib';
+} from '../game-tuning';
+import type { MovementDelta } from '../controls';
 import { EYE_HEIGHT, type MutableCamera } from './zone-runtime';
 
 interface Mantle {

@@ -1,4 +1,4 @@
-import type { Camera, MutableSector } from '../../../core/lib/bsp-engine';
+import type { Camera, MutableSector } from '../../bsp-engine';
 import {
   DOOR_TRIGGER_RADIUS,
   EXIT_RADIUS,
@@ -6,18 +6,14 @@ import {
   PICKUP_FX_DURATION,
   PICKUP_RADIUS,
   SLIDE_TRIGGER_RADIUS,
-  shouldAutoEquip,
-  stepDoorOpenness,
-  stepSlideOpenness,
-  type KeycardColor,
-} from '../../../core/lib';
+} from '../game-tuning';
+import { shouldAutoEquip } from '../weapons';
+import { stepDoorOpenness, stepSlideOpenness } from '../doors';
+import type { KeycardColor } from '../types';
 import { weaponAmmoDose, type WeaponPickupSpec } from './pickups';
-import { ARSENAL, ammoTypeMax } from '../../../core/lib/game/presentation/weapons';
-import type { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
+import { ARSENAL, ammoTypeMax } from '../presentation/weapons';
+import type { DoomHud } from '../presentation/doom-hud';
 import type { Door, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
-
-// true = ammo boxes spin but are never collected (art-inspection mode).
-const INSPECT_PICKUPS: boolean = false;
 
 export interface PickupGrant {
   heal(amount: number): void;
@@ -52,11 +48,16 @@ export class PickupRuntime {
   private readonly badges = new Set<KeycardColor>();
   private flash = 0;
   private hintClock = 0;
+  private inspectPickups = false; // true = ammo boxes spin but are never collected (art-inspection mode)
 
   constructor(private readonly hooks: PickupRuntimeHooks) {}
 
   public get pickupFx(): number {
     return this.flash;
+  }
+
+  public setInspectMode(on: boolean): void {
+    this.inspectPickups = on;
   }
 
   public get hint(): number {
@@ -173,7 +174,7 @@ export class PickupRuntime {
     world.ammoBoxes = world.ammoBoxes.filter((b) => {
       b.age += dt;
 
-      if (INSPECT_PICKUPS) {
+      if (this.inspectPickups) {
         return true;
       }
       const reserve = this.hooks.combat.reserveOf(b.spec.ammoType);
