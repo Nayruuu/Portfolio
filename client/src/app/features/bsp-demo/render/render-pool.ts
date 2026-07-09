@@ -1,24 +1,7 @@
 import type { Camera, MapSource, Sprite, Texture } from '../../../core/lib/bsp-engine';
 
-/** Per-frame live sector heights (animated doors mutate `ceilZ`); forwarded to each worker each render. */
+/** Per-frame live sector heights — only `ceilZ`/`floorZ` change at runtime (animated doors). */
 export type SectorHeights = readonly { readonly floorZ: number; readonly ceilZ: number }[];
-
-/**
- * A multi-threaded render pool: it splits the frame into N horizontal bands and hands each to a worker that
- * paints straight into one SHARED framebuffer + z-buffer (`SharedArrayBuffer`). Each frame: post the camera
- * to every worker, await all `done`, then the caller copies {@link RenderPool.frame} into an `ImageData` and
- * blits. Returns `null` when the platform can't do it (no `SharedArrayBuffer` / not cross-origin isolated /
- * SSR) — the caller then renders single-threaded on the main thread, so `/bsp` always works.
- *
- * The worker set is created ONCE (each worker builds the map + procedural textures on load — the expensive
- * part). {@link RenderPool.resize} re-points the SAME workers at fresh framebuffers/bands for a new resolution
- * via a cheap re-`init` — it never respawns them, so a fullscreen toggle costs a few ms, not a worker rebuild.
- *
- * Zones are held by KEY: each worker caches every compiled zone it has ever built (primary + portal
- * neighbors), so a seamless seam crossing is {@link RenderPool.swapTo} — the workers just PROMOTE the
- * neighbor map they already hold to primary (building only never-seen neighbor sources). Zero teardown,
- * zero rebuild, zero hitch.
- */
 
 interface RenderConfig {
   readonly width: number;
@@ -26,11 +9,10 @@ interface RenderConfig {
   readonly fov: number;
 }
 
-/** One frame's JOIN measurements: the FASTEST band completion (the least-disturbed worker — the robust
- *  true-compute estimator, immune to the wall-time inflation contention causes on every other band), the
- *  SLOWEST band completion (the frame's real render latency), and how long that slowest band lagged the
- *  median (pure scheduling noise — the straggler signal). Feeds the render governor: stalls drive the
- *  worker rung, the join latency audits each shrink, compute guards it (see `render-governor.ts`). */
+/** One frame's JOIN measurements. `computeMs` = the FASTEST band (the least-disturbed worker — the robust
+ *  true-compute estimator, immune to contention's wall-time inflation on the other bands); `joinMs` = the
+ *  slowest band (real render latency); `stallMs` = how far the slowest lagged the median (the straggler
+ *  signal). Feeds the render governor (see `render-governor.ts`). */
 export interface JoinStats {
   readonly computeMs: number;
   readonly joinMs: number;
@@ -41,27 +23,24 @@ export interface JoinStats {
 export interface RenderPool {
   readonly threads: number;
   readonly active: number; // workers currently rendering (≤ threads — the governor's worker rung)
-  readonly stats: JoinStats; // the LAST completed frame's join measurements
+  readonly stats: JoinStats;
   readonly frame: Uint8ClampedArray; // SAB-backed view of the CURRENT resolution; re-read after each render()
   render(
     camera: Camera,
     sprites: readonly Sprite[],
     sectors: SectorHeights,
     slides: readonly number[],
-    // The WARM neighbor's live billboards by zone key, in that zone's own coordinates — rendered through
-    // the seam windows (see the renderer's neighbor sprites).
+    // The WARM neighbor's live billboards by zone key, in that zone's own coordinates.
     neighborSprites?: ReadonlyMap<string, readonly Sprite[]>,
   ): Promise<void>;
   resize(config: RenderConfig): void; // re-point the workers at a new-resolution framebuffer (no respawn)
-  // Resize the ACTIVE worker set (contention resilience): bands re-split across the first `n` workers;
-  // the rest go idle but stay ALIVE with their zone caches warm (regrowing is a cheap re-band, never a
-  // respawn). Call between frames only, like `resize`.
+  // Bands re-split across the first `n` workers; the rest go idle but stay ALIVE with warm zone caches
+  // (regrowing is a cheap re-band, never a respawn). Between frames only, like `resize`.
   setWorkers(n: number): void;
   // Re-point the workers at another zone's geometry (rebuilt in place under its key), plus the sources of
-  // every zone its LIVE portals look into (rendered through the seams — see the renderer's zone portals).
+  // every zone its LIVE portals look into.
   setMaps(key: string, source: MapSource, neighbors?: ReadonlyMap<string, MapSource>): void;
-  // The SEAMLESS crossing: promote an already-held zone to primary — the workers keep every map they have
-  // built and only compile `neighbors` entries they have never seen (none, for a reciprocal seam pair).
+  // The SEAMLESS crossing: promote an already-held zone to primary — only never-seen `neighbors` compile.
   swapTo(key: string, neighbors?: ReadonlyMap<string, MapSource>): void;
   setTextures(textures: ReadonlyMap<string, Texture>): void;
   dispose(): void;
@@ -91,21 +70,20 @@ export function createRenderPool(
     workers.push(new Worker(new URL('./render.worker', import.meta.url), { type: 'module' }));
   }
 
-  // Point every worker at the level's geometry ONCE (each builds its own BSP — primary + portal neighbors).
-  // Messages are ordered, so this is processed before the first `render`. Without it the workers would
-  // render a hard-coded fallback map.
+  // Point every worker at the geometry ONCE. Messages are ordered, so this lands before the first `render`;
+  // without it the workers would render a hard-coded fallback map.
   for (const worker of workers) {
     worker.postMessage({ type: 'map', key, source: mapSource, neighbors });
   }
 
-  let frame = new Uint8ClampedArray(new SharedArrayBuffer(0)); // SAB-backed (matched by `configure`)
-  let current = config; // the pool's live resolution (re-banding a shrunken worker set needs it)
+  let frame = new Uint8ClampedArray(new SharedArrayBuffer(0));
+  let current = config;
   let frameSab = new SharedArrayBuffer(0);
   let zbufSab = new SharedArrayBuffer(0);
-  let active = workerCount; // workers taking render bands; the rest idle warm (governor-driven)
+  let active = workerCount;
 
-  // Re-`init` the ACTIVE workers onto their bands of the current buffers. Idle workers keep a stale band
-  // config — harmless, they receive no `render` messages and are re-banded here before re-activation.
+  // Re-`init` the ACTIVE workers onto their bands. Idle workers keep a stale band config — harmless, they
+  // get no `render` messages and are re-banded here before re-activation.
   const band = (): void => {
     const bandHeight = Math.ceil(current.height / active);
 
@@ -124,8 +102,8 @@ export function createRenderPool(
     }
   };
 
-  // (Re)allocate the shared buffers at `cfg`'s resolution and re-band. The workers keep their already-built
-  // map + swapped textures (module state), so this is cheap — no respawn.
+  // (Re)allocate the shared buffers at `cfg`'s resolution and re-band. The workers keep their built map +
+  // swapped textures (module state), so this is cheap — no respawn.
   const configure = (cfg: RenderConfig): void => {
     const pixels = cfg.width * cfg.height;
 
@@ -145,8 +123,8 @@ export function createRenderPool(
   const doneMs = new Float64Array(workerCount); // per-worker band completion, relative to the post
   let stats: JoinStats = { computeMs: 0, joinMs: 0, stallMs: 0, slowest: 0 };
 
-  // The frame JOIN: the promise resolves when every band of the in-flight frame has landed. The per-band
-  // timestamps become the frame's `JoinStats` — median completion vs slowest-band lag (see `JoinStats`).
+  // The frame JOIN: resolves once every band of the in-flight frame has landed; the per-band timestamps
+  // become the frame's `JoinStats`.
   workers.forEach((worker, i) => {
     worker.onmessage = (): void => {
       doneMs[i] = performance.now() - renderStart;
@@ -216,19 +194,17 @@ export function createRenderPool(
 
       if (next !== active) {
         active = next;
-        band(); // same buffers, re-split across the new active set (idle workers stay warm)
+        band();
       }
     },
     setMaps(nextKey: string, source: MapSource, next?: ReadonlyMap<string, MapSource>): void {
-      // A zone LOAD: each worker rebuilds the primary from the new source (keeping its swapped textures) —
-      // messages are ordered, so the next `render` already sees the new geometry. No worker is respawned.
+      // Messages are ordered, so the next `render` already sees the new geometry. No worker is respawned.
       for (const worker of workers) {
         worker.postMessage({ type: 'map', key: nextKey, source, neighbors: next });
       }
     },
     swapTo(nextKey: string, next?: ReadonlyMap<string, MapSource>): void {
-      // A seam CROSSING: promote the held neighbor to primary (see the worker's zone cache) — the demoted
-      // zone stays held for the reverse portal, and only never-seen neighbor sources compile.
+      // The demoted zone stays held for the reverse portal; only never-seen neighbor sources compile.
       for (const worker of workers) {
         worker.postMessage({ type: 'swap', key: nextKey, neighbors: next });
       }

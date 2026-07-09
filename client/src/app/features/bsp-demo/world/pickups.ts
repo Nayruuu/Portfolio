@@ -8,34 +8,23 @@ import {
 import { AMMO_MAX, WEAPON_IDS, requireWeapon, type WeaponId } from '../../../shared/game/weapons';
 import type { Level } from '../../../core/lib';
 
-/**
- * Pickup + objective registry for the BSP demo — VITALS (health / armour), spinning AMMO boxes, the 3-tier
- * access BADGES (keycards), and the EXIT marker. This stays a FEATURE file: it imports the weapon runtime
- * from {@link ../../../shared/game/weapons}, and core may not import shared (inward-only), so it cannot move
- * to `core/lib` the way the enemy roster did.
- *
- * The single source of truth still holds: each ammo box's reserve CAP is read from {@link AMMO_MAX}
- * (`weapons.json` `ammo_types`). Vitals + badges + the exit carry their own served sprites
- * (`/game/pickups/*.webp`).
- */
+// Stays a FEATURE file (not core): it imports shared/game/weapons, and core may not import shared (inward-only).
 
-/** `armor` is the second vital — shown as MENTAL in the HUD (the burnt-out-dev's sanity buffer). */
+// 'armor' is shown as MENTAL in the HUD.
 export type VitalKind = 'health' | 'armor';
 export type VitalSize = 'large' | 'small';
 
-/** A vitals pickup's rotating-turntable billboard + grant. Health = a first-aid medkit (large) / desk plant
- *  (small); MENTAL = a desk figurine (large) / morale card (small) — the office-satire re-theme. */
 export interface VitalSpec {
   readonly kind: VitalKind;
   readonly size: VitalSize;
   readonly texName: string;
-  readonly url: string; // served turntable strip (a `frames`×1 horizontal atlas, center-bottom anchored)
-  readonly frames: number; // turntable cells (the rotation atlas)
-  readonly frameMs: number; // ms each spin frame holds
-  readonly worldHeight: number; // billboard height in world units
-  readonly aspect: number; // source cell width : height
-  readonly amount: number; // hp/mental granted on collect
-  readonly spin: boolean; // animate the turntable (false = hold frame 0, a static billboard)
+  readonly url: string;
+  readonly frames: number;
+  readonly frameMs: number;
+  readonly worldHeight: number;
+  readonly aspect: number;
+  readonly amount: number;
+  readonly spin: boolean; // false = hold frame 0
 }
 
 export const HEALTH_LARGE_SPEC: VitalSpec = {
@@ -48,7 +37,7 @@ export const HEALTH_LARGE_SPEC: VitalSpec = {
   worldHeight: 0.6,
   aspect: 359 / 269,
   amount: VITAL_LARGE,
-  spin: true, // medkit
+  spin: true,
 };
 
 export const HEALTH_SMALL_SPEC: VitalSpec = {
@@ -58,10 +47,10 @@ export const HEALTH_SMALL_SPEC: VitalSpec = {
   url: '/game/pickups/health_small_plant_rot.webp',
   frames: 6,
   frameMs: PICKUP_SPIN_MS,
-  worldHeight: 0.45, // deliberately SMALLER than the medkit (0.6) — a minor health top-up
+  worldHeight: 0.45,
   aspect: 240 / 379,
   amount: VITAL_SMALL,
-  spin: true, // plant
+  spin: true,
 };
 
 export const MENTAL_LARGE_SPEC: VitalSpec = {
@@ -74,7 +63,7 @@ export const MENTAL_LARGE_SPEC: VitalSpec = {
   worldHeight: 0.8,
   aspect: 377 / 688,
   amount: VITAL_LARGE,
-  spin: true, // figurine keeps rotating
+  spin: true,
 };
 
 export const MENTAL_SMALL_SPEC: VitalSpec = {
@@ -87,7 +76,7 @@ export const MENTAL_SMALL_SPEC: VitalSpec = {
   worldHeight: 0.3,
   aspect: 369 / 353,
   amount: VITAL_SMALL,
-  spin: true, // card
+  spin: true,
 };
 
 const VITAL_SPECS: Readonly<Record<VitalKind, Readonly<Record<VitalSize, VitalSpec>>>> = {
@@ -95,30 +84,25 @@ const VITAL_SPECS: Readonly<Record<VitalKind, Readonly<Record<VitalSize, VitalSp
   armor: { large: MENTAL_LARGE_SPEC, small: MENTAL_SMALL_SPEC },
 };
 
-/** Resolve the vitals spec for a kind + size (a level's placement picks the size; default `large`). */
 export function vitalSpec(kind: VitalKind, size: VitalSize = 'large'): VitalSpec {
   return VITAL_SPECS[kind][size];
 }
 
-/** A rotating ammo box: its turntable strip (`frames` cells advanced over `frameMs`) + which reserve it refills.
- *  `max` is single-sourced from {@link AMMO_MAX}; `amount`/`frameMs`/art mirror the shared `ammo-pickups.json`. */
 export interface AmmoBoxSpec {
   readonly id: string;
   readonly texName: string;
-  readonly url: string; // served turn strip (a `frames`×1 horizontal strip)
+  readonly url: string;
   readonly frames: number;
-  readonly frameMs: number; // ms each spin frame holds
+  readonly frameMs: number;
   readonly worldHeight: number;
-  readonly aspect: number; // source cell width : height
-  readonly ammoType: string; // which reserve it refills (an `ammo_types` key)
-  readonly amount: number; // rounds granted on collect
-  readonly max: number; // reserve cap for this type — a full type never consumes the box
+  readonly aspect: number;
+  readonly ammoType: string;
+  readonly amount: number;
+  readonly max: number;
 }
 
-/** Ammo boxes read as the smallest floor items (well under an enemy or a vitals pickup). */
 const AMMO_WORLD_HEIGHT = 0.5;
 
-/** Build one ammo-box spec; `aspect` follows the source cell, `max` is sourced from {@link AMMO_MAX}. */
 function box(
   id: string,
   ammoType: string,
@@ -131,7 +115,7 @@ function box(
 ): AmmoBoxSpec {
   return {
     id,
-    texName: `AMMO_${id.toUpperCase()}`, // keyed by the unique box id (two boxes can share an ammoType — cells)
+    texName: `AMMO_${id.toUpperCase()}`, // keyed by the unique box id (two boxes can share an ammoType)
     url,
     frames,
     frameMs,
@@ -143,7 +127,6 @@ function box(
   };
 }
 
-/** Every ammo-box kind the demo places (one per ammo type), mirroring `ammo-pickups.json` grants + strips. */
 export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
   box(
     'box_staples',
@@ -165,9 +148,6 @@ export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
     157,
     148,
   ),
-  // The shotgun is the Hilti DX 460 now, so its ammo box (ammoType 'shells') is the Hilti .22 cal box: a
-  // 7-frame turntable (the metal-back duplicates trimmed so the label/cartridges always show), landscape cell,
-  // baseline-aligned to seat flush like the other boxes.
   box(
     'gas_canister',
     'shells',
@@ -198,8 +178,6 @@ export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
     149,
     256,
   ),
-  // The big "server cell" — a richer cells box (the BFG-datacenter flavour): grants more rounds than the
-  // standard energy cell.
   box(
     'server_cell',
     'cells',
@@ -212,24 +190,18 @@ export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
   ),
 ];
 
-/** A WEAPON pickup's floor billboard + identity — the DOOM progression rewards (`Level.weapons`): the run
- *  starts fists-only and each of these unlocks its weapon on collect (+ one standard ammo box of its type,
- *  see {@link weaponAmmoDose}). Shaped like the ammo-box turntable so future rotation art is a drop-in;
- *  v1 ART PLACEHOLDER: the weapon's HUD bay icon (`weapons.json` `icon`, alpha-cut) as a single-frame
- *  billboard — replace `url`/`frames`/`aspect` with a real `_rot` strip when each weapon's turntable ships. */
+// v1 ART PLACEHOLDER: `url`/`frames`/`aspect` hold the HUD icon as a single frame until a real `_rot` strip ships.
 export interface WeaponPickupSpec {
   readonly id: WeaponId;
   readonly texName: string;
-  readonly url: string; // served art (v1: the HUD icon; later a `frames`×1 turntable strip)
-  readonly frames: number; // turntable cells (1 = the static v1 placeholder)
-  readonly frameMs: number; // ms each spin frame holds
-  readonly worldHeight: number; // billboard height in world units
-  readonly aspect: number; // source cell width : height
-  readonly ammoType: string | null; // the reserve the starter dose tops up (null = an ammo-less melee weapon)
+  readonly url: string;
+  readonly frames: number;
+  readonly frameMs: number;
+  readonly worldHeight: number;
+  readonly aspect: number;
+  readonly ammoType: string | null;
 }
 
-/** The v1 icon cells' width:height (measured from the served `icon.webp` files) — dies with the
- *  placeholder art: a real turntable strip carries its own cell aspect. */
 const WEAPON_ICON_ASPECTS: Readonly<Record<WeaponId, number>> = {
   fist: 338 / 259,
   chainsaw: 456 / 134,
@@ -241,10 +213,8 @@ const WEAPON_ICON_ASPECTS: Readonly<Record<WeaponId, number>> = {
   bfg: 699 / 375,
 };
 
-/** Weapon pickups read bigger than an ammo box, under the vitals — a reward the eye finds across a room. */
 const WEAPON_WORLD_HEIGHT = 0.55;
 
-/** One pickup spec per registry weapon, in arsenal order (`requireWeapon` fails loud on a drifted id). */
 export const WEAPON_PICKUP_SPECS: readonly WeaponPickupSpec[] = WEAPON_IDS.map((id) => {
   const weapon = requireWeapon(id);
 
@@ -260,20 +230,16 @@ export const WEAPON_PICKUP_SPECS: readonly WeaponPickupSpec[] = WEAPON_IDS.map((
   };
 });
 
-/** Resolve the pickup spec for a weapon id — the placement side of `Level.weapons`. */
 export function weaponPickupSpec(id: WeaponId): WeaponPickupSpec {
   const spec = WEAPON_PICKUP_SPECS.find((candidate) => candidate.id === id);
 
   if (spec === undefined) {
-    throw new Error(`weapon pickup: no spec for weapon id "${id}"`); // unreachable while WEAPON_IDS covers the registry
+    throw new Error(`weapon pickup: no spec for weapon id "${id}"`);
   }
 
   return spec;
 }
 
-/** The starter ammo DOSE a weapon pickup grants its ammo type: exactly ONE standard ammo box of that type
- *  (the first {@link AMMO_BOX_SPECS} entry for it — 20 bullets / 5 shells / 40 cells / 2 rockets), so the
- *  weapon-pickup grant reuses the box economy instead of inventing its own; 0 for an ammo-less melee weapon. */
 export function weaponAmmoDose(ammoType: string | null): number {
   if (ammoType === null) {
     return 0;
@@ -282,16 +248,14 @@ export function weaponAmmoDose(ammoType: string | null): number {
   return AMMO_BOX_SPECS.find((box) => box.ammoType === ammoType)?.amount ?? 0;
 }
 
-/** A placed vitals pickup on the floor. */
 export interface Vital {
   x: number;
   y: number;
   z: number;
-  age: number; // spin clock (advances the turntable frame)
+  age: number;
   spec: VitalSpec;
 }
 
-/** A placed, spinning ammo box on the floor (`age` is its spin clock). */
 export interface AmmoBox {
   x: number;
   y: number;
@@ -300,8 +264,6 @@ export interface AmmoBox {
   spec: AmmoBoxSpec;
 }
 
-/** A placed weapon pickup on the floor (`age` is its spin clock — held at frame 0 while the v1
- *  single-frame placeholder art stands in for the future turntable strip). */
 export interface WeaponPickup {
   x: number;
   y: number;
@@ -310,7 +272,6 @@ export interface WeaponPickup {
   spec: WeaponPickupSpec;
 }
 
-/** A placed, spinning access badge on the floor (`age` is its spin clock, like {@link Vital}). */
 export interface Keycard {
   x: number;
   y: number;
@@ -319,7 +280,6 @@ export interface Keycard {
   spec: KeycardSpec;
 }
 
-/** A single-sprite floor billboard (the exit sign): art + world sizing, no animation. */
 export interface MarkerSpec {
   readonly texName: string;
   readonly url: string;
@@ -327,7 +287,6 @@ export interface MarkerSpec {
   readonly aspect: number;
 }
 
-/** A placed single-sprite floor marker (the exit sign) — a {@link MarkerSpec} positioned in the world. */
 export interface Marker {
   x: number;
   y: number;
@@ -335,20 +294,16 @@ export interface Marker {
   spec: MarkerSpec;
 }
 
-/** An access BADGE turntable — a corporate keycard that gates its colour-matched door; shows in the HUD card
- *  bay on collect. Rendered as a spinning turntable billboard (a `frames`×1 horizontal strip, center-bottom
- *  anchored), exactly like the vitals/ammo pickups. Its HUD card + door colour is {@link KeycardColor}. */
 export interface KeycardSpec {
   readonly color: KeycardColor;
   readonly texName: string;
-  readonly url: string; // served turntable strip (a `frames`×1 horizontal atlas, center-bottom anchored)
-  readonly frames: number; // turntable cells (the rotation atlas)
-  readonly frameMs: number; // ms each spin frame holds
-  readonly worldHeight: number; // billboard height in world units
-  readonly aspect: number; // source cell width : height
+  readonly url: string;
+  readonly frames: number;
+  readonly frameMs: number;
+  readonly worldHeight: number;
+  readonly aspect: number;
 }
 
-/** BLUE tier — the base "employee" badge (unlocks blue doors). */
 export const KEYCARD_EMPLOYEE: KeycardSpec = {
   color: 'blue',
   texName: 'PICKUP_KEYCARD_EMPLOYEE',
@@ -359,7 +314,6 @@ export const KEYCARD_EMPLOYEE: KeycardSpec = {
   aspect: 358 / 678,
 };
 
-/** YELLOW tier — the mid "manager" badge (unlocks yellow doors). */
 export const KEYCARD_MANAGER: KeycardSpec = {
   color: 'yellow',
   texName: 'PICKUP_KEYCARD_MANAGER',
@@ -370,7 +324,6 @@ export const KEYCARD_MANAGER: KeycardSpec = {
   aspect: 360 / 678,
 };
 
-/** RED tier — the top "director" badge (unlocks red doors). */
 export const KEYCARD_DIRECTOR: KeycardSpec = {
   color: 'red',
   texName: 'PICKUP_KEYCARD_DIRECTOR',
@@ -387,12 +340,10 @@ const KEYCARD_SPECS: Readonly<Record<KeycardColor, KeycardSpec>> = {
   red: KEYCARD_DIRECTOR,
 };
 
-/** Resolve the badge spec for a keycard colour (blue = employee, yellow = manager, red = director). */
 export function keycardSpec(color: KeycardColor): KeycardSpec {
   return KEYCARD_SPECS[color];
 }
 
-/** The EXIT sign — the level goal; reaching it WITH the keycard completes the level. */
 export const EXIT_SPEC: MarkerSpec = {
   texName: 'EXIT_SIGN',
   url: '/game/pickups/exit.webp',
@@ -400,8 +351,6 @@ export const EXIT_SPEC: MarkerSpec = {
   aspect: 240 / 320,
 };
 
-/** Every pickup/marker texture to decode (vitals + ammo strips + weapon pickups + the 3 badge turntables
- *  + exit) — each a single-row sheet. */
 export const PICKUP_TEXTURE_JOBS: readonly { name: string; url: string }[] = [
   ...[HEALTH_LARGE_SPEC, HEALTH_SMALL_SPEC, MENTAL_LARGE_SPEC, MENTAL_SMALL_SPEC].map((spec) => ({
     name: spec.texName,
@@ -416,11 +365,6 @@ export const PICKUP_TEXTURE_JOBS: readonly { name: string; url: string }[] = [
   { name: EXIT_SPEC.texName, url: EXIT_SPEC.url },
 ];
 
-// (Per-level pickup/objective PLACEMENTS live on the level — see `level-accueil.ts` `Level` — so a level owns
-// where its entities sit; this file owns only the level-agnostic specs/art above.)
-
-/** A zone's placed floor pickups (each carrying its spawn `idx`) + the legacy exit marker — the output of
- *  {@link buildPickups}, matching the pickup slots of `WarmZone`. */
 export interface BuiltPickups {
   readonly vitals: (Vital & { idx: number })[];
   readonly ammoBoxes: (AmmoBox & { idx: number })[];
@@ -429,17 +373,9 @@ export interface BuiltPickups {
   readonly exit: Marker | null;
 }
 
-/**
- * Build a zone's floor pickups (coffee = health, RAM = armour, spinning boxes = ammo, weapon unlocks,
- * spinning access badges) + the legacy exit marker, each seated on its sector floor via `floorAt`. Each
- * pickup carries its spawn INDEX (`idx`) and anything the zone's `snap` flags as TAKEN is skipped — collected
- * items stay gone on return. Pure: `floorAt` is the only world seam (the shell resolves it from its map).
- *
- * ⚠️ The idx assigned here is the persistence key: it MUST stay index-aligned with the taken arrays
- * {@link takenFlags} produces — vitals are `health` then `armor` in spawn order, ammo boxes follow
- * {@link AMMO_BOX_SPECS} (one `level.ammo` coord per entry, in order), keycards/weapons follow their
- * authoring order. A drift here respawns a collected pickup (or vanishes a fresh one) across a zone crossing.
- */
+// ⚠️ Each pickup's idx is its persistence key — it MUST stay index-aligned with the taken arrays takenFlags
+// produces (vitals = health then armor in spawn order; ammo follows AMMO_BOX_SPECS; keycards/weapons follow
+// authoring order). A drift respawns a collected pickup (or vanishes a fresh one) across a zone crossing.
 export function buildPickups(
   level: Level,
   snap: ZoneSnapshot | null,
@@ -486,10 +422,7 @@ export function buildPickups(
   };
 }
 
-/** Taken flags for an index-carrying pickup list: `true` at each index where no remaining pickup still
- *  carries it (i.e. it was collected). The counterpart to {@link buildPickups}'s idx scheme — feed the result
- *  into a {@link ZoneSnapshot}. Before the atlases decode nothing has spawned (`atlasesReady` false), so
- *  nothing can have been taken — every flag is `false`. */
+// Before the atlases decode nothing has spawned, so every flag is false (not "all taken").
 export function takenFlags(
   count: number,
   remaining: readonly { idx: number }[],
@@ -503,8 +436,6 @@ export function takenFlags(
   return Array.from({ length: count }, (_, i) => !left.has(i));
 }
 
-/** The turntable cell a rotating floor pickup shows: `age` (seconds) advances one cell per `frameMs`, wrapping
- *  at `frames`. A non-spinning billboard (`spin` false — e.g. a static vitals variant) always holds cell 0. */
 export function pickupFrame(age: number, frameMs: number, frames: number, spin = true): number {
   return spin ? Math.floor(age / (frameMs / 1000)) % frames : 0;
 }

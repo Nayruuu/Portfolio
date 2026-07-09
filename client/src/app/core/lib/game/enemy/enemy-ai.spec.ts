@@ -14,10 +14,6 @@ import {
   throwProjectile,
 } from './enemy-ai';
 
-// --- A tiny world -----------------------------------------------------------
-// The player sits at (30, 30). Two maps: an OPEN 60×60 room (clear line of sight everywhere inside), and a
-// WALLED variant with a one-sided stub wall at x=25 (y 15..45) between a west enemy and the player — that
-// stub blocks a +x sight/hitscan ray.
 const side: SideDef = {
   sector: 0,
   xOffset: 0,
@@ -44,7 +40,7 @@ const OPEN_SOURCE: MapSource = {
 const WALLED_SOURCE: MapSource = {
   ...OPEN_SOURCE,
   vertices: [...OPEN_SOURCE.vertices, { x: 25, y: 15 }, { x: 25, y: 45 }],
-  linedefs: [...OPEN_SOURCE.linedefs, wall(4, 5)], // interior one-sided stub, y 15..45 at x=25
+  linedefs: [...OPEN_SOURCE.linedefs, wall(4, 5)],
 };
 
 const OPEN = buildBsp(OPEN_SOURCE);
@@ -53,7 +49,6 @@ const WALLED = buildBsp(WALLED_SOURCE);
 const PLAYER_X = 30;
 const PLAYER_Y = 30;
 
-// --- Enemy combat specs -----------------------------------------------------
 const MELEE: EnemyCombat = {
   worldHeight: 1.7,
   hitRadius: 0.4,
@@ -92,7 +87,6 @@ const THROWER: EnemyCombat = {
   thrower: THROW_PROJ,
 };
 
-// --- Factories --------------------------------------------------------------
 const makeEnemy = (spec: EnemyCombat, over: Partial<CombatEnemy> = {}): CombatEnemy => ({
   spec,
   x: PLAYER_X,
@@ -108,8 +102,6 @@ const makeEnemy = (spec: EnemyCombat, over: Partial<CombatEnemy> = {}): CombatEn
   ...over,
 });
 
-// The frame carries a real `(dmg) => void` for the engine (a Mock is not assignable to that plain signature),
-// plus a `hurtSpy` the assertions read — the wrapper simply forwards to it.
 interface TestFrame extends CombatFrame {
   readonly hurtSpy: ReturnType<typeof vi.fn>;
 }
@@ -136,18 +128,18 @@ const makeFrame = (
 
 describe('stepEnemies — chase / hold / retreat by the standoff band', () => {
   it('chases when farther than the standoff band (moves toward the player, legs advance)', () => {
-    const e = makeEnemy(MELEE, { x: 20, y: 30 }); // dist 10 > standoff(2)+band, out of melee reach
+    const e = makeEnemy(MELEE, { x: 20, y: 30 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.1);
 
-    expect(e.x).toBeGreaterThan(20); // closed in along +x toward the player
+    expect(e.x).toBeGreaterThan(20);
     expect(e.walkDist).toBeGreaterThan(0);
-    expect(e.windup).toBe(0); // out of range → never telegraphs
+    expect(e.windup).toBe(0);
   });
 
   it('holds inside the standoff band (no move)', () => {
-    const e = makeEnemy(MELEE, { x: 28, y: 30 }); // dist 2 == standoff, out of melee reach → no attack
+    const e = makeEnemy(MELEE, { x: 28, y: 30 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.1);
@@ -157,27 +149,27 @@ describe('stepEnemies — chase / hold / retreat by the standoff band', () => {
   });
 
   it('retreats when closer than the standoff band (backs away from the player)', () => {
-    const e = makeEnemy(MELEE, { x: 29, y: 30, cooldown: 1 }); // dist 1 < standoff-band; cooldown gates the attack
+    const e = makeEnemy(MELEE, { x: 29, y: 30, cooldown: 1 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.1);
 
-    expect(e.x).toBeLessThan(29); // eased back along -x
+    expect(e.x).toBeLessThan(29);
     expect(e.walkDist).toBeGreaterThan(0);
   });
 
   it('a shotgunner beyond its gun range closes in rather than firing', () => {
-    const e = makeEnemy(SHOTGUNNER, { x: 5, y: 30, cooldown: 0 }); // dist 25 > range 8
+    const e = makeEnemy(SHOTGUNNER, { x: 5, y: 30, cooldown: 0 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.1);
 
-    expect(e.x).toBeGreaterThan(5); // chased in
-    expect(e.windup).toBe(0); // out of range → no telegraph
+    expect(e.x).toBeGreaterThan(5);
+    expect(e.windup).toBe(0);
   });
 
   it('a thrower beyond its throw range closes in rather than lobbing', () => {
-    const e = makeEnemy(THROWER, { x: 5, y: 30, cooldown: 0 }); // dist 25 > range 20
+    const e = makeEnemy(THROWER, { x: 5, y: 30, cooldown: 0 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.1);
@@ -189,7 +181,7 @@ describe('stepEnemies — chase / hold / retreat by the standoff band', () => {
 
 describe('stepEnemies — the attack gate + release', () => {
   it('starts a wind-up telegraph when ready and in range (no hit that frame)', () => {
-    const e = makeEnemy(MELEE, { x: 29, y: 30, cooldown: 0 }); // dist 1 <= meleeReach, off cooldown
+    const e = makeEnemy(MELEE, { x: 29, y: 30, cooldown: 0 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.05);
@@ -202,7 +194,7 @@ describe('stepEnemies — the attack gate + release', () => {
     const e = makeEnemy(MELEE, { x: 29, y: 30, windup: 0.1 });
     const frame = makeFrame([e]);
 
-    stepEnemies(frame, 0.1); // wind-up → 0 this frame
+    stepEnemies(frame, 0.1);
 
     expect(e.windup).toBe(0);
     expect(frame.hurtSpy).toHaveBeenCalledWith(MELEE.meleeDamage);
@@ -210,7 +202,7 @@ describe('stepEnemies — the attack gate + release', () => {
   });
 
   it('releases a shotgun blast for a shotgunner', () => {
-    const e = makeEnemy(SHOTGUNNER, { x: 25, y: 30, windup: 0.1 }); // dist 5 <= range 8
+    const e = makeEnemy(SHOTGUNNER, { x: 25, y: 30, windup: 0.1 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.1);
@@ -219,7 +211,7 @@ describe('stepEnemies — the attack gate + release', () => {
   });
 
   it('releases a thrown projectile for a thrower (a shot, not a direct hit)', () => {
-    const e = makeEnemy(THROWER, { x: 20, y: 30, windup: 0.1 }); // dist 10 <= range 20, LOS clear
+    const e = makeEnemy(THROWER, { x: 20, y: 30, windup: 0.1 });
     const frame = makeFrame([e]);
 
     stepEnemies(frame, 0.1);
@@ -229,12 +221,12 @@ describe('stepEnemies — the attack gate + release', () => {
   });
 
   it('idles behind a wall (no line of sight → no move, no telegraph)', () => {
-    const e = makeEnemy(MELEE, { x: 20, y: 30, cooldown: 0 }); // west of the stub wall at x=25
+    const e = makeEnemy(MELEE, { x: 20, y: 30, cooldown: 0 });
     const frame = makeFrame([e], { map: WALLED });
 
     stepEnemies(frame, 0.1);
 
-    expect(e.x).toBe(20); // no LOS → idle
+    expect(e.x).toBe(20);
     expect(e.windup).toBe(0);
   });
 
@@ -242,14 +234,14 @@ describe('stepEnemies — the attack gate + release', () => {
     const e = makeEnemy(MELEE, { x: 29, y: 30, windup: 0.3 });
     const frame = makeFrame([e]);
 
-    stepEnemies(frame, 0.1); // 0.3 → 0.2, still telegraphing
+    stepEnemies(frame, 0.1);
 
     expect(e.windup).toBeCloseTo(0.2, 5);
     expect(frame.hurtSpy).not.toHaveBeenCalled();
   });
 
   it('throws nothing when a thrower’s sight is blocked at release', () => {
-    const e = makeEnemy(THROWER, { x: 20, y: 30, windup: 0.1 }); // west of the stub wall — no LOS at release
+    const e = makeEnemy(THROWER, { x: 20, y: 30, windup: 0.1 });
     const frame = makeFrame([e], { map: WALLED });
 
     stepEnemies(frame, 0.1);
@@ -259,11 +251,11 @@ describe('stepEnemies — the attack gate + release', () => {
   });
 
   it('handles a foe sharing the player’s exact position (no divide-by-zero)', () => {
-    const e = makeEnemy(MELEE, { x: PLAYER_X, y: PLAYER_Y, cooldown: 0 }); // dist 0 → guarded to 1
+    const e = makeEnemy(MELEE, { x: PLAYER_X, y: PLAYER_Y, cooldown: 0 });
     const frame = makeFrame([e]);
 
     expect(() => stepEnemies(frame, 0.1)).not.toThrow();
-    expect(e.windup).toBeCloseTo(MELEE.windup, 5); // dist 1 <= meleeReach → telegraphs
+    expect(e.windup).toBeCloseTo(MELEE.windup, 5);
   });
 
   it('is a no-op with no enemies and no shots', () => {
@@ -288,7 +280,7 @@ describe('fireShotgun', () => {
     const e = makeEnemy(SHOTGUNNER, { x: 25, y: 30 });
     const frame = makeFrame([e]);
 
-    fireShotgun(frame, e, 1, 0, 5); // dist 5 <= range 8
+    fireShotgun(frame, e, 1, 0, 5);
 
     expect(frame.hurtSpy).toHaveBeenCalledWith(15);
   });
@@ -297,22 +289,22 @@ describe('fireShotgun', () => {
     const e = makeEnemy(SHOTGUNNER, { x: 20, y: 30 });
     const frame = makeFrame([e]);
 
-    fireShotgun(frame, e, 1, 0, 10); // 10 > range 8
+    fireShotgun(frame, e, 1, 0, 10);
 
     expect(frame.hurtSpy).not.toHaveBeenCalled();
   });
 
   it('does nothing when a wall blocks the blast', () => {
     const e = makeEnemy(SHOTGUNNER, { x: 20, y: 30 });
-    const frame = makeFrame([e], { map: WALLED }); // the x=25 stub is between the enemy and the player
+    const frame = makeFrame([e], { map: WALLED });
 
-    fireShotgun(frame, e, 1, 0, 8); // in range, but no LOS
+    fireShotgun(frame, e, 1, 0, 8);
 
     expect(frame.hurtSpy).not.toHaveBeenCalled();
   });
 
   it('does nothing for a kind that carries no shotgun', () => {
-    const e = makeEnemy(MELEE, { x: 25, y: 30 }); // no shotgun sub-spec
+    const e = makeEnemy(MELEE, { x: 25, y: 30 });
     const frame = makeFrame([e]);
 
     fireShotgun(frame, e, 1, 0, 5);
@@ -364,7 +356,7 @@ describe('throwProjectile', () => {
 
     throwProjectile(frame, e, 1, 0);
 
-    expect(frame.shots).toHaveLength(61); // nothing added
+    expect(frame.shots).toHaveLength(61);
   });
 });
 
@@ -384,7 +376,7 @@ describe('stepEnemyShots', () => {
     const s = shot();
     const frame = makeFrame([], { shots: [s] });
 
-    stepEnemyShots(frame, 0.1); // step = speed(6) * 0.1 = 0.6
+    stepEnemyShots(frame, 0.1);
 
     expect(frame.shots).toHaveLength(1);
     expect(s.x).toBeCloseTo(10.6, 5);
@@ -393,10 +385,10 @@ describe('stepEnemyShots', () => {
   });
 
   it('hurts the player within the hit radius, then despawns', () => {
-    const s = shot({ x: PLAYER_X - 0.2, y: PLAYER_Y }); // after a 0.6 step it lands 0.4 <= hit-radius away
+    const s = shot({ x: PLAYER_X - 0.2, y: PLAYER_Y });
     const frame = makeFrame([], { shots: [s] });
 
-    expect(PLAYER_HIT_RADIUS).toBeGreaterThan(0.4); // guard the fixture
+    expect(PLAYER_HIT_RADIUS).toBeGreaterThan(0.4);
 
     stepEnemyShots(frame, 0.1);
 
@@ -405,7 +397,7 @@ describe('stepEnemyShots', () => {
   });
 
   it('despawns on a wall', () => {
-    const s = shot({ x: 59.8, y: 30 }); // 0.2 from the east wall at x=60, a 0.6 step strikes it
+    const s = shot({ x: 59.8, y: 30 });
     const frame = makeFrame([], { shots: [s] });
 
     stepEnemyShots(frame, 0.1);
@@ -415,7 +407,7 @@ describe('stepEnemyShots', () => {
   });
 
   it('despawns past its range', () => {
-    const s = shot({ x: 10, y: 30, traveled: 19.7 }); // range 20; a 0.6 step overshoots it
+    const s = shot({ x: 10, y: 30, traveled: 19.7 });
     const frame = makeFrame([], { shots: [s] });
 
     stepEnemyShots(frame, 0.1);
@@ -425,9 +417,9 @@ describe('stepEnemyShots', () => {
   });
 
   it('compacts the array in place, keeping only the survivors', () => {
-    const a = shot({ x: 10, y: 30 }); // advances
-    const b = shot({ x: 59.8, y: 30 }); // hits the east wall
-    const c = shot({ x: 12, y: 30 }); // advances
+    const a = shot({ x: 10, y: 30 });
+    const b = shot({ x: 59.8, y: 30 });
+    const c = shot({ x: 12, y: 30 });
     const frame = makeFrame([], { shots: [a, b, c] });
 
     stepEnemyShots(frame, 0.1);
@@ -442,17 +434,17 @@ describe('stepEnemyShots', () => {
 describe('separateEnemies', () => {
   it('pushes two overlapping foes symmetrically apart', () => {
     const a = makeEnemy(MELEE, { x: 30, y: 30 });
-    const b = makeEnemy(MELEE, { x: 30.5, y: 30 }); // d 0.5 < ENEMY_SEP_DIST
+    const b = makeEnemy(MELEE, { x: 30.5, y: 30 });
     const frame = makeFrame([a, b]);
 
-    expect(ENEMY_SEP_DIST).toBeGreaterThan(0.5); // guard the fixture
+    expect(ENEMY_SEP_DIST).toBeGreaterThan(0.5);
 
     separateEnemies(frame);
 
-    expect(a.x).toBeLessThan(30); // a nudged -x
-    expect(b.x).toBeGreaterThan(30.5); // b nudged +x
-    expect(30 - a.x).toBeCloseTo(b.x - 30.5, 5); // symmetric
-    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(0.5); // farther apart
+    expect(a.x).toBeLessThan(30);
+    expect(b.x).toBeGreaterThan(30.5);
+    expect(30 - a.x).toBeCloseTo(b.x - 30.5, 5);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(0.5);
   });
 
   it('splits an exact overlap along the +x axis', () => {
@@ -481,7 +473,7 @@ describe('separateEnemies', () => {
 
   it('leaves distant living foes untouched', () => {
     const a = makeEnemy(MELEE, { x: 30, y: 30 });
-    const b = makeEnemy(MELEE, { x: 35, y: 30 }); // d 5 >= ENEMY_SEP_DIST → no push
+    const b = makeEnemy(MELEE, { x: 35, y: 30 });
     const frame = makeFrame([a, b]);
 
     separateEnemies(frame);
@@ -505,7 +497,7 @@ describe('moveEnemy', () => {
     const e = makeEnemy(MELEE, { x: 20, y: 30 });
     const frame = makeFrame([e]);
 
-    moveEnemy(frame, e, 1, 0, 0.5); // reach = speed(2) * 0.5 = 1
+    moveEnemy(frame, e, 1, 0, 0.5);
 
     expect(e.x).toBeCloseTo(21, 5);
     expect(e.walkDist).toBeCloseTo(1, 5);
@@ -516,9 +508,9 @@ describe('moveEnemy', () => {
     const e = makeEnemy(MELEE, { x: 20, y: 30 });
     const frame = makeFrame([e], { obstacles: [{ x: 21, y: 30, radius: 0.5 }] });
 
-    moveEnemy(frame, e, 1, 0, 1); // reach 2 would overrun the prop at x=21
+    moveEnemy(frame, e, 1, 0, 1);
 
-    expect(e.x).toBeLessThan(21); // never tunnelled through the prop
+    expect(e.x).toBeLessThan(21);
     expect(Math.hypot(e.x - 21, e.y - 30)).toBeGreaterThanOrEqual(0.5 + 0.3 - 1e-6);
   });
 });

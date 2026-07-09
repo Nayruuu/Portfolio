@@ -1,5 +1,3 @@
-// Full-screen wash painters — the presentation-timing durations they consume (SHOT/HURT/PICKUP flash, the
-// CHARGE flash peak) live in the central gameplay balance sheet (core/lib/game/game-tuning.ts).
 import {
   CHARGE_FLASH_PEAK,
   HURT_FX_DURATION,
@@ -7,18 +5,15 @@ import {
   SHOT_FX_DURATION,
 } from '../../../core/lib';
 
-/** The centre reticle (always on) + a muzzle flash / impact spark while a shot is fresh. `shotFx` is the seconds
- *  left on the shot feedback (0 when idle). */
 export function drawCrosshair(ctx: CanvasRenderingContext2D, shotFx: number): void {
   const cx = ctx.canvas.width / 2;
   const cy = ctx.canvas.height / 2;
-  const fx = shotFx / SHOT_FX_DURATION; // 1 → 0 over the flash (0 when idle)
-  const gap = 10; // clear centre so a distant target stays visible between the arms
-  const len = 22; // arm length
+  const fx = shotFx / SHOT_FX_DURATION;
+  const gap = 10;
+  const len = 22;
 
   ctx.save();
 
-  // Muzzle flash at the gun + an expanding impact spark at the reticle the instant a shot lands.
   if (fx > 0) {
     const muzzleY = ctx.canvas.height * 0.72;
     const glowR = 170 - 60 * fx;
@@ -55,12 +50,11 @@ export function drawCrosshair(ctx: CanvasRenderingContext2D, shotFx: number): vo
     ctx.stroke();
   }
   ctx.fillStyle = 'rgba(120, 255, 140, 0.95)';
-  ctx.fillRect(cx - 2, cy - 2, 4, 4); // centre dot
+  ctx.fillRect(cx - 2, cy - 2, 4, 4);
 
   ctx.restore();
 }
 
-/** A red full-screen wash when the player just took a hit, fading over HURT_FX_DURATION (the grid's hurt flash). */
 export function drawHurtFx(ctx: CanvasRenderingContext2D, hurtFx: number): void {
   if (hurtFx <= 0) {
     return;
@@ -71,7 +65,6 @@ export function drawHurtFx(ctx: CanvasRenderingContext2D, hurtFx: number): void 
   ctx.restore();
 }
 
-/** A brief faint-green wash when the player collects a pickup (the inverse of the red hurt flash). */
 export function drawPickupFx(ctx: CanvasRenderingContext2D, pickupFx: number): void {
   if (pickupFx <= 0) {
     return;
@@ -82,8 +75,6 @@ export function drawPickupFx(ctx: CanvasRenderingContext2D, pickupFx: number): v
   ctx.restore();
 }
 
-/** The BFG's green screen tint: the live charge-buildup while it spins up, and a decaying flash on the
- *  discharge — a full-frame green wash (mirrors the grid's `chargeGlow` + green discharge flash). */
 export function drawChargeFx(
   ctx: CanvasRenderingContext2D,
   chargeGlow: number,
@@ -100,8 +91,6 @@ export function drawChargeFx(
   ctx.restore();
 }
 
-/** A transient objective hint near the centre (e.g. "BADGE REQUIS" at a locked exit), fading over its life.
- *  `hint` is the seconds left on the hint (drawn only while positive). */
 export function drawHint(ctx: CanvasRenderingContext2D, hint: number): void {
   if (hint <= 0) {
     return;
@@ -109,7 +98,7 @@ export function drawHint(ctx: CanvasRenderingContext2D, hint: number): void {
   const { width, height } = ctx.canvas;
 
   ctx.save();
-  ctx.globalAlpha = Math.min(1, hint / 0.4); // hold, then fade out over the last 0.4s
+  ctx.globalAlpha = Math.min(1, hint / 0.4);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffcf4d';
@@ -118,8 +107,6 @@ export function drawHint(ctx: CanvasRenderingContext2D, hint: number): void {
   ctx.restore();
 }
 
-/** The zone-swap wash: black at the floor swap, ramping in/out over `zoneFade` on either side — the brief
- *  blackout that sells moving through the building (the HUD bar stays, DOOM-style). No-op when not transitioning. */
 export function drawZoneFade(
   ctx: CanvasRenderingContext2D,
   transition: { readonly swapped: boolean; readonly clock: number } | null,
@@ -138,8 +125,6 @@ export function drawZoneFade(
   ctx.restore();
 }
 
-/** The game-over screen: a dark wash that fades in over the frozen scene + the satirical "you're fired" title,
- *  then a pulsing restart prompt once a click can restart (`canRestart`). No-op until the player is `dead`. */
 export function drawGameOver(
   ctx: CanvasRenderingContext2D,
   dead: boolean,
@@ -160,7 +145,6 @@ export function drawGameOver(
   ctx.font = `900 ${Math.round(height * 0.12)}px system-ui, sans-serif`;
   ctx.fillText('VOUS ÊTES VIRÉ', width / 2, height * 0.42);
   if (canRestart) {
-    // a slow blink so the prompt reads as interactive
     ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(deadClock * 3));
     ctx.fillStyle = '#e8e2d2';
     ctx.font = `600 ${Math.round(height * 0.038)}px system-ui, sans-serif`;
@@ -169,9 +153,6 @@ export function drawGameOver(
   ctx.restore();
 }
 
-/** The level-complete screen: a dark-green wash fading in over the frozen scene + the "mission accomplished"
- *  title, then a pulsing restart prompt once a click can restart (`canRestart`). The win twin of
- *  {@link drawGameOver}. No-op until the player has `won`. */
 export function drawWinScreen(
   ctx: CanvasRenderingContext2D,
   won: boolean,

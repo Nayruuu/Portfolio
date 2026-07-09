@@ -11,7 +11,6 @@ import {
   type WorldSpriteSource,
 } from './sprite-builder';
 
-/** A minimal walking foe — the walk branch reads only these fields; cast past the full art+combat spec. */
 function walkingFoe(tex: string): Foe {
   return {
     x: 3,
@@ -32,7 +31,6 @@ function walkingFoe(tex: string): Foe {
   } as unknown as Foe;
 }
 
-/** A spinning-pickup spec + instance stub shaped for the turntable billboard build. */
 function pickup(tex: string): { x: number; y: number; z: number; age: number; spec: SpinningStub } {
   return {
     x: 1,
@@ -51,8 +49,6 @@ interface SpinningStub {
   readonly spin: boolean;
 }
 
-/** A small fixture zone: one alive + one culled barrel, one foe, one thrown shot, one of each pickup, and an
- *  exit marker — enough to pin the build ORDER and the aliveness cull. */
 function fixtureWorld(): WorldSpriteSource {
   const barrel = (tex: string, alive: boolean): { sprite: Sprite; alive: boolean } => ({
     sprite: { x: 2, y: 2, z: 0, tex, width: 0.8, height: 1.5 },
@@ -88,7 +84,6 @@ describe('buildWorldSprites', () => {
   it('builds one billboard per live entity, in a fixed order, culling dead barrels', () => {
     const sprites = buildWorldSprites({ world: fixtureWorld(), viewX: 0, viewY: 0 });
 
-    // The dead barrel drops out; the rest keep the build order: target → enemy → shot → pickups → exit.
     expect(sprites.map((s) => s.tex)).toEqual([
       'B_ALIVE',
       'ENEMY_WALK',
@@ -148,7 +143,6 @@ describe('buildLiveSprites', () => {
       stress,
     });
 
-    // Still the world + the stress barrel, but no exit-sign billboard.
     expect(sprites.filter((s) => s.tex === EXIT_SPEC.texName)).toHaveLength(0);
     expect(sprites.filter((s) => s.tex === 'BARREL')).toHaveLength(1);
   });
@@ -159,7 +153,6 @@ describe('buildWarmSprites', () => {
     const warm = { key: 'z2', ...fixtureWorld() } as unknown as WarmZone;
     const seams = [{ zone: 'z2', dx: 10, dy: 20 }];
 
-    // Equivalent to building the warm world at the seam-translated camera point.
     expect(buildWarmSprites({ warm, cameraX: 100, cameraY: 200, seams })).toEqual(
       buildWorldSprites({ world: warm, viewX: 90, viewY: 180 }),
     );

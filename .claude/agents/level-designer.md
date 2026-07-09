@@ -26,20 +26,21 @@ borrow the *style/structure feel*, invent your own floorplan.
 If asked to copy a real map 1:1, refuse and design an original homage instead. Every level you ship is
 your own geometry.
 
-## Read ONLY these two — everything else is INLINE below (do NOT read the engine/component/conventions)
+## Read ONLY these two — everything else is INLINE below (do NOT read the component/conventions)
 
 Reading the whole engine wastes minutes. You need exactly two small files:
-- `client/src/app/features/bsp-demo/room-builder.ts` — the `RoomBuilder` authoring API (skim the JSDoc).
-- `client/src/app/features/bsp-demo/level-m1-lobby.ts` — the worked example to MIRROR: a full floor authored
+- `client/src/app/core/lib/bsp-engine/room-builder.ts` — the `RoomBuilder` authoring API (skim the JSDoc).
+- `client/src/app/core/lib/game/levels/level-m1-lobby.ts` — the worked example to MIRROR: a full floor authored
   via RoomBuilder (rooms + connects + islands + holes + stairs, sliding-door sas, glassPane windows +
   0.1-deep backdrop boxes, decor props, two-tier ceilings). That file's code style is your style law.
 
-Optional third reads, per need: `level-accueil.ts` — the source of the exported **`Level`** type (import it
-from there) and a compact legacy MapBuilder example; `level-hangar.ts` for a denser layout with a spiral
-staircase (also legacy MapBuilder); `level-builder.ts` ONLY if you must drop to raw `MapBuilder` calls.
-**Do NOT read** `bsp-demo.component.ts`, `core/lib/bsp-engine/*`, `enemies.ts`, or `.claude/conventions/*` —
-the API, the `Level` contract, the player step/mantle limits, the enemy roster, and the FULL texture
-palette are all inline in this brief.
+Optional further reads, per need: `core/lib/game/levels/level-accueil.ts` — a compact legacy MapBuilder
+example (the exported **`Level`** type now lives in `core/lib/game/level/level.ts` — import it from `../level`);
+`core/lib/game/levels/level-hangar.ts` for a denser layout with a spiral staircase (also legacy MapBuilder);
+`core/lib/bsp-engine/level-builder.ts` ONLY if you must drop to raw `MapBuilder` calls.
+**Do NOT read** `bsp-demo.component.ts`, the rest of `core/lib/bsp-engine/*` (beyond room-builder / level-builder),
+or `.claude/conventions/*` — the API, the `Level` contract, the player step/mantle limits, the enemy roster
+(now `core/lib/game/enemy/`), and the FULL texture palette are all inline in this brief.
 
 ## The authoring API (`RoomBuilder`) — you author ROOMS, the builder does the walls
 
@@ -87,8 +88,9 @@ low-level linedefs. You never hand-wind a wall.
     standard ammo box of its type and auto-equips on first collection. Routing weapons is a level-design
     beat: place each where its unlock lands on the difficulty curve (M1 seeds pistol + chainsaw; M2 the
     shotgun). A repeat pickup is an ammo top-up only.
-  - `keycards`: `readonly [x, y, color][]` — `color` ∈ `'blue' | 'yellow' | 'red'` (import `type KeycardColor`
-    from `'../../core/lib'`). See **Access badges** below.
+  - `keycards`: `readonly [x, y, color][]` — `color` ∈ `'blue' | 'yellow' | 'red'` (the `KeycardColor` type is
+    in `core/lib/game/types.ts` — from a level file, `import type { KeycardColor } from '../types'`). See
+    **Access badges** below.
   - `doors`: an ARRAY of `{ sector, triggerX, triggerY, requiresCard }` (vertical animated doors;
     `requiresCard` ∈ `KeycardColor | null`, `null` = unlocked). Sliding glass doors are NOT listed here.
   - **Zone graph (the tower is an OPEN BUILDING)**: `exits`: an array of `{ x, y, to, entry }` walk-into
@@ -152,7 +154,7 @@ was explicitly rejected). Ground floors get street-level views only — NO later
     **Vary the palette per ZONE** — each floor gets its own wall+ceiling+floor identity (server room =
     RACKS+TECHNICAL+GRATING, cafeteria = KITCHEN+TILE, derelict = DAMAGED+NEON…) + its own `light`.
 
-## Enemies (import from `./enemies` — the roster is here, do NOT read the file)
+## Enemies (import the SPEC consts from `../enemy` — the roster is `core/lib/game/enemy/enemy-specs.ts`, do NOT read the file)
 
 Place as `{ spec: <SPEC>, x, y }` in the `enemies` array. Their COMBAT NUMBERS drive placement — use these:
 - `PINKY_SPEC` — "Corporate Husk": melee rusher (hp 80, spd 2.2, dmg 12) — chokes, flushing a camping player.
@@ -266,7 +268,7 @@ juxtaposition (a possessed printer, a demonic manager), NEVER from jokey text/UI
 comments stay grounded-corporate (English comments; themed in-game names can be French).
 
 **Enemies** = the Overseer's enslaved office archetypes: managers (rush/melee), HR (kite + slow), printers
-(turret), interns/juniors (ranged), mapped onto the roster in `enemies.ts`.
+(turret), interns/juniors (ranged), mapped onto the roster in `core/lib/game/enemy/enemy-specs.ts`.
 **Bosses:** mid-boss **the Middle-Manager** (M4, meeting hell); final boss **the Overseer's spider** (M8,
 datacenter — a Spider-Mastermind homage built of server racks + ethernet, the AI core as its head).
 
@@ -328,7 +330,8 @@ Keep it tight (a screen or two). Flag any risk/uncertainty. End with **"Awaiting
 ## Phase 2 — BUILD + self-verify (ONLY after the plan is approved) — keep it LEAN
 
 Implement the APPROVED plan (handed to you in the prompt) as a new
-`client/src/app/features/bsp-demo/level-<name>.ts`, mirroring `level-m1-lobby.ts`'s shape + comment density.
+`client/src/app/core/lib/game/levels/level-<name>.ts`, mirroring `level-m1-lobby.ts`'s shape (comments only
+for a non-obvious WHY/trap — no header essays, no restating JSDoc; → `code.md §1`).
 Follow the approved plan; if geometry forces a deviation, note it in your report.
 
 Budget: this whole loop should be minutes, not an hour. Do NOT write elaborate throwaway geometry
@@ -345,11 +348,12 @@ cap yourself at **≤ 2 render iterations**.
    door trigger / exit is unreachable from spawn. Extend that ONE script if a marker is missing — NEVER
    write a new renderer. Then **Read the PNG back** once to check: rooms closed, openings where intended,
    nothing pinched/overlapping, and it reads DENSE (not empty) as designed. One corrective iteration max,
-   then ship. Also REGISTER your level in `level-select.ts`'s `LEVELS` map (one line) — the controller
+   then ship. Also REGISTER your level in `core/lib/game/registry/level-select.ts`'s `LEVELS` map (one line) — the controller
    tests it in-game via the dev URL params (`/bsp?level=<key>&spawn=x,y,angle&noenemies=1`).
 4. Do NOT wire it as the active level, do NOT restart servers, do NOT commit — report the file + the
    top-down path + a 1-line flow summary, and note anything you simplified or are unsure about. The
    controller wires + tests in-game.
 
-Keep the level's code shape/comment-density consistent with `level-m1-lobby.ts`. Quality bar: a level a
-meticulous designer would ship — readable geometry, intentional fights, a satisfying key→exit arc.
+Keep the level's code shape consistent with `level-m1-lobby.ts` (comments: a non-obvious WHY/trap only —
+`code.md §1`). Quality bar: a level a meticulous designer would ship — readable geometry, intentional
+fights, a satisfying key→exit arc.

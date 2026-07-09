@@ -1,36 +1,18 @@
 import type { LineDef, MapSource, SideDef } from './types';
 
-/**
- * A tiny hand-authored test map exercising the cases the node builder + renderer must handle: a
- * **free-angle** wall (the chamfered NE corner — not 0/45/90°), and a **stepped dais** built from three
- * **concentric diamond** portal loops, so a column can cross several sector heights in a row (the case
- * that exposes flat z-fighting). Walking in from the room you climb three even steps onto the top dais:
- *
- *      (0,10)──────────(12,10)
- *        │                   ╲
- *        │       ╱▒▒▒╲        ╲(16,6)   ← free-angle wall (slope -4/4 ≠ axis, ≠ 45°-grid)
- *        │      ▒ ╱█╲ ▒        │
- *        │      ▒ █▲█ ▒        │        ▒ = step rings (0.33, 0.66)   █▲ = top dais (1.0)
- *        │      ▒ ╲█╱ ▒        │
- *        │       ╲▒▒▒╱         │        three concentric diamonds, each a two-sided portal (a step up)
- *        │                     │
- *      (0,0)──────────────(16,0)
- *
- * Outer walls are one-sided (front = the room, sector 0). Each diamond ring is a two-sided portal loop,
- * wound so the HIGHER (inner) sector is on the FRONT of every edge; the room floor is tan, the dais metal.
- */
+// Hand-authored test fixture. Each diamond ring is a two-sided portal loop wound so the HIGHER (inner)
+// sector is on the FRONT of every edge; the outer loop is wound so the room is on the FRONT.
 
 const ROOM = 0;
-const TOP = 1; // the innermost diamond — the raised dais (kept as sector 1: the by-hand reference point)
+const TOP = 1; // innermost diamond — the raised dais
 const STEP1 = 2; // outer ring (lowest step)
 const STEP2 = 3; // middle ring
 
-/** A one-sided outer wall fronting the room — brick. */
 function wall(v1: number, v2: number): LineDef {
   return { v1, v2, front: side(ROOM, 'BRICK'), back: null };
 }
 
-/** A two-sided dais-ring edge (front = the higher/inner sector, back = the lower/outer) — metal both sides. */
+// front = the higher/inner sector, back = the lower/outer.
 function portal(v1: number, v2: number, front: number, back: number): LineDef {
   return { v1, v2, front: side(front, 'METAL'), back: side(back, 'METAL') };
 }

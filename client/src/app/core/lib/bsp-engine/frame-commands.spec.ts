@@ -49,7 +49,6 @@ const TEX = new Map([
   ['CEIL', ceilTexture()],
 ]);
 
-/** The GPU texture-pool convention: id 0 = MISSING, then the library entries in insertion order. */
 function texturePool(lib: ReadonlyMap<string, Texture>): {
   ids: Map<string, number>;
   pool: Texture[];
@@ -65,14 +64,6 @@ function texturePool(lib: ReadonlyMap<string, Texture>): {
   return { ids, pool };
 }
 
-/**
- * A REFERENCE executor: replays a command buffer into a framebuffer with the renderer's EXACT per-pixel
- * math (same f64 expressions, same integer truncations, same accumulation order, same strict `<` depth
- * test over the same paint order) — what the WGSL compute shader does in f32. It covers the FULL stage-2
- * format: the merged geometry stream, then each recorded PHASE in order (a glass set blended farthest-
- * first, then its sprites far-to-near, window-clipped and glass-tinted). Byte-identity between this and
- * `renderFrame` proves the command buffer carries EVERYTHING the per-pixel work needs.
- */
 function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArray {
   const { width, height, focal, horizon, camZ } = cmds;
   const buf = new Uint8ClampedArray(width * height * 4);
@@ -130,7 +121,7 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
         const rayY = cmds.spanFloats[base + 6];
         const falloff = cmds.spanFloats[base + 7];
         const light = cmds.spanFloats[base + 8];
-        const camX = cmds.spanFloats[base + 9]; // the RECORDING pass's camera (translated on a seam)
+        const camX = cmds.spanFloats[base + 9];
         const camY = cmds.spanFloats[base + 10];
         const { width: tw, height: th, pixels: px } = tex;
         const inv = 1 / (tex.worldSize ?? 1);
@@ -172,9 +163,6 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
     }
   }
 
-  // The deferred PHASES, in recorded order: seam phases (neighbour glass, then its window-clipped
-  // sprites), then the primary phase (primary glass, then the frame's sprites) — `renderFrame`'s exact
-  // deferred sequence, replayed per pixel off the serialized records.
   const asI32 = (w: number): number => cmds.auxWords[w] | 0;
 
   for (let ph = 0; ph < cmds.phaseCount; ph++) {
@@ -185,7 +173,6 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
     const windowSeam = asI32(pb + 3);
 
     if (glassSet >= 0) {
-      // The set's layers blend FARTHEST → NEAREST per column (blendGlass's k-descending walk).
       for (let x = 0; x < width; x++) {
         const table = 5 * width + 2 * (glassSet * width + x);
         const off = cmds.columns[table];
@@ -260,7 +247,6 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
       const yLo = Math.max(0, yTop);
       const yHi = Math.min(height - 1, yBottom);
 
-      /** One glass-tint pass over pixel (x, y) painted at `depth` — the phase-set scan both kinds share. */
       const tintThroughGlass = (x: number, y: number, i: number, depth: number): void => {
         if (glassSet >= 0) {
           const table = 5 * width + 2 * (glassSet * width + x);
@@ -281,8 +267,6 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
       };
 
       if (cmds.auxWords[sb + 11] === SPRITE_VOXEL) {
-        // A VOXEL record — drawVoxel's math in f64, off the f32-stored tail: the pixel's grid-space
-        // ray, a slab window over the grid box, then an exact 3D DDA to the first solid cell.
         const n = cmds.auxWords[sb + 5];
         const nyG = cmds.auxWords[sb + 6];
         const nzG = cmds.auxWords[sb + 7];
@@ -294,7 +278,6 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
         const rightGX = cmds.auxFloats[sb + 17];
         const rightGY = cmds.auxFloats[sb + 18];
         const zScale = cmds.auxFloats[sb + 19];
-        // Per-axis march state — drawVoxel's exact shape (0 = lateral, 1 = depth, 2 = up).
         const origin3 = [camGX, camGY, camGZ] as const;
         const size3 = [n, nyG, nzG] as const;
         const dir3 = new Float64Array(3);
@@ -454,14 +437,6 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
   return buf;
 }
 
-/**
- * Assert `got` matches `want` within the command format's f32-QUANTIZATION bound. Span params are stored
- * f32 (what the GPU consumes) while `renderFrame` computes in f64, so a shade truncation sitting exactly
- * on an integer boundary can flip a channel by one — nothing else. The bound is therefore TIGHT: every
- * channel within ±1, and ≥ 99% of pixels bit-identical (measured ~0.2% of bytes at ±1 on the fixtures).
- * A LIVE-SEAM scene widens the flip surface (its flats re-project off an f32-stored translated camera,
- * and tints stack over quantized pixels) — those pass a wider identity ratio, the ±1 bound unchanged.
- */
 function expectQuantized(
   got: Uint8ClampedArray,
   want: Uint8ClampedArray,
@@ -488,8 +463,6 @@ function expectQuantized(
   expect(diffPixels / (got.length / 4)).toBeLessThan(maxDiffRatio);
 }
 
-/** `renderFrame` over the same inputs — what the command buffer + executor must reproduce within the
- *  f32 bound. Defaults to a sprite-free frame (the geometry fixtures). */
 function reference(
   map = MAP,
   camera: Camera,
@@ -517,7 +490,6 @@ function reference(
   return target;
 }
 
-/** Build + execute against the SAME inputs as {@link reference} — the round-trip under test. */
 function roundTrip(
   map = MAP,
   camera: Camera,
@@ -534,11 +506,11 @@ function roundTrip(
 
 describe('buildFrameCommands', () => {
   const CAMERAS: readonly Camera[] = [
-    { x: 4, y: 5, angle: 0.3, z: 1.6 }, // the renderer suite's reference viewpoint
-    { x: 13, y: 7, angle: Math.PI * 0.8, z: 1.6 }, // across the dais, free-angle wall in view
-    { x: 4, y: 5, angle: 0.3, z: 1.6, pitch: 0.5 }, // looking up (horizon shifted down… up-screen)
-    { x: 8, y: 5, angle: 1.2, z: 2.2, pitch: -0.6 }, // looking down from above the steps
-    { x: 4, y: 5, angle: 0.3, z: 1.6, pitch: -2 }, // horizon off the top — all-floor backdrop
+    { x: 4, y: 5, angle: 0.3, z: 1.6 },
+    { x: 13, y: 7, angle: Math.PI * 0.8, z: 1.6 },
+    { x: 4, y: 5, angle: 0.3, z: 1.6, pitch: 0.5 },
+    { x: 8, y: 5, angle: 1.2, z: 2.2, pitch: -0.6 },
+    { x: 4, y: 5, angle: 0.3, z: 1.6, pitch: -2 },
   ];
 
   it('executes to renderFrame within the f32 bound (walls + flats), across angles and pitches', () => {
@@ -557,7 +529,6 @@ describe('buildFrameCommands', () => {
 
     expect(cmds.spanWords.filter((_, i) => i % SPAN_STRIDE === 0).includes(SPAN_SKY)).toBe(true);
     expectQuantized(pixels, reference(sky, camera));
-    // A steep look-down clips most ceiling spans empty — the sky sink must skip them, not record them.
     const down: Camera = { ...camera, pitch: -0.9 };
 
     expectQuantized(roundTrip(sky, down).pixels, reference(sky, down));
@@ -571,7 +542,6 @@ describe('buildFrameCommands', () => {
     for (let s = 0; s < cmds.spanCount; s++) {
       expect(cmds.spanWords[s * SPAN_STRIDE + 1]).toBe(0);
     }
-    // …and executing over a MISSING-only pool matches renderFrame over an empty library.
     expectQuantized(execute(cmds, [missingTexture()]), reference(MAP, camera, empty));
   });
 
@@ -579,9 +549,9 @@ describe('buildFrameCommands', () => {
     const { cmds } = roundTrip(MAP, { x: 4, y: 5, angle: 0.3, z: 1.6 });
     let total = 0;
 
-    expect(cmds.spanCount).toBeGreaterThan(64); // more than the initial capacity → the growth path ran
+    expect(cmds.spanCount).toBeGreaterThan(64);
     for (let x = 0; x < CONFIG.width; x++) {
-      expect(cmds.columns[2 * x]).toBe(total); // offsets are the running prefix sum — contiguous groups
+      expect(cmds.columns[2 * x]).toBe(total);
       total += cmds.columns[2 * x + 1];
     }
     expect(total).toBe(cmds.spanCount);
@@ -589,7 +559,7 @@ describe('buildFrameCommands', () => {
       const base = s * SPAN_STRIDE;
 
       expect([SPAN_WALL, SPAN_FLAT, SPAN_SKY]).toContain(cmds.spanWords[base]);
-      expect(cmds.spanWords[base + 2]).toBeLessThanOrEqual(cmds.spanWords[base + 3]); // y0 ≤ y1
+      expect(cmds.spanWords[base + 2]).toBeLessThanOrEqual(cmds.spanWords[base + 3]);
       expect(cmds.spanWords[base + 3]).toBeLessThan(CONFIG.height);
     }
   });
@@ -604,7 +574,7 @@ describe('buildFrameCommands', () => {
     const again = buildFrameCommands(MAP, b, CONFIG, TEX, ids, [], undefined, undefined, reused);
     const fresh = buildFrameCommands(MAP, b, CONFIG, TEX, ids, []);
 
-    expect(again).toBe(reused); // rendered in place
+    expect(again).toBe(reused);
     expect(again.spanCount).toBe(fresh.spanCount);
     expect(Array.from(again.columns.subarray(0, again.columnsWordCount))).toEqual(
       Array.from(fresh.columns.subarray(0, fresh.columnsWordCount)),
@@ -623,63 +593,36 @@ describe('buildFrameCommands', () => {
     const camera: Camera = { x: 4, y: 5, angle: 0.3, z: 1.6 };
     const narrow = { width: 64, height: 48, fov: Math.PI / 2 };
 
-    buildFrameCommands(MAP, camera, narrow, TEX, ids, []); // resize the module scratch down…
-    const cmds = buildFrameCommands(MAP, camera, CONFIG, TEX, ids, []); // …and back up
+    buildFrameCommands(MAP, camera, narrow, TEX, ids, []);
+    const cmds = buildFrameCommands(MAP, camera, CONFIG, TEX, ids, []);
 
-    expect(cmds.columnsWordCount).toBe(CONFIG.width * 7); // geometry + windows + one glass set
+    expect(cmds.columnsWordCount).toBe(CONFIG.width * 7);
     expectQuantized(execute(cmds, pool), reference(MAP, camera));
   });
 
   it('defaults its sprite list to the map decor, exactly like renderFrame', () => {
     const camera: Camera = { x: 4, y: 5, angle: 0.3, z: 1.6 };
     const { ids, pool } = texturePool(TEX);
-    const cmds = buildFrameCommands(MAP, camera, CONFIG, TEX, ids); // no sprites argument
+    const cmds = buildFrameCommands(MAP, camera, CONFIG, TEX, ids);
     const target = new Uint8ClampedArray(CONFIG.width * CONFIG.height * 4);
 
-    renderFrame(MAP, camera, CONFIG, TEX, target); // no sprites argument either → mapSprites
+    renderFrame(MAP, camera, CONFIG, TEX, target);
     expectQuantized(execute(cmds, pool), target);
   });
 });
 
-// ---------------------------------------------------------------------------------------------
-// Stage-2 fixtures: glass, zone portals, sprites — compact authored maps in the renderer suite's
-// style, each executed against `renderFrame` over the SAME inputs.
-// ---------------------------------------------------------------------------------------------
-
-/** A sidedef fronting `sector` (compact fixture builder). */
 function side(sector: number, middleTex = 'BRICK'): SideDef {
   return { sector, xOffset: 0, yOffset: 0, upperTex: 'METAL', lowerTex: 'METAL', middleTex };
 }
 
-/** A 2×2 half-opaque glass texture: TOP row opaque green "mullion", BOTTOM row clear — exercises both
- *  blend branches of a textured pane / door leaf. */
 function halfGlassTexture(): Texture {
   return {
     width: 2,
     height: 2,
-    pixels: new Uint8ClampedArray([
-      40,
-      200,
-      60,
-      255,
-      40,
-      200,
-      60,
-      255, // opaque green frame row
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0, // clear row
-    ]),
+    pixels: new Uint8ClampedArray([40, 200, 60, 255, 40, 200, 60, 255, 0, 0, 0, 0, 0, 0, 0, 0]),
   };
 }
 
-/** A NON-power-of-two 12×10 sprite texture with alpha holes — the atlas-style art the GPU pool must
- *  sample by division (the walls' `&`-wrap would garble it). Two 6×10 cells: left red, right blue. */
 function nonPotSprite(): Texture {
   const width = 12;
   const height = 10;
@@ -690,7 +633,7 @@ function nonPotSprite(): Texture {
       const i = (y * width + x) * 4;
 
       if ((x + y) % 4 === 0) {
-        continue; // an alpha hole
+        continue;
       }
       pixels[i] = x < 6 ? 230 : 30;
       pixels[i + 1] = 40;
@@ -702,8 +645,6 @@ function nonPotSprite(): Texture {
   return { width, height, pixels };
 }
 
-/** Rooms A[y0..6] | B[y6..12] | C[y12..18]: A|B glass (plain, pane, or sliding by `kind`), B|C plain
- *  glass — a two-layer stack from a camera in A looking +y. */
 function glassCorridor(kind: 'plain' | 'pane' | 'sliding'): MapSource {
   return {
     vertices: [
@@ -722,9 +663,9 @@ function glassCorridor(kind: 'plain' | 'pane' | 'sliding'): MapSource {
       { floorZ: 0, ceilZ: 3, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 180 },
     ],
     linedefs: [
-      { v1: 1, v2: 0, front: side(0), back: null }, // A south
-      { v1: 3, v2: 1, front: side(0), back: null }, // A east
-      { v1: 0, v2: 2, front: side(0), back: null }, // A west
+      { v1: 1, v2: 0, front: side(0), back: null },
+      { v1: 3, v2: 1, front: side(0), back: null },
+      { v1: 0, v2: 2, front: side(0), back: null },
       {
         v1: 2,
         v2: 3,
@@ -733,13 +674,13 @@ function glassCorridor(kind: 'plain' | 'pane' | 'sliding'): MapSource {
         glass: true,
         pane: kind === 'pane',
         sliding: kind === 'sliding',
-      }, // A|B
-      { v1: 5, v2: 3, front: side(1), back: null }, // B east
-      { v1: 2, v2: 4, front: side(1), back: null }, // B west
-      { v1: 4, v2: 5, front: side(1), back: side(2), glass: true }, // B|C plain glass
-      { v1: 7, v2: 5, front: side(2), back: null }, // C east
-      { v1: 4, v2: 6, front: side(2), back: null }, // C west
-      { v1: 6, v2: 7, front: side(2), back: null }, // C north
+      },
+      { v1: 5, v2: 3, front: side(1), back: null },
+      { v1: 2, v2: 4, front: side(1), back: null },
+      { v1: 4, v2: 5, front: side(1), back: side(2), glass: true },
+      { v1: 7, v2: 5, front: side(2), back: null },
+      { v1: 4, v2: 6, front: side(2), back: null },
+      { v1: 6, v2: 7, front: side(2), back: null },
     ],
     things: [],
   };
@@ -754,7 +695,6 @@ describe('buildFrameCommands — layered glass', () => {
     const { cmds, pixels } = roundTrip(map, GLASS_CAM, GLASS_TEX);
 
     expectQuantized(pixels, reference(map, GLASS_CAM, GLASS_TEX));
-    // The primary glass set (set 0) recorded layered columns — and a PLAIN window records tu < 0.
     let layered = 0;
 
     for (let x = 0; x < CONFIG.width; x++) {
@@ -762,7 +702,7 @@ describe('buildFrameCommands — layered glass', () => {
 
       if (cmds.columns[table + 1] >= 2) {
         layered++;
-        expect(cmds.auxFloats[cmds.columns[table] + 4]).toBeLessThan(0); // plain → flat tint
+        expect(cmds.auxFloats[cmds.columns[table] + 4]).toBeLessThan(0);
       }
     }
     expect(layered).toBeGreaterThan(0);
@@ -775,13 +715,11 @@ describe('buildFrameCommands — layered glass', () => {
       roundTrip(map, GLASS_CAM, GLASS_TEX).pixels,
       reference(map, GLASS_CAM, GLASS_TEX),
     );
-    // A pane whose texture the library LACKS falls back to the MISSING art on both paths (glass texId 0).
     expectQuantized(roundTrip(map, GLASS_CAM, TEX).pixels, reference(map, GLASS_CAM, TEX));
   });
 
   it('reproduces a SLIDING door leaf at several openness values, sliding its texture U', () => {
     const map = buildBsp(glassCorridor('sliding'));
-    // linedef 3 is the sliding door; index the slides array accordingly.
     const shut = [0, 0, 0, 0];
     const half = [0, 0, 0, 0.5];
     const open = [0, 0, 0, 0.95];
@@ -792,7 +730,6 @@ describe('buildFrameCommands — layered glass', () => {
         reference(map, GLASS_CAM, GLASS_TEX, [], slides),
       );
     }
-    // The leaf texture SLIDES with the door: openness shifts the recorded tu on a still-covered column.
     const { ids } = texturePool(GLASS_TEX);
     const at = (slides: readonly number[]): FrameCommands =>
       buildFrameCommands(map, GLASS_CAM, CONFIG, GLASS_TEX, ids, [], slides);
@@ -822,8 +759,8 @@ describe('buildFrameCommands — layered glass', () => {
   it('washes a sprite seen THROUGH glass and occludes one behind an opaque mullion', () => {
     const map = buildBsp(glassCorridor('pane'));
     const sprites: Sprite[] = [
-      { x: 4.3, y: 9, z: 0, tex: 'REDGUY', width: 1, height: 2.6 }, // in B, behind the pane
-      { x: 4.1, y: 4.5, z: 0, tex: 'REDGUY', width: 0.7, height: 1.2 }, // in A, in FRONT of the pane
+      { x: 4.3, y: 9, z: 0, tex: 'REDGUY', width: 1, height: 2.6 },
+      { x: 4.1, y: 4.5, z: 0, tex: 'REDGUY', width: 0.7, height: 1.2 },
     ];
     const red: Texture = {
       width: 2,
@@ -841,8 +778,6 @@ describe('buildFrameCommands — layered glass', () => {
   });
 });
 
-/** The NEIGHBOUR zone: rooms N1[x0..4] | N2[x4..8] with a glass divider — its own glass must blend
- *  inside the seam window, and its sprites must clip to it. */
 function neighbourZone(): MapSource {
   return {
     vertices: [
@@ -858,20 +793,18 @@ function neighbourZone(): MapSource {
       { floorZ: 0, ceilZ: 3, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 170 },
     ],
     linedefs: [
-      { v1: 1, v2: 0, front: side(0), back: null }, // N1 south
-      { v1: 2, v2: 1, front: side(1), back: null }, // N2 south
-      { v1: 5, v2: 2, front: side(1), back: null }, // N2 east
-      { v1: 4, v2: 5, front: side(1), back: null }, // N2 north
-      { v1: 3, v2: 4, front: side(0), back: null }, // N1 north
-      { v1: 0, v2: 3, front: side(0), back: null }, // N1 west (behind the seam viewer — back-face culled)
-      { v1: 4, v2: 1, front: side(0), back: side(1), glass: true }, // N1|N2 glass divider
+      { v1: 1, v2: 0, front: side(0), back: null },
+      { v1: 2, v2: 1, front: side(1), back: null },
+      { v1: 5, v2: 2, front: side(1), back: null },
+      { v1: 4, v2: 5, front: side(1), back: null },
+      { v1: 3, v2: 4, front: side(0), back: null },
+      { v1: 0, v2: 3, front: side(0), back: null },
+      { v1: 4, v2: 1, front: side(0), back: side(1), glass: true },
     ],
     things: [],
   };
 }
 
-/** The MAIN zone: one room x[0..8] y[0..6] whose EAST edge (x=8) is a live zone-portal seam onto
- *  {@link neighbourZone} — neighbour (0,y) + (8,0) = main (8,y). */
 function mainZone(): MapSource {
   return {
     vertices: [
@@ -882,16 +815,16 @@ function mainZone(): MapSource {
     ],
     sectors: [{ floorZ: 0, ceilZ: 3, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 220 }],
     linedefs: [
-      { v1: 1, v2: 0, front: side(0), back: null }, // south
-      { v1: 0, v2: 2, front: side(0), back: null }, // west
-      { v1: 2, v2: 3, front: side(0), back: null }, // north
+      { v1: 1, v2: 0, front: side(0), back: null },
+      { v1: 0, v2: 2, front: side(0), back: null },
+      { v1: 2, v2: 3, front: side(0), back: null },
       {
         v1: 3,
         v2: 1,
         front: side(0, 'METAL'),
         back: null,
         zonePortal: { zone: 'n', dx: 8, dy: 0 },
-      }, // east — the LIVE seam (solid METAL fallback without a neighbour map)
+      },
     ],
     things: [],
   };
@@ -907,9 +840,8 @@ describe('buildFrameCommands — zone portals', () => {
     const { cmds, pixels } = roundTrip(PMAP, PORTAL_CAM, GLASS_TEX, [], undefined, neighbors);
 
     expectQuantized(pixels, reference(PMAP, PORTAL_CAM, GLASS_TEX, [], undefined, neighbors), 0.02);
-    expect(cmds.setCount).toBe(2); // primary + one seam glass set
-    expect(cmds.phaseCount).toBe(2); // the seam phase + the primary phase
-    // The seam's window columns are recorded (seam id 0) and its flat spans carry the TRANSLATED camera.
+    expect(cmds.setCount).toBe(2);
+    expect(cmds.phaseCount).toBe(2);
     let windows = 0;
     let translated = 0;
 
@@ -923,7 +855,7 @@ describe('buildFrameCommands — zone portals', () => {
 
       if (
         cmds.spanWords[base] === SPAN_FLAT &&
-        cmds.spanFloats[base + 9] === Math.fround(PORTAL_CAM.x - 8) // ncam.x = camera.x − dx (f32-stored)
+        cmds.spanFloats[base + 9] === Math.fround(PORTAL_CAM.x - 8)
       ) {
         translated++;
       }
@@ -933,7 +865,7 @@ describe('buildFrameCommands — zone portals', () => {
   });
 
   it('draws a warm neighbour sprite through the seam, clipped to its windows and z-tested', () => {
-    const sprite: Sprite[] = [{ x: 2, y: 3, z: 0, tex: 'REDGUY', width: 1, height: 2.4 }]; // neighbour coords
+    const sprite: Sprite[] = [{ x: 2, y: 3, z: 0, tex: 'REDGUY', width: 1, height: 2.4 }];
     const red: Texture = {
       width: 2,
       height: 2,
@@ -946,9 +878,8 @@ describe('buildFrameCommands — zone portals', () => {
     const { cmds, pixels } = roundTrip(PMAP, PORTAL_CAM, lib, [], undefined, neighbors);
 
     expectQuantized(pixels, reference(PMAP, PORTAL_CAM, lib, [], undefined, neighbors));
-    // The seam phase carries the neighbour sprite; its record is window-clipped by seam id 0.
-    expect(cmds.auxWords[2]).toBe(1); // phase 0 spriteCount
-    expect(cmds.auxWords[3] | 0).toBe(0); // phase 0 windowSeam
+    expect(cmds.auxWords[2]).toBe(1);
+    expect(cmds.auxWords[3] | 0).toBe(0);
   });
 
   it('runs a GLASS-FREE neighbour without arming its glass set (glass-free zones pay nothing)', () => {
@@ -960,13 +891,10 @@ describe('buildFrameCommands — zone portals', () => {
     const { cmds, pixels } = roundTrip(PMAP, PORTAL_CAM, GLASS_TEX, [], undefined, neighbors);
 
     expectQuantized(pixels, reference(PMAP, PORTAL_CAM, GLASS_TEX, [], undefined, neighbors), 0.02);
-    expect(cmds.auxWords[0] | 0).toBe(-1); // seam phase: no glass set to blend
+    expect(cmds.auxWords[0] | 0).toBe(-1);
   });
 
   it('skips a registered seam whose every column a nearer wall already occluded', () => {
-    // The main zone plus a full-width interior wall at x=6, BETWEEN the camera and the seam: the walk
-    // still registers the seam (its seg is visited, front-facing) but every column is already closed —
-    // the neighbour pass must be skipped, exactly like renderNeighbors' `columns === 0` guard.
     const source = mainZone();
     const blocked = buildBsp({
       ...source,
@@ -977,9 +905,9 @@ describe('buildFrameCommands — zone portals', () => {
     const { cmds, pixels } = roundTrip(blocked, PORTAL_CAM, GLASS_TEX, [], undefined, neighbors);
 
     expectQuantized(pixels, reference(blocked, PORTAL_CAM, GLASS_TEX, [], undefined, neighbors));
-    expect(cmds.setCount).toBe(2); // the seam registered (its glass-set slot exists)…
-    expect(cmds.auxWords[2]).toBe(0); // …but its phase carries no sprites
-    expect(cmds.auxWords[0] | 0).toBe(-1); // …and no glass set (the neighbour walk never ran)
+    expect(cmds.setCount).toBe(2);
+    expect(cmds.auxWords[2]).toBe(0);
+    expect(cmds.auxWords[0] | 0).toBe(-1);
   });
 
   it('keeps a seam solid when its zone has no neighbour map (and when neighbors is absent)', () => {
@@ -1015,16 +943,13 @@ describe('buildFrameCommands — sprites', () => {
         row: 0,
         flash: 0.8,
       },
-      { x: 8.5, y: 5.5, z: 0, tex: 'ABSENT', width: 0.8, height: 1 }, // missing art → the magenta MISSING billboard
+      { x: 8.5, y: 5.5, z: 0, tex: 'ABSENT', width: 0.8, height: 1 },
     ];
 
     expectQuantized(roundTrip(MAP, CAM, lib, sprites).pixels, reference(MAP, CAM, lib, sprites));
   });
 
   it('reproduces VOXEL props (per-pixel DDA volumes) within the f32 bound, head-on and oblique', () => {
-    // A uniform-colour 4×4×4 grid: an f32-vs-f64 cell flip at a voxel boundary lands on the same
-    // colour, so the bound stays the format's ±1 quantization (face-axis ties are measure-zero at
-    // these generic angles).
     const grid: Texture = {
       width: 4,
       height: 16,
@@ -1050,7 +975,6 @@ describe('buildFrameCommands — sprites', () => {
       voxel: true,
     };
 
-    // Oblique (two faces, per-pixel depths) and near-frontal viewpoints, plus a pitched camera.
     for (const camera of [
       CAM,
       { x: 6.5, y: 4.2, angle: 0.9, z: 1.6 },
@@ -1101,16 +1025,13 @@ describe('buildFrameCommands — sprites', () => {
 
       kinds.push(kind);
       if (kind === SPRITE_VOXEL) {
-        // The atlas-cell words are repurposed as the grid dimensions…
-        expect(cmds.auxWords[sb + 5]).toBe(2); // n
-        expect(cmds.auxWords[sb + 6]).toBe(2); // ny (voxelDepth)
-        expect(cmds.auxWords[sb + 7]).toBe(3); // nz = height / ny
+        expect(cmds.auxWords[sb + 5]).toBe(2);
+        expect(cmds.auxWords[sb + 6]).toBe(2);
+        expect(cmds.auxWords[sb + 7]).toBe(3);
         expect(cmds.auxWords[sb + 8]).toBe(0);
-        // …and the tail carries the grid-space camera + ray axes (zScale = nz / height).
-        expect(cmds.auxFloats[sb + 14]).toBeCloseTo(1.6 * (3 / 1.8), 5); // camGZ
-        expect(cmds.auxFloats[sb + 19]).toBeCloseTo(3 / 1.8, 5); // zScale
+        expect(cmds.auxFloats[sb + 14]).toBeCloseTo(1.6 * (3 / 1.8), 5);
+        expect(cmds.auxFloats[sb + 19]).toBeCloseTo(3 / 1.8, 5);
       } else {
-        // A billboard's voxel tail is zeroed (the aux buffer is reused across frames).
         for (let w = 12; w < SPRITE_STRIDE; w++) {
           expect(cmds.auxWords[sb + w]).toBe(0);
         }
@@ -1128,7 +1049,7 @@ describe('buildFrameCommands — sprites', () => {
     ];
     const lib = new Map([...TEX, ['BARREL', metalTexture()]]);
     const { cmds } = roundTrip(MAP, CAM, lib, sprites);
-    const pb = (cmds.phaseCount - 1) * PHASE_STRIDE; // the primary phase is last
+    const pb = (cmds.phaseCount - 1) * PHASE_STRIDE;
     const base = cmds.auxWords[pb + 1];
     const count = cmds.auxWords[pb + 2];
 

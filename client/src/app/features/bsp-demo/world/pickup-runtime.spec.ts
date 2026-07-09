@@ -20,37 +20,25 @@ import type { Door, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
 import { CombatRuntime } from './combat-runtime';
 import { PickupRuntime } from './pickup-runtime';
 
-/**
- * The pickup-objective subsystem's real net — the Playwright specs shoot the portfolio pages, never the game
- * interior, so the collect / objective / door logic is characterized ONLY here. Each test wires a real {@link
- * PickupRuntime} over a shared camera, a real {@link DoomHud}, a REAL {@link CombatRuntime} as the grant target
- * (so the vital/ammo caps are the real ones), and a MUTABLE fixture zone whose pickup / door / slide arrays the
- * runtime edits IN PLACE — then drives the exact methods the frame loop calls and asserts the mutation.
- */
-
-const STAPLES = AMMO_BOX_SPECS[0]; // box_staples: bullets, +20
+const STAPLES = AMMO_BOX_SPECS[0];
 const SHOTGUN = ARSENAL.findIndex((weapon) => weapon.id === 'shotgun');
 
-/** A placed vitals pickup carrying its spawn idx (the WarmZone shape). */
 function vital(x: number, y: number, kind: 'health' | 'armor', size: 'large' | 'small' = 'large') {
   return { x, y, z: 0, age: 0, spec: vitalSpec(kind, size), idx: 0 } satisfies Vital & {
     idx: number;
   };
 }
 
-/** A placed ammo box carrying its spawn idx. */
 function ammoBox(x: number, y: number) {
   return { x, y, z: 0, age: 0, spec: STAPLES, idx: 0 } satisfies AmmoBox & { idx: number };
 }
 
-/** A placed access badge carrying its spawn idx. */
 function keycard(x: number, y: number, color: 'blue' | 'yellow' | 'red') {
   return { x, y, z: 0, age: 0, spec: keycardSpec(color), idx: 0 } satisfies Keycard & {
     idx: number;
   };
 }
 
-/** A placed weapon pickup carrying its spawn idx. */
 function weaponPickup(x: number, y: number, id: 'shotgun') {
   return {
     x,
@@ -62,7 +50,6 @@ function weaponPickup(x: number, y: number, id: 'shotgun') {
   } satisfies WeaponPickup & { idx: number };
 }
 
-/** A blue-badge-locked door whose trigger sits at (`x`,`y`). */
 function door(x: number, y: number, requiresCard: 'blue' | null): Door {
   return {
     sector: 0,
@@ -75,13 +62,10 @@ function door(x: number, y: number, requiresCard: 'blue' | null): Door {
   };
 }
 
-/** A legacy exit marker at (`x`,`y`). */
 function exitMarker(x: number, y: number): Marker {
   return { x, y, z: 0, spec: EXIT_SPEC };
 }
 
-/** A mutable fixture zone — the pickup runtime's {@link PickupZone} seam over a live world, with spy-able
- *  transition + door-stamp drivers. Loosely mutable so a test can seat exits / slides / the transition. */
 interface TestZone {
   world: WarmZone;
   exits: ZoneExit[];
@@ -92,7 +76,6 @@ interface TestZone {
   applyDoors: ReturnType<typeof vi.fn<(doors: readonly Door[], sectors: MutableSector[]) => void>>;
 }
 
-/** Build the fixture world carrying only the fields the pickup runtime reads (cast to the full WarmZone). */
 function makeWorld(overrides: Partial<WarmZone> = {}): WarmZone {
   return {
     vitals: [],
@@ -116,7 +99,6 @@ interface Harness {
   readonly zone: TestZone;
 }
 
-/** Wire a runtime over a fresh camera / HUD / real combat grant / mutable fixture zone. */
 function setup(worldOverrides: Partial<WarmZone> = {}): Harness {
   const camera = { x: 0, y: 0, angle: 0, z: 1.4, pitch: 0 };
   const hud = new DoomHud();
@@ -145,19 +127,19 @@ describe('PickupRuntime — vitals', () => {
   it('heals on a health pickup the player walks onto, marks it taken, and flashes', () => {
     const { pr, combat, world } = setup({ vitals: [vital(0, 0, 'health', 'small')] });
 
-    combat.hurtPlayer(50); // health 50 → a small (25) top-up is visible
+    combat.hurtPlayer(50);
 
     pr.stepPickups(0.1);
 
     expect(combat.hp).toBe(75);
-    expect(world.vitals).toHaveLength(0); // collected — filtered out in place
-    expect(pr.pickupFx).toBe(PICKUP_FX_DURATION); // the green flash is armed
+    expect(world.vitals).toHaveLength(0);
+    expect(pr.pickupFx).toBe(PICKUP_FX_DURATION);
   });
 
   it('caps the heal at the player ceiling', () => {
     const { pr, combat, world } = setup({ vitals: [vital(0, 0, 'health', 'large')] });
 
-    combat.hurtPlayer(10); // health 90; a large (50) heal must cap at 100
+    combat.hurtPlayer(10);
     pr.stepPickups(0.1);
 
     expect(combat.hp).toBe(100);
@@ -179,9 +161,9 @@ describe('PickupRuntime — vitals', () => {
     combat.hurtPlayer(50);
     pr.stepPickups(0.1);
 
-    expect(combat.hp).toBe(50); // untouched
+    expect(combat.hp).toBe(50);
     expect(world.vitals).toHaveLength(1);
-    expect(world.vitals[0].age).toBeCloseTo(0.1, 5); // its turntable advanced
+    expect(world.vitals[0].age).toBeCloseTo(0.1, 5);
   });
 });
 
@@ -193,7 +175,7 @@ describe('PickupRuntime — ammo boxes', () => {
 
     pr.stepPickups(0.1);
 
-    expect(combat.reserveOf('bullets')).toBe(STAPLES.amount); // +20, from 0
+    expect(combat.reserveOf('bullets')).toBe(STAPLES.amount);
     expect(world.ammoBoxes).toHaveLength(0);
     expect(pr.pickupFx).toBe(PICKUP_FX_DURATION);
   });
@@ -201,20 +183,20 @@ describe('PickupRuntime — ammo boxes', () => {
   it('keeps the box when the reserve is already full', () => {
     const { pr, combat, world } = setup({ ammoBoxes: [ammoBox(0, 0)] });
 
-    combat.addAmmo('bullets', STAPLES.max, STAPLES.max); // fill bullets to its cap
+    combat.addAmmo('bullets', STAPLES.max, STAPLES.max);
 
     pr.stepPickups(0.1);
 
-    expect(combat.reserveOf('bullets')).toBe(STAPLES.max); // no over-fill
-    expect(world.ammoBoxes).toHaveLength(1); // kept
+    expect(combat.reserveOf('bullets')).toBe(STAPLES.max);
+    expect(world.ammoBoxes).toHaveLength(1);
   });
 
   it('caps the refill at the reserve max', () => {
     const { pr, combat } = setup({ ammoBoxes: [ammoBox(0, 0)] });
 
-    combat.addAmmo('bullets', STAPLES.max - 5, STAPLES.max); // 5 short of the cap
+    combat.addAmmo('bullets', STAPLES.max - 5, STAPLES.max);
 
-    pr.stepPickups(0.1); // +20 must clamp at the cap
+    pr.stepPickups(0.1);
 
     expect(combat.reserveOf('bullets')).toBe(STAPLES.max);
   });
@@ -225,27 +207,27 @@ describe('PickupRuntime — weapon pickups', () => {
     const { pr, combat, world } = setup({ weaponPickups: [weaponPickup(0, 0, 'shotgun')] });
 
     expect(combat.owns('shotgun')).toBe(false);
-    expect(combat.weaponIndex).toBe(0); // fists at start
+    expect(combat.weaponIndex).toBe(0);
 
     pr.stepPickups(0.1);
 
     expect(combat.owns('shotgun')).toBe(true);
-    expect(combat.weaponIndex).toBe(SHOTGUN); // auto-equipped
-    expect(combat.reserveOf('shells')).toBeGreaterThan(0); // starter dose granted
+    expect(combat.weaponIndex).toBe(SHOTGUN);
+    expect(combat.reserveOf('shells')).toBeGreaterThan(0);
     expect(world.weaponPickups).toHaveLength(0);
   });
 
   it('does NOT re-equip on a repeat pickup (only tops the reserve up)', () => {
     const { pr, combat } = setup({ weaponPickups: [weaponPickup(0, 0, 'shotgun')] });
 
-    combat.grantWeapon('shotgun'); // ALREADY owned — a repeat pickup, player currently on fists
+    combat.grantWeapon('shotgun');
     expect(combat.weaponIndex).toBe(0);
     const shellsBefore = combat.reserveOf('shells');
 
     pr.stepPickups(0.1);
 
-    expect(combat.weaponIndex).toBe(0); // stayed on fists — no re-equip
-    expect(combat.reserveOf('shells')).toBeGreaterThan(shellsBefore); // but the ammo dose still landed
+    expect(combat.weaponIndex).toBe(0);
+    expect(combat.reserveOf('shells')).toBeGreaterThan(shellsBefore);
   });
 });
 
@@ -276,15 +258,15 @@ describe('PickupRuntime — the objective', () => {
     const { pr, camera, zone } = setup();
 
     zone.exits = [{ x: 0, y: 0, z: 0, to: 'm2', entry: 'lobby' }];
-    zone.exitsLocked = true; // arrived here — locked
+    zone.exitsLocked = true;
 
-    pr.stepObjective(0.1); // still inside → stays locked, no transition
+    pr.stepObjective(0.1);
     expect(zone.exitsLocked).toBe(true);
     expect(zone.beginTransition).not.toHaveBeenCalled();
 
-    camera.x = 100; // walk out of the exit radius
+    camera.x = 100;
     pr.stepObjective(0.1);
-    expect(zone.exitsLocked).toBe(false); // re-armed
+    expect(zone.exitsLocked).toBe(false);
   });
 
   it('wins on reaching the legacy single exit', () => {
@@ -313,13 +295,11 @@ describe('PickupRuntime — doors', () => {
       keycards: [keycard(0, 0, 'blue')],
     });
 
-    // No badge yet → the near, locked door stays shut and flashes the hint.
     pr.stepDoors(0.1);
     expect(world.doors[0].openness).toBe(0);
     expect(pr.hint).toBeGreaterThan(0);
     expect(zone.applyDoors).toHaveBeenCalledWith(world.doors, world.sectors);
 
-    // Collect the blue badge, then the same near door opens.
     pr.stepObjective(0.1);
     pr.stepDoors(0.1);
     expect(world.doors[0].openness).toBeGreaterThan(0);
@@ -331,7 +311,7 @@ describe('PickupRuntime — doors', () => {
     pr.stepDoors(0.1);
 
     expect(world.doors[0].openness).toBeGreaterThan(0);
-    expect(pr.hint).toBe(0); // no "badge requis" flash for an unlocked door
+    expect(pr.hint).toBe(0);
   });
 
   it('leaves a far door shut', () => {
@@ -349,13 +329,13 @@ describe('PickupRuntime — sliding doors', () => {
 
     zone.slidingDoors = [{ line: 0, mx: 0, my: 0 }];
 
-    pr.stepSliding(0.1); // near → eases open
+    pr.stepSliding(0.1);
     const opened = world.slides[0];
 
     expect(opened).toBeGreaterThan(0);
 
-    camera.x = 100; // walk away
-    pr.stepSliding(0.1); // far → eases shut
+    camera.x = 100;
+    pr.stepSliding(0.1);
     expect(world.slides[0]).toBeLessThan(opened);
   });
 });
@@ -364,7 +344,7 @@ describe('PickupRuntime — feedback timers + reset', () => {
   it('fades the green pickup flash each frame, clamped at 0', () => {
     const { pr } = setup({ vitals: [vital(0, 0, 'health', 'small')] });
 
-    pr.stepPickups(0.1); // arms the flash
+    pr.stepPickups(0.1);
     expect(pr.pickupFx).toBe(PICKUP_FX_DURATION);
 
     pr.decayFx(0.1);
@@ -381,7 +361,7 @@ describe('PickupRuntime — feedback timers + reset', () => {
     });
     const clearCards = vi.spyOn(hud, 'clearCards');
 
-    pr.stepObjective(0.1); // collect the blue badge (flash armed, badge held)
+    pr.stepObjective(0.1);
     expect(pr.pickupFx).toBeGreaterThan(0);
 
     pr.reset();
@@ -390,7 +370,6 @@ describe('PickupRuntime — feedback timers + reset', () => {
     expect(pr.pickupFx).toBe(0);
     expect(pr.hint).toBe(0);
 
-    // The badge is gone: the blue-locked door no longer opens.
     pr.stepDoors(0.1);
     expect(world.doors[0].openness).toBe(0);
   });

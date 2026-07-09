@@ -19,46 +19,24 @@ import {
 import type { TextureLibrary } from './texture';
 import type { CompiledMap } from './types';
 
-/**
- * The GPU COMMAND-BUFFER builder: the CPU half of the WebGPU compute backend. It runs the SAME passes
- * as the software renderer — the primary {@link wallPass} (BSP front-to-back order, near clipping,
- * per-column occlusion windows), one translated-camera wall pass per LIVE zone-portal seam (clipped to
- * the recorded windows, exactly `renderNeighbors`' discipline), glass recording, and the shared sprite
- * projection ({@link projectSprites}) — but, instead of painting, RECORDS everything into flat typed
- * arrays shaped for storage buffers. A WGSL compute shader then executes the per-pixel work (texture
- * sampling, shading, depth arbitration, the deferred glass blend, the sprite passes) massively parallel —
- * one invocation per pixel.
- *
- * The GPU needs NO recursion / pass concept for portals: seam windows are COLUMN-DISJOINT (one seam per
- * column), so every wall/flat/sky span — primary or neighbour — merges into one per-column stream whose
- * emission order IS the CPU paint order, and the deferred work becomes a flat list of PHASES (per seam:
- * its glass layers then its sprites; finally the primary glass then the primary sprites) each pixel
- * replays in order over local colour/depth registers.
- *
- * Pure: the output depends only on the arguments. Internal working buffers live in a reused module
- * scratch (the renderer's FrameScratch lesson) and `out` is reusable across frames; the only per-frame
- * allocations are the projected sprite-quad lists + the per-seam translated camera — the same small
- * objects the CPU renderer itself allocates in `drawSprites`/`renderNeighbors`.
- */
+// The CPU half of the WebGPU compute backend: runs the software renderer's passes but RECORDS spans/
+// glass/sprites into flat typed arrays a WGSL shader replays per pixel. No recursion for portals — seam
+// windows are COLUMN-DISJOINT, so every span merges into one per-column stream whose emission order IS
+// the CPU paint order, and deferred work is a flat PHASE list. Pure; buffers live in a reused scratch.
 
-/** 32-bit words per span record (u32 header + f32 params + padding — a fixed GPU storage stride). */
-export const SPAN_STRIDE = 12;
+export const SPAN_STRIDE = 12; // u32 header + f32 params + padding — a fixed GPU storage stride
 
-/** Span kinds (word 0 of a record). */
+// Span kinds (word 0 of a record).
 export const SPAN_WALL = 0;
 export const SPAN_FLAT = 1;
 export const SPAN_SKY = 2;
 
-/** 32-bit words per GLASS-LAYER record in the aux buffer. */
 export const GLASS_STRIDE = 8;
-/** 32-bit words per SPRITE record in the aux buffer (billboards and voxel volumes share the stride —
- *  words 12+ are the voxel tail, zeroed on a billboard). */
+// Billboards and voxel volumes share the stride — words 12+ are the voxel tail, zeroed on a billboard.
 export const SPRITE_STRIDE = 20;
-/** SPRITE record kinds (word 11): a camera-facing billboard, or a world-anchored voxel volume (a
- *  per-pixel 3D DDA through its carved grid — see {@link VoxelQuad}). */
+// SPRITE record kinds (word 11).
 export const SPRITE_BILLBOARD = 0;
 export const SPRITE_VOXEL = 1;
-/** 32-bit words per PHASE record in the aux buffer. */
 export const PHASE_STRIDE = 4;
 
 /**
@@ -139,7 +117,6 @@ export interface FrameCommands {
   camZ: number;
 }
 
-/** An empty reusable {@link FrameCommands} — pass it back to `buildFrameCommands` frame after frame. */
 export function createFrameCommands(): FrameCommands {
   return {
     spanWords: new Uint32Array(0),
@@ -162,14 +139,11 @@ export function createFrameCommands(): FrameCommands {
   };
 }
 
-/** Initial scratch capacity, in spans — deliberately small so the doubling growth path stays exercised
- *  by ordinary test frames (any real frame emits far more spans than this). */
+// Deliberately small so the doubling growth path stays exercised by ordinary test frames.
 const INITIAL_CAPACITY = 64;
 
-/** The builder's reused working buffers: raw records in emission order (+ their column) before the
- *  per-column grouping pass, the per-column counters, the walk's clip windows, and the glass/portal
- *  recording structures (one neighbour-glass slot per seam — unlike the CPU's sequential reuse, every
- *  seam's layers must survive until serialization). */
+// One neighbour-glass slot per seam — unlike the CPU's sequential reuse, every seam's layers must survive
+// until serialization.
 interface BuilderScratch {
   width: number;
   capacity: number;
@@ -187,7 +161,7 @@ interface BuilderScratch {
 
 let scratch: BuilderScratch | null = null;
 
-/** The module's {@link BuilderScratch}, (re)allocated only when the render width changes. */
+// (Re)allocated only when the render width changes.
 function builderScratch(width: number): BuilderScratch {
   if (scratch === null || scratch.width !== width) {
     scratch = {
@@ -210,7 +184,6 @@ function builderScratch(width: number): BuilderScratch {
   return scratch;
 }
 
-/** Double the raw-record capacity, keeping the already-emitted records. */
 function grow(scr: BuilderScratch): void {
   scr.capacity *= 2;
   const words = new Uint32Array(scr.capacity * SPAN_STRIDE);
@@ -223,12 +196,11 @@ function grow(scr: BuilderScratch): void {
   scr.rawCol = col;
 }
 
-/** Grow-only fit of a plain-ArrayBuffer-backed u32 array to at least `words` words. */
+// Grow-only.
 function fitWords(current: Uint32Array<ArrayBuffer>, words: number): Uint32Array<ArrayBuffer> {
   return current.length >= words ? current : new Uint32Array(words);
 }
 
-/** Sum of a glass record's live layer counts (0 when the pass ran without glass). */
 function glassTotal(panes: GlassPanes | null, width: number): number {
   if (panes === null) {
     return 0;
@@ -242,17 +214,9 @@ function glassTotal(panes: GlassPanes | null, width: number): number {
   return total;
 }
 
-/**
- * Build one frame's GPU command buffer: run the renderer's passes exactly (same projection, same
- * clipping, same paint order — primary walk, then one clipped translated-camera walk per live zone-portal
- * seam) and record every non-empty span, glass layer, portal window and projected sprite. `textureIds`
- * maps surface names to GPU texture-pool ids; an absent name falls back to id 0 — the pool's reserved
- * MISSING slot (the same magenta fallback the CPU renderer paints). `textures` is the SAME library the
- * CPU renderer would use — glass leaf/pane mapping and sprite atlas cells derive from the actual texture
- * dimensions. `sprites`/`slides`/`neighbors` mirror `renderFrame`'s tail (absent sprites → the map's
- * static decor; absent neighbors → seams record their solid middle texture). Pass the previous frame's
- * `out` to render (almost) allocation-free.
- */
+// Records the renderer's passes exactly (same projection/clipping/paint order). `textureIds` maps surface
+// names to GPU pool ids; an absent name → id 0, the reserved MISSING slot. Pass the previous frame's `out`
+// to render (almost) allocation-free.
 export function buildFrameCommands(
   map: CompiledMap,
   camera: Camera,
@@ -293,8 +257,8 @@ export function buildFrameCommands(
     return base;
   };
 
-  // The recording pass's camera x/y — a NEIGHBOUR walk re-points these at its translated camera so its
-  // flat spans carry the coordinates their world points project from (walls only need the shared camZ).
+  // A NEIGHBOUR walk re-points these at its translated camera, so its flat spans carry the coordinates
+  // their world points project from (walls only need the shared camZ).
   let passCamX = camera.x;
   let passCamY = camera.y;
 
@@ -329,7 +293,7 @@ export function buildFrameCommands(
     },
   };
 
-  // PRIMARY pass — glass/portal recording armed exactly like renderFrame (glass-free maps pay nothing).
+  // PRIMARY pass — glass-free maps pay nothing.
   const glass = map.source.linedefs.some((l) => l.glass === true) ? resetGlass(scr.glass) : null;
   const portals =
     neighbors !== undefined && map.source.linedefs.some((l) => l.zonePortal !== undefined)
@@ -351,10 +315,8 @@ export function buildFrameCommands(
     sink,
   });
 
-  // NEIGHBOUR passes — `renderNeighbors`' discipline, recording: camera translated into the zone, clip
-  // windows pre-loaded from the seam's recorded columns, the neighbour's own glass, no nested portals
-  // (the depth-1 cap), doors shut. Every span lands in the SAME per-column stream: windows are column-
-  // disjoint, so merged emission order is the CPU's paint order.
+  // NEIGHBOUR passes: camera translated into the zone, clip windows pre-loaded from the seam's recorded
+  // columns, no nested portals (depth-1 cap). Column-disjoint windows → merged order is the CPU paint order.
   const seams = portals?.spans.seams ?? [];
   const neighborQuads: SpriteQuad[][] = [];
   const neighborGlass: (GlassPanes | null)[] = [];
@@ -368,7 +330,7 @@ export function buildFrameCommands(
     if (seam.columns === 0) {
       neighborQuads.push([]);
       neighborGlass.push(null);
-      continue; // the seam was visited but every column was already occluded — nothing to record
+      continue; // visited but every column already occluded — nothing to record
     }
     const spans = scr.portals;
 
@@ -431,8 +393,8 @@ export function buildFrameCommands(
 
   cmds.columns = fitWords(cmds.columns, columnsWords);
 
-  // Geometry grouping: prefix-sum the counts into offsets, then a stable counting-sort scatter — within
-  // a column the merged paint order (the CPU tie-breaker) is preserved.
+  // Prefix-sum counts into offsets, then a stable counting-sort scatter — within a column the merged
+  // paint order (the CPU tie-breaker) is preserved.
   let offset = 0;
 
   for (let x = 0; x < width; x++) {
@@ -457,8 +419,7 @@ export function buildFrameCommands(
     }
   }
 
-  // Windows section: the primary pass's recorded portal columns (−1 = no seam window on this column).
-  // Negative values store two's-complement in the u32 array (−1 → 0xffffffff); the shader bitcasts back.
+  // −1 = no seam window; negatives store two's-complement in the u32 array, the shader bitcasts back.
   for (let x = 0; x < width; x++) {
     const base = 2 * width + 3 * x;
 
@@ -468,7 +429,7 @@ export function buildFrameCommands(
   }
 
   // Aux layout: phases, then the glass records (set 0 = primary, then per seam), then the sprites.
-  const phaseCount = seams.length + 1; // one per seam (in seam order) + the primary phase, always last
+  const phaseCount = seams.length + 1; // one per seam (in order) + the primary phase, always last
   const glassSets: (GlassPanes | null)[] = [glass, ...neighborGlass];
   let glassWords = 0;
 
@@ -515,8 +476,7 @@ export function buildFrameCommands(
     }
   }
 
-  // Sprite records + phase table. Phase order = the CPU's deferred order: each seam's [glass, sprites]
-  // in seam order, then the primary [glass, sprites].
+  // Phase order = the CPU's deferred order: each seam's [glass, sprites], then the primary [glass, sprites].
   const writeQuads = (quads: readonly SpriteQuad[], at: number): void => {
     let w = at;
 

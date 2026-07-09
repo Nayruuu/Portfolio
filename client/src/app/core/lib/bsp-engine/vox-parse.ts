@@ -1,50 +1,13 @@
 import type { Texture } from './texture';
 
-/**
- * MAGICAVOXEL `.vox` IMPORTER — decode a hand-sculpted MagicaVoxel model into the SAME voxel-grid
- * {@link Texture} that `voxel-carve.ts` produces, so the renderer's `drawVoxel` DDA draws it without
- * knowing its origin. This is the EXACT-VOLUME source that complements the silhouette carve: the carve
- * guesses a hull from rotation sheets (great for a cubic totem, mushy for a detailed chair/screen); a
- * `.vox` is the real, per-voxel volume the user modelled by hand.
- *
- * FORMAT (the RIFF-like container, https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox.txt):
- * - Header: the 4 bytes `'VOX '` + an int32 version (LE) — the version is not validated (every shipped
- *   version keeps the chunk layout below).
- * - `'MAIN'` chunk: `id(4) · contentSize:int32 · childrenSize:int32`, its content empty; every other
- *   chunk is one of its children. Each chunk header is `id(4) · contentSize · childrenSize` (all int32
- *   LE), so an UNKNOWN chunk (`PACK`, `nTRN`/`nGRP`/`nSHP` scene graph, `MATL`, `LAYR`, …) is skipped
- *   by advancing `contentSize + childrenSize` bytes — this reads the FIRST model only, which is what a
- *   single-object prop export is.
- * - `'SIZE'` chunk: three int32 `(x, y, z)` — the model's bounding box.
- * - `'XYZI'` chunk: an int32 `numVoxels`, then that many `(x, y, z, colorIndex)` uint8 quadruplets.
- *   A voxel's `colorIndex` is 1-based (0 is empty and never listed — only filled voxels appear).
- * - `'RGBA'` chunk (OPTIONAL): 256 `(r, g, b, a)` uint8 entries. Per the spec the array is SHIFTED —
- *   stored entry `i` (0-based) is the colour for `colorIndex i + 1` — so voxel colour `c` reads stored
- *   entry `c − 1`. Absent → the MagicaVoxel {@link DEFAULT_PALETTE} (baked in below).
- *
- * AXIS MAPPING (MagicaVoxel is Z-up like our grid; the choice is documented + proven by the in-game
- * test prop `scripts/make-test-vox.mjs`): MV `(vx, vy, vz)` → grid `(gx, gy, gz)` DIRECTLY —
- *   - `gz = vz` — height, 0 at the BOTTOM (both are Z-up), so a model authored standing renders standing;
- *   - `gy = vy` — DEPTH, 0 at the object's FRONT growing AWAY from the head-on viewer. The face the
- *     player should meet is the model's `−Y` side (MV `y = 0`), matching a thing's authored `angle`;
- *   - `gx = vx` — LATERAL, the front view's left→right (grid `+x` is the head-on viewer's RIGHT).
- * Authoring rule for the user: in MagicaVoxel, model with the side you want facing the player at `Y = 0`
- * (green-axis origin), `+X` to the right, `+Z` up.
- *
- * ENCODING (identical to `carveVoxelProp`): the grid rides an ordinary {@link Texture} — `width = n`
- * (= MV size X, lateral cells), `height = voxelDepth · nz` (= size Y · size Z), `voxelDepth = ny`
- * (= MV size Y, depth). Voxel `(gx, gy, gz)` lives at pixel `(gx, gz · ny + gy)`, slices stacked
- * BOTTOM-up. Alpha `0` = empty, `255` = solid (occupancy — a palette alpha never empties a voxel).
- * Non-cubic models are supported (the three sizes are independent); the renderer keeps the plan cells
- * square off `Sprite.width`, so the model keeps its authored aspect.
- *
- * Pure + deterministic (same bytes → same grid); throws a clear `Error` on a non-`.vox`, a missing
- * `MAIN`/`SIZE`/`XYZI`, a degenerate size, a truncated/corrupt chunk, or a voxel outside the box.
- */
+// Decodes a MagicaVoxel .vox into the SAME voxel-grid Texture voxel-carve.ts produces (byte-identical
+// encoding: voxel (gx,gy,gz) at pixel (gx, gz·ny+gy), slices bottom-up; alpha 0 = empty / 255 = solid).
+// Reads the FIRST model only — unknown chunks (scene graph, MATL, LAYR…) are skipped by size.
+// Axis mapping (MV is Z-up like our grid): gx = MV x (lateral), gy = MV y (depth, 0 = FRONT the player
+// meets), gz = MV z (height, 0 = bottom). RGBA chunk is SHIFTED (see buildPalette).
 
-/** MagicaVoxel's built-in 256-colour palette (used when a `.vox` carries no `RGBA` chunk). Each entry
- *  is `0xAABBGGRR` (little-endian RGBA) and is INDEX-ALIGNED: entry `c` is the colour for voxel
- *  `colorIndex c` (entry `[0]` is the unused/empty slot). */
+// MagicaVoxel's built-in 256-colour palette (no RGBA chunk). Each entry 0xAABBGGRR, INDEX-ALIGNED: entry
+// `c` is the colour for colorIndex `c` ([0] unused).
 const DEFAULT_PALETTE = new Uint32Array([
   0x00000000, 0xffffffff, 0xffccffff, 0xff99ffff, 0xff66ffff, 0xff33ffff, 0xff00ffff, 0xffffccff,
   0xffccccff, 0xff99ccff, 0xff66ccff, 0xff33ccff, 0xff00ccff, 0xffff99ff, 0xffcc99ff, 0xff9999ff,
@@ -80,12 +43,10 @@ const DEFAULT_PALETTE = new Uint32Array([
   0xffbbbbbb, 0xffaaaaaa, 0xff888888, 0xff777777, 0xff555555, 0xff444444, 0xff222222, 0xff111111,
 ]);
 
-/** The `RGBA` chunk's byte length: 256 entries × 4 bytes. */
 const RGBA_BYTES = 256 * 4;
 
-/** Build an INDEX-ALIGNED RGBA palette (`pal[c·4 …]` = the colour for voxel `colorIndex c`, `[0]`
- *  unused): from the file's `RGBA` chunk (stored entry `i` is colour `i + 1`, the spec's shift) or,
- *  when absent, from {@link DEFAULT_PALETTE}. */
+// INDEX-ALIGNED palette (pal[c·4…] = colour for colorIndex c). The file's RGBA chunk is SHIFTED — stored
+// entry i is colour i+1.
 function buildPalette(raw: Uint8Array | null): Uint8Array {
   const pal = new Uint8Array(256 * 4);
 
@@ -101,8 +62,7 @@ function buildPalette(raw: Uint8Array | null): Uint8Array {
 
     return pal;
   }
-  // The RGBA chunk is shifted: stored entry i (0-based) is the colour for colorIndex i + 1, so it
-  // fills palette indices 1..255 (the 256th stored entry maps to index 256 and is unused).
+  // Fills palette indices 1..255 (the 256th stored entry maps to index 256 and is unused).
   for (let i = 0; i < 255; i++) {
     pal[(i + 1) * 4] = raw[i * 4];
     pal[(i + 1) * 4 + 1] = raw[i * 4 + 1];
@@ -113,15 +73,10 @@ function buildPalette(raw: Uint8Array | null): Uint8Array {
   return pal;
 }
 
-/**
- * Decode a MagicaVoxel `.vox` model into a voxel-grid {@link Texture} (see the module doc for the
- * format, the MV → grid axis mapping, and the encoding — byte-identical to `carveVoxelProp`'s output).
- * Throws a clear `Error` on any malformed input. Pure + deterministic.
- */
 export function parseVox(input: ArrayBuffer | Uint8Array): Texture {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  // Bounds-guarded readers — every read past the buffer is a truncated file, not a silent NaN/0.
+  // Bounds-guarded readers — a read past the buffer is a truncated file, not a silent NaN/0.
   const int32 = (off: number): number => {
     if (off + 4 > bytes.length) {
       throw new Error('vox: truncated (reading past end of buffer)');
@@ -144,7 +99,7 @@ export function parseVox(input: ArrayBuffer | Uint8Array): Texture {
     throw new Error("vox: missing 'MAIN' chunk");
   }
   // Walk MAIN's children, keeping the first SIZE / XYZI / RGBA (a single-object export).
-  let p = 20 + int32(12); // 20 = header(8) + MAIN id(4) + content/children sizes(8); skip MAIN content
+  let p = 20 + int32(12); // 20 = header(8) + MAIN id(4) + sizes(8); skip MAIN content
   const end = p + int32(16);
   let dims: readonly [number, number, number] | null = null;
   let voxels: { readonly count: number; readonly off: number } | null = null;

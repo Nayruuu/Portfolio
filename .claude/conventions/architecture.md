@@ -104,14 +104,15 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
 
 - **One** barrel: `core/lib/index.ts`, `export *` from each `lib/` file (one line per file). A cohesive
   multi-file engine may live in a **sub-folder with its own sub-barrel**. The BSP game uses two:
-  - `core/lib/game/` — the pure combat subset both the standalone demo and the in-player game reuse: the
-    combat types (`KeycardColor`/`KEYCARD_COLORS`, `WeaponCombat`, `ProjectileSpec`, `ChainSpec`), the
-    magazine / fire-rate / reload subsystem (`stepArsenal`), the weapon-ownership progression rules
-    (`weapon-progression` — fists-only start, unowned-slot wheel skipping, first-pickup auto-equip), the
-    workers-only render governor (`render-governor` — measured trial/audit/revert; resolution never
-    adapts), and the shared combat-tuning constants
-    (`AIM_CONE`/`AMMO_START`/`MELEE_CONE`/`MELEE_RANGE`/`ARC_DURATION`). It is **re-exported through the
-    root barrel** as one line — `export * from './game'` — so consumers import it from `…/core/lib`.
+  - `core/lib/game/` — the pure game layer both the standalone demo and the in-player game reuse, grouped
+    into sub-folders by concern: `enemy/` (the roster + the pure AI), `combat/` (hitscan / projectile /
+    per-frame combat), `doors/`, `controls/`, `zone/` (the zone snapshot), `level/` (the `Level` contract),
+    `levels/` (the hand-authored floors + `demo-map`), `registry/` (`level-select`), `weapons/` (the
+    magazine / fire-rate / reload subsystem + the fists-only ownership progression), `telemetry/`
+    (frame-stats + the workers-only render governor). Plus the top-level `types.ts` (`KeycardColor`/
+    `KEYCARD_COLORS`, …) and **`game-tuning.ts`** — the central gameplay balance/feel sheet (movement / look /
+    combat / enemy / pickup / door / timing constants). It is **re-exported through the root barrel** as one
+    line — `export * from './game'` — so consumers import it from `…/core/lib`.
   - `core/lib/bsp-engine/` — the from-scratch DOOM-style **BSP software engine**: the map data model +
     node builder (the BSP compiler), the front-to-back BSP walk + textured wall/floor/ceiling `renderer`
     (incl. the transparent-glass pass — tinted panes, textured windows, double sliding doors — and the
@@ -156,12 +157,13 @@ by relative path within the feature.
 
 A folder holds **a few files or sub-folders grouped by category**, never a flat pile. As a unit grows,
 split it into named sub-folders by concern — the way `domain/` already groups by sub-domain and
-`core/services/` by service. Rule of thumb: **past ~4–5 files in one folder, group them.** The game
-sub-modules are where this bites right now and are **not yet compliant**: `core/lib/bsp-engine/` (14
-files) and `features/bsp-demo/` (17 files) are currently FLAT and well over the threshold — the ongoing
-component decomposition splits them into categorized sub-folders (`core/lib/game/{enemy,combat,zone,
-door}/`, `features/bsp-demo/{levels,render,load}/`, …), and every new file lands grouped, not at the
-root. Sub-folders are wired through the module's **existing sub-barrel** (§3): the barrel re-exports the
+`core/services/` by service. Rule of thumb: **past ~4–5 files in one folder, group them.** The game modules
+were decomposed into this shape: `core/lib/game/` splits into ten categorized sub-folders
+(`enemy/ combat/ doors/ controls/ zone/ level/ levels/ registry/ weapons/ telemetry/`), and
+`features/bsp-demo/` into six (`boot/ input/ painters/ render/ sprites/ world/`) around the thin coordinator
+component. `core/lib/bsp-engine/` (~15 source files) is the one remaining FLAT module — a cohesive engine kept whole
+for now; it may yet split by concern (walk / geometry / voxel / gpu). Every new file lands grouped, not at
+the root. Sub-folders are wired through the module's **existing sub-barrel** (§3): the barrel re-exports the
 nested files, so consumers still import from the one barrel — the nesting is internal organization, not
 new public surface. (Folder-level companion to the one-file-one-responsibility rule in `code.md §1`.)
 
@@ -180,6 +182,7 @@ domain/
   code/     code-lang.ts token.ts
   comment/  comment.ts
   contact/  contact.ts contact-kind.ts contact-method.ts availability.ts form-labels.ts
+  game/     weapon-id.ts                   # WEAPON_IDS value-set + the derived WeaponId union (the game domain)
   i18n/     lang.ts theme.ts
   player/   chapter.ts metric.ts scene-id.ts scene-{intro,stack,projects,timeline,outro}.ts stack-card.ts timeline-row.ts up-next.ts
   project/  project-scene.ts project-thumb.ts
@@ -228,9 +231,13 @@ features/home/
             typed/   typed.component.{ts,html,scss}      # no-reflow per-string typewriter (sd-typed)
             scenes/  intro-scene/ stack-scene/ projects-scene/ timeline-scene/ outro-scene/
 features/bsp-demo/                                 # the hidden BSP game (OPEN SPACE.EXE) — a top-level lazy feature
-  bsp-demo.component.{ts,html,scss}                # sd-bsp-demo — the game shell; served at /bsp AND mounted in the player
-  render.worker.ts  render-pool.ts  gpu-renderer.ts  load-textures.ts  # browser-only render code (SAB worker pool + the WebGPU compute backend + WebP/procedural textures)
-  level-accueil.ts  level-m1-lobby.ts  level-m2-openspace.ts  level-hangar.ts  level-demo.ts  demo-map.ts  level-builder.ts  room-builder.ts  level-select.ts  zone-state.ts  pickups.ts  enemies.ts  # hand-authored levels + the wall/room authoring builders + the level registry (dev URL params) + per-zone world-state persistence + entity helpers
+  bsp-demo.component.{ts,html,scss}                # sd-bsp-demo — the thin coordinator shell; served at /bsp AND mounted in the player
+  boot/      asset-loader.ts                       # the afterNextRender asset-load orchestration (dispose-gated)
+  input/     input-controller.ts                   # keyboard/mouse handlers + the held movement set
+  render/    render.worker.ts render-pool.ts gpu-renderer.ts load-textures.ts render-host.ts  # browser-only render (SAB worker pool + WebGPU backend + WebP/procedural textures + the render confluence)
+  painters/  overlay-painter.ts world-fx-painter.ts hud-painter.ts weapon-painter.ts          # the canvas painters, invoked in a fixed blit draw-order
+  sprites/   sprite-builder.ts                     # world → Sprite[]
+  world/     zone-runtime.ts combat-runtime.ts pickup-runtime.ts player-motion.ts  zone-world.ts enemy-runtime.ts pickups.ts  # the state-owning game runtimes + the feature model types (the levels / builders / registry / roster / zone-state moved to core/lib)
 ```
 
 Features with internal routing keep a `*.routes.ts` at the feature root and a `*-detail/` folder for
@@ -245,9 +252,9 @@ the detail component (`articles/articles.routes.ts` + `article-detail/`; same fo
 `layout/channel-header/`, `layout/tabs-bar/`. Each is a folder holding the component + its
 co-located template/styles/spec. `shared/game/` is the exception — not an `sd-` component but the
 cross-feature **presentational game helpers** (the `DoomHud` / `WeaponView` / `ClimbView` imperative
-helper classes + the `weapons` / `effects` JSON-bridge data, each with its `.spec.ts`, plus the small
-`climb-frames` / `loaded-image` support modules), engine-agnostic so any game surface — today
-`sd-bsp-demo` — can reuse them.
+helper classes + the `weapons` / `effects` JSON-bridge data + the `gaze` turn-EMA helper, each with its
+`.spec.ts`, plus the small `climb-frames` / `loaded-image` support modules), engine-agnostic so any game
+surface — today `sd-bsp-demo` — can reuse them.
 
 ---
 

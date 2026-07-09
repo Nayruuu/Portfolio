@@ -3,19 +3,10 @@ import type { MapSource } from '../../../core/lib/bsp-engine';
 import { parseLevelParams, ZONE_FADE, zoneStates } from '../../../core/lib';
 import { EYE_HEIGHT, ZoneRuntime, type MutableCamera, type ZoneRuntimeHooks } from './zone-runtime';
 
-/**
- * Characterization of the zone/world lifecycle — the behaviour the seam-crossing / zone-swap / warm-neighbour
- * paths rely on (they are NOT fully covered by the Playwright net). Exercised over the real M1 ⇄ M2 seam pair:
- * M1 (`m1`) carries a PASSABLE live seam into M2 (`m2`) at the north hall stub, so loading M1 warms M2 and
- * walking through the seam swaps them. `zoneStates` is a module singleton, so each test resets it.
- */
-
-/** A fresh camera object — the runtime places + translates it by reference; tests read it back. */
 function makeCamera(): MutableCamera {
   return { x: 0, y: 0, angle: 0, z: 0, pitch: 0 };
 }
 
-/** A runtime wired to spies over a fresh camera; the pool/transient hooks record their calls. */
 function makeRuntime(camera: MutableCamera = makeCamera()): {
   runtime: ZoneRuntime;
   camera: MutableCamera;
@@ -38,7 +29,7 @@ function makeRuntime(camera: MutableCamera = makeCamera()): {
 }
 
 beforeEach(() => {
-  zoneStates.reset(); // the building is module-scoped — never leak one test's snapshots into the next
+  zoneStates.reset();
 });
 
 describe('ZoneRuntime — active world load', () => {
@@ -51,7 +42,6 @@ describe('ZoneRuntime — active world load', () => {
     expect(runtime.world.sectors.length).toBeGreaterThan(0);
     expect(runtime.world.map).toBeDefined();
     expect(runtime.currentKey).toBe('m1');
-    // M1's authored spawn — the runtime writes the SHARED camera in place (not a copy).
     expect(camera.x).toBe(26);
     expect(camera.y).toBe(131);
     expect(camera.z).toBeCloseTo(runtime.world.level.map.sectors[0].floorZ + EYE_HEIGHT, 5);
@@ -75,7 +65,6 @@ describe('ZoneRuntime — active world load', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    // Pre-atlas: geometry only — no entities, and the world must not read as "populated".
     expect(runtime.atlasesReady).toBe(false);
     expect(runtime.world.populated).toBe(false);
     expect(runtime.world.enemies).toHaveLength(0);
@@ -94,7 +83,7 @@ describe('ZoneRuntime — active world load', () => {
 
     runtime.loadZone('does-not-exist');
 
-    expect(runtime.world.key).toBe('m1'); // DEFAULT_LEVEL_KEY
+    expect(runtime.world.key).toBe('m1');
   });
 });
 
@@ -103,7 +92,6 @@ describe('ZoneRuntime — warm neighbour', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    // Before the atlases: the warm world exists as bare geometry.
     expect(runtime.warm).not.toBeNull();
     expect(runtime.warm?.key).toBe('m2');
     expect(runtime.warm?.populated).toBe(false);
@@ -150,17 +138,13 @@ describe('ZoneRuntime — seamless seam crossing', () => {
 
     runtime.loadZone('m1');
     runtime.markAtlasesReady();
-    // The M1→M2 seam runs x∈[24,28] at y=30, its outward normal pointing −y into M2 (dx 0, dy −100).
-    // Step from just south of the line (front) to just north (back): a valid front→back crossing.
     const crossed = runtime.crossSeam(26, 31, 26, 29);
 
     expect(crossed).toBe(true);
-    expect(runtime.world.key).toBe('m2'); // the warm world is adopted as active
-    expect(runtime.warm?.key).toBe('m1'); // the outgoing world becomes the reverse-portal warm neighbour
-    // Player translated by the seam transform (dx 0, dy −100): (26, 29) → (26, 129) in M2 coordinates.
+    expect(runtime.world.key).toBe('m2');
+    expect(runtime.warm?.key).toBe('m1');
     expect(camera.x).toBeCloseTo(26, 5);
     expect(camera.y).toBeCloseTo(129, 5);
-    // The component seams fire: pool.swapTo + the transient translation by the seam offset.
     expect(hooks.onSeamSwap).toHaveBeenCalledWith('m2', expect.anything());
     expect(hooks.onSeamTranslate).toHaveBeenCalledWith(0, -100);
   });
@@ -170,7 +154,6 @@ describe('ZoneRuntime — seamless seam crossing', () => {
 
     runtime.loadZone('m1');
     runtime.markAtlasesReady();
-    // A step that stays on the front side of the seam — no crossing.
     const crossed = runtime.crossSeam(26, 33, 26, 32);
 
     expect(crossed).toBe(false);
@@ -184,7 +167,6 @@ describe('ZoneRuntime — seamless seam crossing', () => {
     runtime.markAtlasesReady();
     runtime.crossSeam(26, 31, 26, 29);
 
-    // Now in M2 — its own passable seam back into M1 must be indexed.
     expect(runtime.seams.some((seam) => seam.zone === 'm1')).toBe(true);
   });
 });
@@ -200,17 +182,16 @@ describe('ZoneRuntime — snapshot / restore round-trip', () => {
     expect(runtime.world.enemies.length).toBeGreaterThan(0);
     expect(vitalCount).toBeGreaterThan(0);
 
-    // Kill the first enemy (a dying-through corpse) and collect the first vital (drop it from the live list).
     runtime.world.enemies[0].dying = true;
     runtime.world.enemies[0].hp = 0;
     runtime.world.vitals = runtime.world.vitals.slice(1);
 
-    runtime.loadZone('m2'); // leaving M1 snapshots the corpse + the taken vital
-    runtime.loadZone('m1'); // returning restores them — nothing respawns behind the player
+    runtime.loadZone('m2');
+    runtime.loadZone('m1');
 
     expect(runtime.world.enemies[0].dying).toBe(true);
     expect(runtime.world.enemies[0].hp).toBe(0);
-    expect(runtime.world.vitals).toHaveLength(vitalCount - 1); // the collected vital stays gone
+    expect(runtime.world.vitals).toHaveLength(vitalCount - 1);
   });
 
   it('respawns everything on a fresh (new-game) load', () => {
@@ -223,9 +204,9 @@ describe('ZoneRuntime — snapshot / restore round-trip', () => {
     runtime.world.enemies[0].dying = true;
     runtime.world.enemies[0].hp = 0;
     runtime.world.vitals = runtime.world.vitals.slice(1);
-    runtime.loadZone('m2'); // snapshot the changes
+    runtime.loadZone('m2');
 
-    runtime.loadZone('m1', undefined, true); // fresh: the whole building resets
+    runtime.loadZone('m1', undefined, true);
 
     expect(runtime.world.enemies[0].dying).toBe(false);
     expect(runtime.world.enemies[0].hp).toBeGreaterThan(0);
@@ -243,17 +224,14 @@ describe('ZoneRuntime — fade transition', () => {
 
     expect(runtime.transition).not.toBeNull();
 
-    // Fade-out (< ZONE_FADE): still on the old floor.
     runtime.stepTransition(ZONE_FADE * 0.5);
     expect(runtime.transition?.swapped).toBe(false);
     expect(runtime.world.key).toBe('m1');
 
-    // Past ZONE_FADE (at black): the floor swaps.
     runtime.stepTransition(ZONE_FADE * 0.6);
     expect(runtime.transition?.swapped).toBe(true);
     expect(runtime.world.key).toBe('accueil');
 
-    // Past 2·ZONE_FADE: the transition clears.
     runtime.stepTransition(ZONE_FADE);
     expect(runtime.transition).toBeNull();
   });

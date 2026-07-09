@@ -14,8 +14,6 @@ interface FillCall {
   readonly rect: readonly number[];
 }
 
-/** A minimal 2D-context stub that records the `fillStyle` in force at each `fillRect` — enough to assert the
- *  overlay guards (nothing drawn) and the exact alpha math of each full-screen wash. */
 function fakeCtx(width = 100, height = 80): { ctx: CanvasRenderingContext2D; fills: FillCall[] } {
   const fills: FillCall[] = [];
   const ctx = {
@@ -58,7 +56,7 @@ describe('overlay-painter washes', () => {
   it('drawHurtFx paints a full-screen red wash at 0.45×ratio alpha', () => {
     const { ctx, fills } = fakeCtx(120, 90);
 
-    drawHurtFx(ctx, HURT_FX_DURATION); // ratio 1 → peak alpha
+    drawHurtFx(ctx, HURT_FX_DURATION);
 
     expect(fills).toHaveLength(1);
     expect(fills[0].fillStyle).toBe('rgba(190, 0, 0, 0.45)');
@@ -68,7 +66,7 @@ describe('overlay-painter washes', () => {
   it('drawPickupFx paints a green wash at 0.22×ratio alpha', () => {
     const { ctx, fills } = fakeCtx();
 
-    drawPickupFx(ctx, PICKUP_FX_DURATION / 2); // ratio 0.5 → 0.11
+    drawPickupFx(ctx, PICKUP_FX_DURATION / 2);
 
     expect(fills).toHaveLength(1);
     expect(fills[0].fillStyle).toBe('rgba(70, 230, 120, 0.11)');
@@ -85,7 +83,7 @@ describe('overlay-painter washes', () => {
   it('drawChargeFx uses the stronger of the live glow and the peak-scaled discharge flash', () => {
     const { ctx, fills } = fakeCtx();
 
-    drawChargeFx(ctx, 0.3, 1); // max(0.3, 1 * 0.92) → 0.92
+    drawChargeFx(ctx, 0.3, 1);
 
     expect(fills).toHaveLength(1);
     expect(fills[0].fillStyle).toBe('rgba(60, 255, 90, 0.92)');
@@ -102,7 +100,7 @@ describe('overlay-painter washes', () => {
   it('drawZoneFade ramps to opaque black at the floor swap', () => {
     const { ctx, fills } = fakeCtx();
 
-    drawZoneFade(ctx, { swapped: false, clock: 0.35 }, 0.35); // clock/fade = 1
+    drawZoneFade(ctx, { swapped: false, clock: 0.35 }, 0.35);
 
     expect(fills).toHaveLength(1);
     expect(fills[0].fillStyle).toBe('rgba(0, 0, 0, 1)');
@@ -120,7 +118,7 @@ describe('overlay-painter washes', () => {
   it('drawGameOver washes the frozen scene once the player is dead', () => {
     const { ctx, fills } = fakeCtx();
 
-    drawGameOver(ctx, true, 0.5, false); // min(0.72, 0.5*0.9) → 0.45
+    drawGameOver(ctx, true, 0.5, false);
 
     expect(fills).toHaveLength(1);
     expect(fills[0].fillStyle).toBe('rgba(8, 0, 0, 0.45)');

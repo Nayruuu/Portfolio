@@ -1,22 +1,11 @@
-/**
- * The world → `Sprite[]` builders for the BSP demo: they turn ONE zone's live entity state (barrels,
- * enemies, thrown projectiles, floor pickups, the legacy exit sign) into the per-frame billboard list the
- * renderer depth-sorts. The active zone's list ({@link buildLiveSprites}) also carries the zone-graph exit
- * signs + stress-test barrels; a WARM neighbour's list ({@link buildWarmSprites}) is built in its OWN
- * coordinates so props seen through a seam window orient for the camera translated across the seam.
- *
- * Pure functions of their explicit arguments — the component sources the zone state at the call site. The
- * produced array's contents + order are load-bearing (a changed list is a visual diff), so the build order,
- * the distance/aliveness culling, and the atlas gating here mirror the render contract exactly.
- */
+// The produced array's contents + ORDER are load-bearing (a changed list is a visual diff), so build order,
+// culling, and atlas gating mirror the render contract exactly.
 import { orientSprite, type Sprite } from '../../../core/lib/bsp-engine';
 import { ENEMY_RECOIL, HIT_FLASH_DURATION, type EnemyShot } from '../../../core/lib';
 import type { Foe } from '../world/enemy-runtime';
 import type { WarmZone, ZoneExit } from '../world/zone-world';
 import { EXIT_SPEC, pickupFrame, type Marker } from '../world/pickups';
 
-/** The subset of a zone's live state the world-sprite build reads — the active zone (assembled at the call
- *  site) or a {@link WarmZone} neighbour both satisfy it. */
 export type WorldSpriteSource = Pick<
   WarmZone,
   | 'targets'
@@ -29,16 +18,13 @@ export type WorldSpriteSource = Pick<
   | 'exit'
 >;
 
-/** One zone's world-sprite build inputs: the live entity source + the camera IN THAT ZONE'S coordinates (the
- *  view point that picks each directional prop's rotation cell). */
+/** (`viewX`,`viewY`) is the camera IN THAT ZONE'S coordinates — it picks each directional prop's rotation cell. */
 export interface WorldSpritesInput {
   readonly world: WorldSpriteSource;
   readonly viewX: number;
   readonly viewY: number;
 }
 
-/** The active zone's live-sprite build inputs: the world source + view point, the atlas-decoded gate for the
- *  zone-graph exit signs, those exits, and the debug stress-test barrels. */
 export interface LiveSpritesInput {
   readonly world: WorldSpriteSource;
   readonly viewX: number;
@@ -48,8 +34,8 @@ export interface LiveSpritesInput {
   readonly stress: readonly { readonly x: number; readonly y: number; readonly z: number }[];
 }
 
-/** A warm neighbour's sprite build inputs: the warm world + the camera (in the ACTIVE zone's coordinates) + the
- *  passable seams, from which the matching seam translates the camera into the warm zone's own coordinates. */
+/** `cameraX`/`cameraY` are in the ACTIVE zone's coordinates; the matching seam translates them into the warm
+ *  zone's own coordinates. */
 export interface WarmSpritesInput {
   readonly warm: WarmZone;
   readonly cameraX: number;
@@ -57,7 +43,6 @@ export interface WarmSpritesInput {
   readonly seams: readonly { readonly zone: string; readonly dx: number; readonly dy: number }[];
 }
 
-/** The shared shape every rotating floor pickup's spec exposes to the turntable billboard build. */
 interface SpinningPickupSpec {
   readonly texName: string;
   readonly worldHeight: number;
@@ -66,12 +51,11 @@ interface SpinningPickupSpec {
   readonly frameMs: number;
 }
 
-/** One enemy → its billboard for this frame. Priority of animation state: death → attack wind-up → pain →
- *  walk; the hit-flash decays over its duration (0→1 additive brighten) and flinches the body UP with it. */
+/** Animation-state priority: death → attack wind-up → pain → walk. */
 function enemySprite(e: Foe): Sprite {
   const s = e.spec;
-  // A dying enemy carries no flash — the death animation owns its feedback.
-  const flash = e.dying ? 0 : e.hitFlash / HIT_FLASH_DURATION;
+  const flash = e.dying ? 0 : e.hitFlash / HIT_FLASH_DURATION; // a dying enemy carries no flash
+
   const base = {
     x: e.x,
     y: e.y,
@@ -82,14 +66,12 @@ function enemySprite(e: Foe): Sprite {
   };
 
   if (e.dying) {
-    // Death atlas (front-only strip): advance by deathTime, then freeze on the last frame — a corpse.
-    const col = Math.min(s.deathFrames - 1, Math.floor(e.deathTime * s.deathFps));
+    const col = Math.min(s.deathFrames - 1, Math.floor(e.deathTime * s.deathFps)); // freeze on the last frame — a corpse
 
     return { ...base, tex: s.deathTexName, cols: s.deathFrames, rows: 1, col, row: 0 };
   }
   if (e.windup > 0) {
-    // Attack atlas (front-only): the wind-up animation plays once across the telegraph. Its cell may have a
-    // different aspect than the walk cell, so override the billboard width for this state.
+    // The attack cell may have a different aspect than the walk cell → override the billboard width here.
     const col = Math.min(s.attackFrames - 1, Math.floor((s.windup - e.windup) * s.attackFps));
 
     return {
@@ -103,16 +85,14 @@ function enemySprite(e: Foe): Sprite {
     };
   }
   if (e.hitFlash > 0) {
-    // Pain: a single front-only flinch frame while the hit-flash lasts (priority: attack → pain → walk).
     return { ...base, tex: s.painTexName, cols: 1, rows: 1, col: 0, row: 0 };
   }
-  // Walk frame from cumulative travel (legs tied to motion); front row — a foe faces the player in combat.
+  // Walk frame from cumulative travel; front row (row 0) — a foe faces the player in combat.
   const col = Math.floor(e.walkDist * s.walkStepRate) % s.walkCols;
 
   return { ...base, tex: s.texName, cols: s.walkCols, rows: s.walkRows, col, row: 0 };
 }
 
-/** A thrower's flying projectile → a spinning front-strip billboard at its world point. */
 function enemyShotSprite(shot: EnemyShot): Sprite {
   const col = Math.floor(shot.traveled * shot.proj.spinRate) % shot.proj.frames;
 
@@ -130,8 +110,6 @@ function enemyShotSprite(shot: EnemyShot): Sprite {
   };
 }
 
-/** A grounded turntable pickup (vitals · ammo box · access badge · weapon unlock) → its billboard: a
- *  turntable when `spin`, else a static frame-0 quad. The quad never rotates; only the atlas cell advances. */
 function spinningSprite(
   x: number,
   y: number,
@@ -156,7 +134,6 @@ function spinningSprite(
   };
 }
 
-/** The legacy exit sign → a grounded single-frame billboard (the level goal). */
 function exitSprite(exit: Marker): Sprite {
   return {
     x: exit.x,
@@ -168,10 +145,7 @@ function exitSprite(exit: Marker): Sprite {
   };
 }
 
-/** ONE zone's entity billboards — the active zone's (via {@link buildLiveSprites}) or a WARM neighbour's
- *  (via {@link buildWarmSprites}), in that zone's own coordinates. (`viewX`,`viewY`) is the camera IN THAT
- *  ZONE'S coordinates — it picks each directional prop's rotation cell per frame. Build order is load-bearing:
- *  targets → enemies → thrown shots → vitals → ammo → keycards → weapon pickups → exit. */
+/** Build order is load-bearing: targets → enemies → thrown shots → vitals → ammo → keycards → weapon pickups → exit. */
 export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
   const { world, viewX, viewY } = input;
   const sprites = world.targets
@@ -203,16 +177,12 @@ export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
   return sprites;
 }
 
-/** The active zone's live billboards this frame — the world sprites plus the zone-graph exit signs (gated on
- *  the pickup atlases having decoded) and the stress-test barrels. Projectiles are NOT here: they are painted
- *  screen-space over the frame by the world-fx painter. */
+/** Projectiles are NOT here — they are painted screen-space over the frame by the world-fx painter. */
 export function buildLiveSprites(input: LiveSpritesInput): Sprite[] {
   const { world, viewX, viewY, atlasesReady, zoneExits, stress } = input;
   const sprites = buildWorldSprites({ world, viewX, viewY });
 
   if (atlasesReady) {
-    // Each zone-graph exit shows the same exit sign (its art decodes with the pickup atlases). Active zone
-    // only — a warm neighbour's graph exits stay signless behind the window.
     for (const e of zoneExits) {
       sprites.push({
         x: e.x,
@@ -225,15 +195,14 @@ export function buildLiveSprites(input: LiveSpritesInput): Sprite[] {
     }
   }
   for (const e of stress) {
-    sprites.push({ x: e.x, y: e.y, z: e.z, tex: 'BARREL', width: 0.8, height: 1.7 }); // synthetic enemy billboard
+    sprites.push({ x: e.x, y: e.y, z: e.z, tex: 'BARREL', width: 0.8, height: 1.7 });
   }
 
   return sprites;
 }
 
-/** A WARM neighbour's live billboards for the render's neighbour-sprites channel, in ITS own coordinates —
- *  directional props oriented for the camera translated through the seam (the same ghost point the warm AI
- *  tracks), so a totem seen through the window turns exactly like a local one. */
+/** Built in the neighbour's OWN coordinates — props oriented for the camera translated through the seam, so a
+ *  totem seen through the window turns exactly like a local one. */
 export function buildWarmSprites(input: WarmSpritesInput): Sprite[] {
   const { warm, cameraX, cameraY, seams } = input;
   const seam = seams.find((s) => s.zone === warm.key);

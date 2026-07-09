@@ -3,15 +3,6 @@ import type { MutableCamera } from '../world/zone-runtime';
 import { RESTART_DELAY } from '../../../core/lib';
 import { InputController, type InputCombat, type InputControllerHooks } from './input-controller';
 
-/**
- * Characterization of the INPUT boundary — the keyboard / mouse / wheel / resize routing the component wires to
- * the DOM. The Playwright net drives real play but never exercises the debug keys, the pointer-lock gating, or
- * the end-state restart branch, so these are pinned here. The combat surface + the component callbacks are
- * spies: we assert the REAL routing (which edge each input drives), the camera-look math, and the held→axes
- * derivation `advance` integrates.
- */
-
-/** A mutable combat spy — the readonly latches (`dead`/`won`/clocks) are plain fields tests flip. */
 interface CombatSpy extends InputCombat {
   dead: boolean;
   won: boolean;
@@ -74,12 +65,10 @@ function makeController(): {
   return { controller: new InputController(controllerHooks), canvas, camera, combat, hooks };
 }
 
-/** Simulate the browser pointer-lock owner (jsdom leaves the property unset). */
 function setPointerLock(element: Element | null): void {
   Object.defineProperty(document, 'pointerLockElement', { configurable: true, value: element });
 }
 
-/** Simulate the fullscreen owner the resize handler reads to pick the render tier. */
 function setFullscreen(element: Element | null): void {
   Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: element });
 }
@@ -165,7 +154,7 @@ describe('InputController — movement axes derivation', () => {
     expect(controller.movementAxes()).toEqual({ forward: 1, strafe: 0 });
 
     controller.onDown(keyEvent('s'));
-    expect(controller.movementAxes()).toEqual({ forward: 0, strafe: 0 }); // opposing keys cancel
+    expect(controller.movementAxes()).toEqual({ forward: 0, strafe: 0 });
 
     controller.onUp(keyEvent('w'));
     expect(controller.movementAxes()).toEqual({ forward: -1, strafe: 0 });
@@ -178,7 +167,7 @@ describe('InputController — movement axes derivation', () => {
     expect(controller.movementAxes()).toEqual({ forward: 0, strafe: 1 });
 
     controller.onDown(keyEvent('q'));
-    expect(controller.movementAxes()).toEqual({ forward: 0, strafe: 0 }); // AZERTY left cancels right
+    expect(controller.movementAxes()).toEqual({ forward: 0, strafe: 0 });
 
     controller.onUp(keyEvent('d'));
     expect(controller.movementAxes()).toEqual({ forward: 0, strafe: -1 });
@@ -187,7 +176,6 @@ describe('InputController — movement axes derivation', () => {
   it('maps a diagonal held combo through movementWant (core movementDelta)', () => {
     const { controller } = makeController();
 
-    // angle 0 (facing +x): forward runs along +x, a right strafe runs toward −y.
     expect(controller.movementWant(0, 1, 0, 2)).toEqual({ x: 2, y: 0 });
     expect(controller.movementWant(0, 0, 1, 2)).toEqual({ x: 0, y: -2 });
   });
@@ -200,22 +188,22 @@ describe('InputController — mouse look', () => {
     setPointerLock(canvas);
     controller.onMouse(mouseEvent({ movementX: 100, movementY: 10 }));
 
-    expect(camera.angle).toBeCloseTo(-0.35, 6); // 100 · 0.0035
-    expect(camera.pitch).toBeCloseTo(-0.035, 6); // 0 − 10·0.0035, within range
+    expect(camera.angle).toBeCloseTo(-0.35, 6);
+    expect(camera.pitch).toBeCloseTo(-0.035, 6);
   });
 
   it('clamps pitch to the look-up / look-down limits', () => {
     const up = makeController();
 
     setPointerLock(up.canvas);
-    up.controller.onMouse(mouseEvent({ movementY: -1000 })); // huge look-up
-    expect(up.camera.pitch).toBeCloseTo(0.85, 6); // PITCH_UP_MAX
+    up.controller.onMouse(mouseEvent({ movementY: -1000 }));
+    expect(up.camera.pitch).toBeCloseTo(0.85, 6);
 
     const down = makeController();
 
     setPointerLock(down.canvas);
-    down.controller.onMouse(mouseEvent({ movementY: 1000 })); // huge look-down
-    expect(down.camera.pitch).toBeCloseTo(-2.0, 6); // −PITCH_DOWN_MAX
+    down.controller.onMouse(mouseEvent({ movementY: 1000 }));
+    expect(down.camera.pitch).toBeCloseTo(-2.0, 6);
   });
 
   it('freezes look when not pointer-locked', () => {
@@ -251,7 +239,7 @@ describe('InputController — action / debug keys', () => {
       expect(combat.selectWeapon).toHaveBeenCalledWith(n - 1);
       expect(event.preventDefault).toHaveBeenCalledOnce();
     }
-    expect(controller.held.size).toBe(0); // number keys never enter the movement set
+    expect(controller.held.size).toBe(0);
   });
 
   it('routes R to reload, G to the stress toggle, F to the fullscreen callback', () => {
@@ -440,6 +428,6 @@ describe('InputController — click: restart vs pointer-lock', () => {
     controller.onClick();
 
     expect(hooks.restart).toHaveBeenCalledOnce();
-    expect(canvas.requestPointerLock).not.toHaveBeenCalled(); // never grabs the pointer on the end screen
+    expect(canvas.requestPointerLock).not.toHaveBeenCalled();
   });
 });

@@ -30,6 +30,9 @@ code follows the conventions and flag any deviation with `file:line` + a fix.
       `imports` last.
 - [ ] **One declaration per file** (a file = one interface/type/function/class/component); barrel only at
       module boundaries; layers depend inward (`features`/`layout`/`shared` → `core` → `domain`).
+- [ ] **Comments earn their place** (code.md §1) — flag JSDoc/trailing comments that restate the signature or
+      name the obvious; keep only a non-obvious WHY / trap, the terse-math-symbol definitions, and functional
+      pragmas (`eslint-disable`/`@ts-expect-error`/`@vitest-environment`).
 - [ ] **Braces on every control statement** — `if`/`else`/`for`/`while`, single-line included (ESLint `curly`).
 - [ ] **Explicit, non-abbreviated identifiers** — no cryptic 1–2 char locals/params/template `@let`/`@for`
       vars (`content` not `c`, `index` not `i`, `event` not `e`). (Token-kind values `'c'`/`'s'` + locale

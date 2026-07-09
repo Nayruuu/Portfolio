@@ -1,36 +1,24 @@
 import { MapBuilder } from './level-builder';
 import type { MapSource, Sector, Thing, ZonePortalDef } from './types';
 
-/** A world-coordinate point `[x, y]` — y grows DOWN, as everywhere in the engine. */
+// y grows DOWN, as everywhere in the engine.
 export type RoomPoint = readonly [number, number];
 
-/** How a {@link RoomBuilder.connect} opening reads: a walkable doorway, one of the glass kinds, or a
- *  see-over-but-never-crossable fence (each maps to the {@link MapBuilder} line kind of the same name). */
 export type ConnectionKind = 'portal' | 'glass' | 'glassPane' | 'slidingDoor' | 'fence';
 
-/**
- * A room's {@link Sector} values plus its wall dressing: `wallTex` is the default texture of every
- * boundary wall; `walls` overrides single edges by index (edge `i` runs `polygon[i] → polygon[i+1]`,
- * wrapping — indices always refer to the polygon AS GIVEN, whichever way it was wound).
- */
 export interface RoomSpec extends Sector {
   readonly wallTex: string;
+  // Overrides single edges by index — edge `i` runs polygon[i] → polygon[i+1] AS GIVEN, whichever winding.
   readonly walls?: Readonly<Record<number, string>>;
 }
 
-/** Options for {@link RoomBuilder.connect}. `tex` dresses the emitted line(s) — each kind falls back to
- *  its {@link MapBuilder} default ('METAL' / 'GLASS' / 'GLASS_PANE' / 'DOOR_GLASS' / 'METAL'); `at`
- *  restricts the opening to the `[x1, y1, x2, y2]` sub-span of the shared overlap (a door narrower
- *  than the full shared edge) — its endpoints need not pre-exist as polygon vertices. */
 export interface ConnectOptions {
   readonly kind?: ConnectionKind;
   readonly tex?: string;
-  readonly at?: readonly [number, number, number, number];
+  readonly at?: readonly [number, number, number, number]; // shrink the opening to a sub-span of the overlap
 }
 
-/** The shape of a {@link RoomBuilder.stairs} flight: `count` steps, each `depth` deep, rising `dz` each
- *  (step `i`'s floor at `zBase + (i+1)·dz`, so `zBase` is the floor of the room BELOW the flight) under
- *  one flat `ceilZ`. */
+// zBase is the floor of the room BELOW the flight; step i's floor = zBase + (i+1)·dz.
 export interface StairSpec {
   readonly depth: number;
   readonly count: number;
@@ -43,25 +31,15 @@ export interface StairSpec {
   readonly ceilTex?: string; // default 'CEIL_LUX'
 }
 
-/**
- * A room-graph authoring layer that COMPILES down to {@link MapBuilder} calls: you declare closed room
- * polygons, then the connections between them, and the builder does everything the hand-authored levels
- * did by convention — it normalizes the winding (interior on the RIGHT of every directed edge, the
- * engine's rule), splits a long wall around a doorway (solid before, opening within, solid after),
- * emits each connection ONCE as a two-sided line, and walls up every span no connection claimed as
- * one-sided solids. Two back-to-back rooms that are never `connect`ed therefore each emit their own
- * opaque dividing wall, exactly like the hand-authored maps handled shared boundaries.
- */
+// A room-graph authoring layer compiling to MapBuilder calls: normalizes the winding, splits a long wall
+// around a doorway, emits each connection ONCE as a two-sided line, and walls up every unclaimed span.
 export class RoomBuilder {
   private readonly builder = new MapBuilder();
-  /** Room sector → its boundary edges. Only {@link room}s register here — islands and holes have no
-   *  carve-able boundary (their edges are emitted whole, immediately). */
+  // Only rooms register here — islands and holes have no carve-able boundary.
   private readonly boundaries = new Map<number, readonly BoundaryEdge[]>();
   private sectorCount = 0;
 
-  /** A sector-room from a closed polygon (any winding, any decimals): registers the sector and defers
-   *  its boundary walls until {@link build}, so later {@link connect}s can carve openings out of them.
-   *  Returns the sector index. */
+  // Defers boundary walls until build() so later connects can carve openings out of them.
   public room(polygon: readonly RoomPoint[], spec: RoomSpec): number {
     const edges = orientedEdges(polygon, spec.wallTex, spec.walls, `room ${this.sectorCount}`);
     const sector = this.addSector(spec);
@@ -71,13 +49,8 @@ export class RoomBuilder {
     return sector;
   }
 
-  /**
-   * Declare that rooms `a` and `b` communicate: finds the colinear overlapping span(s) between their
-   * boundaries and replaces each with ONE two-sided line (`front` = room `a`), leaving the rest of the
-   * touched edges solid. The shared edge may be PARTIAL — a doorway in a long wall splits it — and with
-   * `opts.at` the opening shrinks to a sub-span of the overlap. Throws if the rooms share no colinear
-   * overlap (or the `at` span sits outside every overlap).
-   */
+  // Replaces each colinear overlap between the rooms with ONE two-sided line (front = room `a`). Throws if
+  // they share no colinear overlap (or the `at` span sits outside every overlap).
   public connect(a: number, b: number, opts: ConnectOptions = {}): void {
     if (a === b) {
       throw new Error(`RoomBuilder.connect: cannot connect room ${a} to itself`);
@@ -109,9 +82,7 @@ export class RoomBuilder {
     }
   }
 
-  /** A room wholly INSIDE another (raised furniture block, dais, rug inset): every edge becomes a
-   *  portal — or a blocking fence when `fenced` (a counter / turnstile the step-up physics must never
-   *  walk onto) — between the island (`front`) and its `host` sector. Returns the island's sector. */
+  // A room wholly INSIDE `host`: every edge becomes a portal — or a blocking fence when `fenced`.
   public island(
     host: number,
     polygon: readonly RoomPoint[],
@@ -132,11 +103,8 @@ export class RoomBuilder {
     return sector;
   }
 
-  /** A LIVE ZONE-PORTAL seam carved out of room `room`'s boundary: the `[x1, y1, x2, y2]` span of one of
-   *  its walls is emitted as a one-sided {@link MapBuilder.zonePortal} line (solid for physics + hitscan,
-   *  renders `portal.zone`'s map translated by `(dx, dy)`), the rest of the wall staying solid. `tex`
-   *  defaults to that wall's texture — the solid fallback look when the neighbor map isn't provided.
-   *  Throws when the span lies on no boundary edge of the room. */
+  // Emits the `at` span of one boundary wall as a one-sided zonePortal line, the rest staying solid.
+  // Throws when the span lies on no boundary edge of the room.
   public zonePortal(
     room: number,
     at: readonly [number, number, number, number],
@@ -170,20 +138,16 @@ export class RoomBuilder {
     );
   }
 
-  /** A solid column/pillar wholly inside `host`: one-sided walls facing the host on the OUTSIDE (the
-   *  polygon's inside is dead space the BSP never enters). */
+  // A solid column/pillar inside `host`: the polygon's inside is dead space the BSP never enters.
   public hole(host: number, polygon: readonly RoomPoint[], tex: string): void {
-    // Oriented interior-on-the-right like a room, then emitted REVERSED — the pillar's inside lands on
-    // the LEFT of each wall, leaving the host (the only renderable side) as the `front`.
+    // Oriented interior-on-the-right then emitted REVERSED, so the host (the only renderable side) fronts.
     for (const e of orientedEdges(polygon, tex, undefined, `hole in sector ${host}`)) {
       this.builder.solid(e.bx, e.by, e.ax, e.ay, host, e.tex);
     }
   }
 
-  /** A straight flight of `count` step rooms chained by portals, climbing on the RIGHT of the base edge
-   *  `from → to` (the full-width bottom edge of the flight — e.g. west→east climbs NORTH, y down). The
-   *  caller `connect`s the flight's ends: `connect(below, steps[0])` and `connect(above, steps.at(-1))`.
-   *  Returns the step sector indices, bottom → top. */
+  // A flight of step rooms chained by portals, climbing on the RIGHT of the base edge `from → to`. The
+  // caller connects the flight's ends. Returns the step sectors, bottom → top.
   public stairs(from: RoomPoint, to: RoomPoint, spec: StairSpec): number[] {
     const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
 
@@ -214,7 +178,7 @@ export class RoomBuilder {
       );
 
       if (i > 0) {
-        this.connect(sectors[i - 1], sector, { tex: spec.wallTex }); // shared step edge (front = the lower step)
+        this.connect(sectors[i - 1], sector, { tex: spec.wallTex });
       }
       sectors.push(sector);
     }
@@ -222,13 +186,11 @@ export class RoomBuilder {
     return sectors;
   }
 
-  /** Stamp a thing (spawn / prop) on the map. */
   public thing(x: number, y: number, angle: number, type: Thing['type']): void {
     this.builder.thing(x, y, angle, type);
   }
 
-  /** Flush every room boundary's remaining SOLID spans (whatever no connection carved out), then
-   *  assemble the map. Terminal: the boundaries are consumed. */
+  // Terminal: consumes the boundaries.
   public build(): MapSource {
     for (const [sector, edges] of this.boundaries) {
       for (const edge of edges) {
@@ -245,7 +207,7 @@ export class RoomBuilder {
     return this.builder.build();
   }
 
-  /** Register the sector VALUES only — `RoomSpec`'s wall dressing must not leak into the map. */
+  // Sector VALUES only — RoomSpec's wall dressing must not leak into the map.
   private addSector({ floorZ, ceilZ, floorTex, ceilTex, light }: Sector): number {
     this.sectorCount++;
 
@@ -264,7 +226,6 @@ export class RoomBuilder {
     return edges;
   }
 
-  /** Emit one connection line via the matching {@link MapBuilder} kind (`front` = room `a`). */
   private opening(
     kind: ConnectionKind,
     [x1, y1]: RoomPoint,
@@ -293,12 +254,11 @@ export class RoomBuilder {
   }
 }
 
-/** Comparison slack for colinearity / overlap / split-point dedup — coordinates are decimals (0.1-deep
- *  backdrop boxes exist), so exact equality is out. */
+// Coordinates are decimals (0.1-deep backdrop boxes exist), so exact equality is out.
 const EPSILON = 1e-6;
 
-/** A directed room-boundary edge — interior on the RIGHT of `(ax,ay) → (bx,by)`, `(ux,uy)` its unit
- *  direction — plus the opening spans already carved out of it (arc lengths from the `a` end). */
+// A directed room-boundary edge — interior on the RIGHT of a→b — plus the spans already carved out of it
+// (arc lengths from the `a` end).
 interface BoundaryEdge {
   readonly ax: number;
   readonly ay: number;
@@ -311,8 +271,6 @@ interface BoundaryEdge {
   readonly cuts: { lo: number; hi: number }[];
 }
 
-/** A colinear overlap between one edge of each connected room, in arc length along `edge` (room `a`'s
- *  side — the side the two-sided line fronts). */
 interface Overlap {
   readonly edge: BoundaryEdge;
   readonly other: BoundaryEdge;
@@ -320,12 +278,8 @@ interface Overlap {
   readonly hi: number;
 }
 
-/**
- * Validate a polygon and return its boundary edges wound CANONICALLY — interior on the RIGHT of every
- * directed edge, which with y down is a NEGATIVE shoelace sum (the winding of the hand-authored rooms,
- * e.g. `(0,0) → (0,4) → (4,4) → (4,0)`). A polygon given the other way round is reversed edge by edge,
- * so `walls` indices keep pointing at the same geometric edges of the input.
- */
+// Canonical winding = interior on the RIGHT of every edge = a NEGATIVE shoelace sum with y down. A
+// polygon wound the other way is reversed edge by edge, so `walls` indices keep pointing at the same edges.
 function orientedEdges(
   polygon: readonly RoomPoint[],
   wallTex: string,
@@ -383,8 +337,6 @@ function edgeOf(a: RoomPoint, b: RoomPoint, tex: string): BoundaryEdge {
   };
 }
 
-/** The colinear overlap of `other` on `edge` (as an arc-length span), or `null`. Handles diagonal
- *  edges — everything is parametrized and projected, nothing assumes axis alignment. */
 function overlapSpan(edge: BoundaryEdge, other: BoundaryEdge): { lo: number; hi: number } | null {
   // Colinear = both of `other`'s endpoints sit on `edge`'s infinite line…
   if (Math.abs(offLine(edge, [other.ax, other.ay])) > EPSILON) {
@@ -393,8 +345,8 @@ function overlapSpan(edge: BoundaryEdge, other: BoundaryEdge): { lo: number; hi:
   if (Math.abs(offLine(edge, [other.bx, other.by])) > EPSILON) {
     return null;
   }
-  // …and ANTIPARALLEL: two rooms face each other across a boundary, so their interior-on-the-right
-  // edges run in opposite directions (a same-direction pair is two walls of rooms on the SAME side).
+  // …and ANTIPARALLEL: facing rooms' interior-on-the-right edges run opposite (a same-direction pair is
+  // two walls of rooms on the SAME side).
   if (edge.ux * other.ux + edge.uy * other.uy >= 0) {
     return null;
   }
@@ -406,7 +358,7 @@ function overlapSpan(edge: BoundaryEdge, other: BoundaryEdge): { lo: number; hi:
   return hi - lo > EPSILON ? { lo, hi } : null;
 }
 
-/** Narrow the overlaps down to the single `at` sub-span, or throw if it fits inside none of them. */
+// Narrow the overlaps to the single `at` sub-span, or throw if it fits inside none.
 function restrict(
   overlaps: readonly Overlap[],
   at: readonly [number, number, number, number],
@@ -437,7 +389,7 @@ function restrict(
   );
 }
 
-/** The still-solid spans of an edge: the gaps between its (merged) cuts, dropping slivers ≤ EPSILON. */
+// The gaps between an edge's merged cuts, dropping slivers ≤ EPSILON.
 function solidSpans(edge: BoundaryEdge): { lo: number; hi: number }[] {
   const spans: { lo: number; hi: number }[] = [];
   let cursor = 0;
@@ -455,19 +407,17 @@ function solidSpans(edge: BoundaryEdge): { lo: number; hi: number }[] {
   return spans;
 }
 
-/** Signed perpendicular distance of a point from an edge's infinite line (`u` is unit length). */
+// Signed perpendicular distance of a point from an edge's infinite line (u is unit length).
 function offLine(edge: BoundaryEdge, [x, y]: RoomPoint): number {
   return edge.ux * (y - edge.ay) - edge.uy * (x - edge.ax);
 }
 
-/** A point's arc-length coordinate along an edge's direction. */
 function along(edge: BoundaryEdge, [x, y]: RoomPoint): number {
   return (x - edge.ax) * edge.ux + (y - edge.ay) * edge.uy;
 }
 
-/** The point at arc length `s` along an edge, snapped to the EPSILON grid so a computed split point
- *  lands on the exact same vertex key as the polygon endpoints around it ({@link MapBuilder} dedups
- *  vertices by exact value). */
+// Snapped to the EPSILON grid so a computed split point lands on the exact same vertex key as the
+// polygon endpoints (MapBuilder dedups vertices by exact value).
 function pointAt(edge: BoundaryEdge, s: number): RoomPoint {
   return [snap(edge.ax + edge.ux * s), snap(edge.ay + edge.uy * s)];
 }

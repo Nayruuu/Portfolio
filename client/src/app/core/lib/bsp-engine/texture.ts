@@ -1,24 +1,15 @@
-/**
- * A texture = an RGBA bitmap the renderer samples per wall pixel. For now textures are **procedural**
- * (generated in code) so we can see + unit-test texturing without an asset pipeline; loading real images
- * is a later step. Textures tile every {@link TEX_WORLD} world units in both axes.
- */
 export interface Texture {
   readonly width: number;
   readonly height: number;
   readonly pixels: Uint8ClampedArray; // RGBA, row-major, width*height*4
-  readonly worldSize?: number; // world units one tile spans (default 1); larger = the art repeats less often
-  // Present on a carved VOXEL GRID (see `voxel-carve.ts`): the pixels are not a flat image but stacked
-  // horizontal slices — `width` lateral cells × `voxelDepth` depth rows per slice × height/voxelDepth
-  // slices bottom-up (alpha 0 = empty cell). Marks the entry so the sprite pass renders its prop as a
-  // world-anchored voxel VOLUME instead of a billboard; plain textures never carry it.
+  readonly worldSize?: number; // world units one tile spans (default 1)
+  // Present on a carved VOXEL GRID (voxel-carve.ts): pixels are stacked horizontal slices, not a flat
+  // image (alpha 0 = empty cell). Marks the entry so the sprite pass renders a voxel VOLUME, not a billboard.
   readonly voxelDepth?: number;
 }
 
-/** World units spanned by one texture tile (so 1 = the texture repeats every world unit along a wall). */
 export const TEX_WORLD = 1;
 
-/** A deterministic 64×64 brick texture: offset brick rows, mortar gaps, subtle per-brick tint. */
 export function brickTexture(): Texture {
   const width = 64;
   const height = 64;
@@ -55,7 +46,6 @@ export function brickTexture(): Texture {
   return { width, height, pixels };
 }
 
-/** A deterministic 64×64 grid texture: square tiles of `tile` px with `grout`-px seams + per-tile tint. */
 function tiledTexture(
   baseR: number,
   baseG: number,
@@ -91,45 +81,41 @@ function tiledTexture(
   return { width, height, pixels };
 }
 
-/** A tan stone-tile floor. */
 export function floorTexture(): Texture {
   return tiledTexture(122, 112, 96, 32, 2);
 }
 
-/** Dark acoustic-panel ceiling. */
 export function ceilTexture(): Texture {
   return tiledTexture(60, 63, 72, 16, 1);
 }
 
-/** Bluish metal panelling (platform walls + step). */
 export function metalTexture(): Texture {
   return tiledTexture(92, 100, 116, 32, 2);
 }
 
-/** A 64×64 green barrel SPRITE: opaque body (with hoop bands + cylinder shading), transparent surround. */
 export function barrelTexture(): Texture {
   const width = 64;
   const height = 64;
-  const pixels = new Uint8ClampedArray(width * height * 4); // all 0 → fully transparent by default
+  const pixels = new Uint8ClampedArray(width * height * 4); // all 0 → transparent surround by default
 
   for (let y = 4; y < 60; y++) {
     for (let x = 16; x < 48; x++) {
       const i = (y * width + x) * 4;
-      const band = y % 12 < 2 ? 0.6 : 1; // darker metal hoops
-      const round = x < 22 || x > 42 ? 0.7 : 1; // cylinder edge shading
+      const band = y % 12 < 2 ? 0.6 : 1;
+      const round = x < 22 || x > 42 ? 0.7 : 1;
       const k = band * round;
 
       pixels[i] = 70 * k;
       pixels[i + 1] = 132 * k;
       pixels[i + 2] = 58 * k;
-      pixels[i + 3] = 255; // opaque body
+      pixels[i + 3] = 255;
     }
   }
 
   return { width, height, pixels };
 }
 
-/** A 2×2 magenta/black "missing texture" — drawn when a surface names a texture the library lacks. */
+// Drawn when a surface names a texture the library lacks.
 export function missingTexture(): Texture {
   const pixels = new Uint8ClampedArray([
     255, 0, 220, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 220, 255,
@@ -138,5 +124,5 @@ export function missingTexture(): Texture {
   return { width: 2, height: 2, pixels };
 }
 
-/** A level's texture assets, keyed by the names used in its sidedefs/sectors. */
+// Keyed by the names used in a level's sidedefs/sectors.
 export type TextureLibrary = ReadonlyMap<string, Texture>;

@@ -26,35 +26,18 @@ import {
 } from '../../../core/lib/bsp-engine';
 
 /**
- * The WEBGPU COMPUTE render backend — the DEFAULT when WebGPU is available (`?renderer=cpu` forces the CPU
- * worker-pool path, which also remains the automatic fallback). The DOOM algorithm stays
- * OURS and stays on the CPU: `buildFrameCommands` walks the BSP (primary + one translated walk per live
- * zone-portal seam), clips, projects the sprites, and emits the per-column span command buffer + the
- * deferred-phase buffer (the smart, cheap part). This module uploads them and runs a WGSL COMPUTE shader —
- * one invocation per pixel, over local colour/depth registers: the merged geometry stream nearest-wins,
- * then each PHASE in order (a glass set blended farthest-first, then its sprites far-to-near, window-
- * clipped and glass-tinted) — the CPU renderer's exact per-pixel sequence. NO triangle rasterization
- * pipeline anywhere: geometry never becomes vertices, portals need no recursion concept.
+ * The DEFAULT backend (`?renderer=cpu` forces the CPU worker-pool path, also the automatic fallback). The
+ * DOOM algorithm stays on the CPU: `buildFrameCommands` emits the per-column span + deferred-phase buffers,
+ * and this module runs a WGSL COMPUTE shader (one invocation per pixel) that replays the CPU renderer's
+ * EXACT per-pixel sequence — NO triangle rasterization anywhere.
  *
- * Texture storage: a flat STORAGE-BUFFER texel pool (one packed u32 per texel) + a per-texture info table,
- * NOT a `texture_2d_array` — the library mixes sizes (the 2×2 MISSING fallback, 64² procedural, 512×256
- * and 512² art, NON-power-of-two sprite atlases). Walls/flats keep the engine's integer `& (size−1)` wrap
- * (their art is POT by construction); sprites/glass sample by division into their atlas cell, so any size
- * is exact. The pool uploads `Texture.pixels` as decoded — for atlases that is ALREADY the hardened
- * (alpha-thresholded) RGBA `loadAtlasTexture` produced, so the alpha tests match the CPU per texel.
- *
- * Present: the output storage buffer is copied to a MAP_READ staging buffer and read back into the
- * caller's `ImageData` — the existing `putImageData` blit + 2D overlay stack (weapon, HUD, projectiles,
- * effects) then work unchanged. A zero-copy canvas present is a later stage; if one ever lands, that
- * fullscreen blit is the ONLY place a render pipeline is allowed.
- *
- * Per-frame flow: build commands (CPU) → `writeBuffer` uploads (reused buffers, grown only when a frame
- * outgrows them — never per-frame allocation) → one compute dispatch → copy → `mapAsync` → blit.
- * Browser-only (feature layer): SSR never touches `navigator.gpu` — `createGpuRenderer` resolves `null`
- * there, as it does on any init failure, and the caller stays on the CPU renderer.
+ * Texture storage is a flat STORAGE-BUFFER texel pool + info table, NOT a `texture_2d_array`, because the
+ * library mixes sizes: POT walls/flats keep the integer `& (size−1)` wrap; sprites/glass sample by division.
+ * Present reads the output buffer back into the caller's `ImageData` (the 2D overlay stack works unchanged).
+ * Browser-only: SSR / any init failure resolves `null` and the caller stays on the CPU renderer.
  */
 
-/** Last frame's timings: command build (CPU, main thread) and submit→readback-mapped (GPU + readback). */
+/** Last frame's timings: command build (CPU) and submit→readback-mapped (GPU + readback). */
 export interface GpuStats {
   buildMs: number;
   gpuMs: number;
@@ -63,8 +46,6 @@ export interface GpuStats {
 export interface GpuRenderer {
   /** A STABLE object mutated in place each frame — safe to expose once (e.g. on the perf ring). */
   readonly stats: GpuStats;
-  /** Render one frame into `target` (an `ImageData.data` at the current config's resolution) — the full
-   *  `renderFrame` surface: live sprites, sliding-door openness, zone-portal neighbours (warm sprites). */
   render(
     map: CompiledMap,
     camera: Camera,
@@ -73,9 +54,8 @@ export interface GpuRenderer {
     slides?: readonly number[],
     neighbors?: ReadonlyMap<string, ZoneNeighbor>,
   ): Promise<void>;
-  /** Rebuild + upload the texel pool from the library (ALL entries — POT walls/flats + sprite atlases). */
   setTextures(textures: ReadonlyMap<string, Texture>): void;
-  /** Re-point the output/staging/columns buffers at a new resolution (between frames, like the pool). */
+  /** Re-point the buffers at a new resolution — between frames only, like the pool. */
   resize(config: RenderConfig): void;
   dispose(): void;
 }
@@ -85,15 +65,9 @@ function packRgb(c: readonly [number, number, number]): number {
   return ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
 }
 
-/**
- * The compute shader: executes one frame's commands (see `frame-commands.ts` for the buffer layouts).
- * Each pixel scans its column's geometry spans nearest-wins (strict `<` + emission-order tie-break — the
- * CPU z-buffer over the same paint order), then replays the deferred phases over its local colour/depth.
- * The sampling math is the CPU renderer's, transcribed: same anchors, same integer truncation, same
- * shade/tint constants — the only divergence is f32 vs f64 rounding (measured 99.4-99.98 % pixel-identical
- * per scene by a Playwright CPU-vs-GPU diff at integration time; the in-repo contract is the f64 command
- * EXECUTOR in `frame-commands.spec.ts`, which pins the buffers against `renderFrame`'s output).
- */
+// The compute shader: the CPU renderer's per-pixel math transcribed (same anchors, truncation, shade/tint
+// constants); the only divergence is f32-vs-f64 rounding. In-repo contract = the f64 executor in
+// `frame-commands.spec.ts`, which pins the buffers against `renderFrame`'s output.
 const SHADER = /* wgsl */ `
 struct Uniforms {
   width: u32,
@@ -487,15 +461,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
-/** Initial span-buffer capacity (records) — grows by doubling when a frame outgrows it. */
-const INITIAL_SPAN_CAPACITY = 8192;
-/** Initial aux-buffer capacity (words: phases + glass layers + sprites) — grows by doubling. */
-const INITIAL_AUX_CAPACITY = 8192;
+const INITIAL_SPAN_CAPACITY = 8192; // records — grows by doubling when a frame outgrows it
+const INITIAL_AUX_CAPACITY = 8192; // words (phases + glass layers + sprites) — grows by doubling
 
-/**
- * Init WebGPU and build the backend, or `null` when the platform can't (SSR, no `navigator.gpu`, no
- * adapter/device) — the caller then keeps the CPU renderer, silently.
- */
+/** `null` when the platform can't (SSR, no `navigator.gpu`, no adapter/device) — the caller keeps the CPU renderer. */
 export async function createGpuRenderer(config: RenderConfig): Promise<GpuRenderer | null> {
   if (typeof navigator === 'undefined' || navigator.gpu === undefined) {
     return null;
@@ -525,7 +494,7 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
     size: uniformData.byteLength,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-  const cmds = createFrameCommands(); // the reused CPU-side command buffer
+  const cmds = createFrameCommands();
   const stats: GpuStats = { buildMs: 0, gpuMs: 0 };
   let cfg: RenderConfig = config;
   let lib: ReadonlyMap<string, Texture> = new Map(); // the live library (glass/sprite metrics need it)
@@ -576,9 +545,8 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
     bindGroup = null;
   };
 
-  // Upload a texture set as the pooled texel buffer + info table. Id 0 is always MISSING; the WHOLE
-  // library follows in insertion order — POT walls/flats sample by `&`-wrap off perUnit/invWorld,
-  // non-POT sprite atlases by division into their cell (their perUnit fields are simply unused).
+  // Id 0 is always MISSING; the rest follow in insertion order (POT walls/flats sample by `&`-wrap off
+  // perUnit/invWorld, non-POT atlases by division into their cell).
   const upload = (textures: ReadonlyMap<string, Texture>): void => {
     const pool: Texture[] = [missingTexture()];
     const nextIds = new Map<string, number>();

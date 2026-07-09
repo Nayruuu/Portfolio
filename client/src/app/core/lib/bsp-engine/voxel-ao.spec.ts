@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { Texture } from './texture';
 import { bakeVoxelAo, DEFAULT_AO } from './voxel-ao';
 
-/** Build a voxel-grid Texture (the `((gz·ny+gy)·n+gx)·4` encoding): every cell `solid()` reports true is
- *  painted `[r,g,b,255]`, the rest are left transparent (alpha 0). */
 function makeGrid(
   n: number,
   ny: number,
@@ -32,7 +30,6 @@ function makeGrid(
   return { width: n, height: ny * nz, pixels, voxelDepth: ny };
 }
 
-/** RGB triple of voxel (gx, gy, gz). */
 function rgbAt(grid: Texture, n: number, ny: number, gx: number, gy: number, gz: number): number[] {
   const out = ((gz * ny + gy) * n + gx) * 4;
 
@@ -58,7 +55,6 @@ describe('bakeVoxelAo', () => {
   });
 
   it('leaves flat-face surface voxels at full brightness (baseline = 17 neighbours)', () => {
-    // A 2-thick slab: the centre voxel of the top face has 9 (below) + 8 (same layer) = 17 neighbours.
     const grid = makeGrid(5, 5, 4, (_gx, _gy, gz) => gz < 2);
     const baked = bakeVoxelAo(grid);
 
@@ -66,11 +62,9 @@ describe('bakeVoxelAo', () => {
   });
 
   it('darkens a concave voxel proportional to its excess neighbours (no clamp)', () => {
-    // All-solid 3×3×3: the centre has all 26 neighbours → excess 9 → full occlusion.
     const grid = makeGrid(3, 3, 3, () => true);
     const baked = bakeVoxelAo(grid, { strength: 0.2, aoMin: 0.1 });
 
-    // factor = 1 − 0.2·(9/9) = 0.8 → 200·0.8 = 160.
     expect(rgbAt(baked, 3, 3, 1, 1, 1)).toEqual([160, 160, 160, 255]);
   });
 
@@ -78,12 +72,10 @@ describe('bakeVoxelAo', () => {
     const grid = makeGrid(3, 3, 3, () => true);
     const baked = bakeVoxelAo(grid, { strength: 0.95, aoMin: 0.5 });
 
-    // factor = max(0.5, 1 − 0.95) = 0.5 → 200·0.5 = 100.
     expect(rgbAt(baked, 3, 3, 1, 1, 1)).toEqual([100, 100, 100, 255]);
   });
 
   it('leaves convex edges/corners untouched by default (edge = 0)', () => {
-    // A corner voxel of the all-solid cube has 7 neighbours → excess −10 → no darkening, no lift.
     const grid = makeGrid(3, 3, 3, () => true);
     const baked = bakeVoxelAo(grid);
 
@@ -94,7 +86,6 @@ describe('bakeVoxelAo', () => {
     const grid = makeGrid(3, 3, 3, () => true, [100, 100, 100]);
     const baked = bakeVoxelAo(grid, { edge: 0.34 });
 
-    // corner count 7 → excess −10 → factor = 1 + 0.34·(10/17) = 1.2 → 100·1.2 = 120.
     expect(rgbAt(baked, 3, 3, 0, 0, 0)).toEqual([120, 120, 120, 255]);
   });
 
@@ -103,9 +94,9 @@ describe('bakeVoxelAo', () => {
     const before = Uint8ClampedArray.from(grid.pixels);
     const baked = bakeVoxelAo(grid);
 
-    expect(baked.pixels).not.toBe(grid.pixels); // a fresh buffer
-    expect(grid.pixels).toEqual(before); // input untouched
-    expect(rgbAt(baked, 3, 3, 1, 1, 2)).toEqual([0, 0, 0, 0]); // an empty cell stays empty
+    expect(baked.pixels).not.toBe(grid.pixels);
+    expect(grid.pixels).toEqual(before);
+    expect(rgbAt(baked, 3, 3, 1, 1, 2)).toEqual([0, 0, 0, 0]);
   });
 
   it('preserves the grid dimensions and metadata', () => {
@@ -125,12 +116,9 @@ describe('bakeVoxelAo', () => {
   });
 
   it('honours an explicit radius (wider neighbourhood, larger flat baseline)', () => {
-    // 5×5×5 all-solid, radius 2: the centre sees all 124 neighbours; the flat baseline is
-    // 2·25 + 24 = 74, so excess = 50 = range (124 − 74) → full occlusion.
     const grid = makeGrid(5, 5, 5, () => true);
     const baked = bakeVoxelAo(grid, { radius: 2, strength: 0.5, aoMin: 0.1 });
 
-    // factor = max(0.1, 1 − 0.5·(50/50)) = 0.5 → 200·0.5 = 100.
     expect(rgbAt(baked, 5, 5, 2, 2, 2)).toEqual([100, 100, 100, 255]);
   });
 

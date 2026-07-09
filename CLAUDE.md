@@ -88,7 +88,7 @@ Full rules — layers, dependency direction, barrels, folder layout — are in
     the shared typed bridge + the generated `article-bodies.ts` over `.md` bodies).
   - `shared/` — cross-feature presentational components (`icon`, `code-block`, `inline-runs`) + `game`
     (the shared BSP-game helpers: `doom-hud`, `weapon-view`, `climb-view`, `climb-frames`, `weapons`,
-    `effects`, `loaded-image`).
+    `effects`, `gaze`, `loaded-image`).
   - `layout/` — the shell (`nav`, `prefs`, `channel-header`, `tabs-bar`).
   - `features/` — one **lazy-loaded** folder per feature (`home`, `articles`, `series`, `about`,
     `stack`, `contact`) — plus the hidden `bsp-demo` game (`sd-bsp-demo`, served at `/bsp` and mounted in

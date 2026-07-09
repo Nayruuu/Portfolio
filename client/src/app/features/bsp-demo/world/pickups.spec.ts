@@ -44,26 +44,26 @@ describe('pickups registry', () => {
 
   it('exposes the four vitals turntables (health + mental, large + small) as spinning specs', () => {
     for (const spec of VITAL_SPECS) {
-      expect(spec.frames).toBeGreaterThan(0); // a turntable, not a static frame
+      expect(spec.frames).toBeGreaterThan(0);
       expect(spec.frameMs).toBeGreaterThan(0);
       expect(spec.aspect).toBeGreaterThan(0);
       expect(spec.amount).toBeGreaterThan(0);
     }
     expect(HEALTH_LARGE_SPEC.kind).toBe('health');
-    expect(MENTAL_LARGE_SPEC.kind).toBe('armor'); // mental is the second vital (armor under the hood)
-    expect(HEALTH_LARGE_SPEC.amount).toBeGreaterThan(HEALTH_SMALL_SPEC.amount); // large grants more
+    expect(MENTAL_LARGE_SPEC.kind).toBe('armor');
+    expect(HEALTH_LARGE_SPEC.amount).toBeGreaterThan(HEALTH_SMALL_SPEC.amount);
   });
 
   it('resolves a vitals spec by kind + size (default large)', () => {
     expect(vitalSpec('health', 'small')).toBe(HEALTH_SMALL_SPEC);
     expect(vitalSpec('health', 'large')).toBe(HEALTH_LARGE_SPEC);
     expect(vitalSpec('armor', 'small')).toBe(MENTAL_SMALL_SPEC);
-    expect(vitalSpec('health')).toBe(HEALTH_LARGE_SPEC); // size omitted → large
+    expect(vitalSpec('health')).toBe(HEALTH_LARGE_SPEC);
   });
 
   it('exposes the three access-badge turntables (employee/manager/director) as colour-matched spinning specs', () => {
     for (const spec of KEYCARD_SPECS) {
-      expect(spec.frames).toBeGreaterThan(0); // a turntable, not a static frame
+      expect(spec.frames).toBeGreaterThan(0);
       expect(spec.frameMs).toBeGreaterThan(0);
       expect(spec.aspect).toBeGreaterThan(0);
       expect(spec.worldHeight).toBeGreaterThan(0);
@@ -85,9 +85,9 @@ describe('pickups registry', () => {
       const weapon = requireWeapon(spec.id);
 
       expect(spec.texName).toBe(`PICKUP_WEAPON_${spec.id.toUpperCase()}`);
-      expect(spec.url).toBe(weapon.icon); // the v1 placeholder — swapped for a real turntable strip later
-      expect(spec.frames).toBe(1); // a static single-frame billboard until the rotation art ships
-      expect(spec.ammoType).toBe(weapon.ammoType); // the starter dose targets the weapon's own reserve
+      expect(spec.url).toBe(weapon.icon);
+      expect(spec.frames).toBe(1);
+      expect(spec.ammoType).toBe(weapon.ammoType);
       expect(spec.aspect).toBeGreaterThan(0);
       expect(spec.worldHeight).toBeGreaterThan(0);
     }
@@ -97,16 +97,16 @@ describe('pickups registry', () => {
     expect(weaponPickupSpec('pistol')).toBe(
       WEAPON_PICKUP_SPECS.find((spec) => spec.id === 'pistol'),
     );
-    expect(weaponPickupSpec('chainsaw').ammoType).toBeNull(); // the melee alt grants no ammo
+    expect(weaponPickupSpec('chainsaw').ammoType).toBeNull();
   });
 
   it('grants exactly ONE standard ammo box of the weapon’s type as the pickup dose (0 for melee)', () => {
-    expect(weaponAmmoDose('bullets')).toBe(20); // the staples box
-    expect(weaponAmmoDose('shells')).toBe(5); // the Hilti canister box
-    expect(weaponAmmoDose('cells')).toBe(40); // the standard energy cell (not the 80-round server cell)
-    expect(weaponAmmoDose('rockets')).toBe(2); // the battery pack
-    expect(weaponAmmoDose(null)).toBe(0); // fist / chainsaw
-    expect(weaponAmmoDose('confetti')).toBe(0); // an unknown type grants nothing (defensive)
+    expect(weaponAmmoDose('bullets')).toBe(20);
+    expect(weaponAmmoDose('shells')).toBe(5);
+    expect(weaponAmmoDose('cells')).toBe(40);
+    expect(weaponAmmoDose('rockets')).toBe(2);
+    expect(weaponAmmoDose(null)).toBe(0);
+    expect(weaponAmmoDose('confetti')).toBe(0);
   });
 
   it('covers every vitals + ammo + weapon + badge + exit sprite in the texture jobs (no duplicate names)', () => {
@@ -125,18 +125,12 @@ describe('pickups registry', () => {
     for (const spec of WEAPON_PICKUP_SPECS) {
       expect(names).toContain(spec.texName);
     }
-    expect(new Set(names).size).toBe(names.length); // no collisions → no texture clobbers another
+    expect(new Set(names).size).toBe(names.length);
   });
 });
 
-/** A deterministic floor resolver — a UNIQUE z per point, so a placed pickup's z proves it was seated from
- *  the point it was authored at (not a stale/duplicated coordinate). */
 const stubFloorAt = (x: number, y: number): number => x * 1000 + y;
 
-/** A controlled placement fixture: known coordinates per kind so idx alignment is asserted directly. Built
- *  off a real level (the heavy `map`/`doors`/`spawn` fields are carried untouched — `buildPickups` reads only
- *  the pickup arrays) with every pickup array overridden. `ammo` carries one coord per `AMMO_BOX_SPECS` entry
- *  (its idx scheme), in order. */
 function fixtureLevel(): Level {
   return {
     ...ACCUEIL,
@@ -144,7 +138,7 @@ function fixtureLevel(): Level {
       [10, 1, 'large'],
       [11, 2, 'small'],
     ],
-    armor: [[12, 3]], // large by default
+    armor: [[12, 3]],
     ammo: AMMO_BOX_SPECS.map((_, i) => [20 + i, 30 + i] as const),
     keycards: [
       [40, 4, 'blue'],
@@ -162,7 +156,7 @@ describe('buildPickups (pure placement)', () => {
   it('places vitals as health-then-armor in spawn order, idx-numbered, seated on floorAt', () => {
     const { vitals } = buildPickups(fixtureLevel(), null, stubFloorAt);
 
-    expect(vitals.map((v) => v.idx)).toEqual([0, 1, 2]); // health[0], health[1], armor[0]
+    expect(vitals.map((v) => v.idx)).toEqual([0, 1, 2]);
     expect(vitals.map((v) => v.spec)).toEqual([
       vitalSpec('health', 'large'),
       vitalSpec('health', 'small'),
@@ -231,10 +225,10 @@ describe('buildPickups (pure placement)', () => {
     const snap: ZoneSnapshot = {
       enemies: [],
       barrels: [],
-      vitalsTaken: [false, true, false], // vital idx 1 gone
-      ammoTaken: AMMO_BOX_SPECS.map((_, i) => i === 0 || i === 3), // ammo idx 0 + 3 gone
-      cardsTaken: [true, false], // keycard idx 0 gone
-      weaponsTaken: [false, true], // weapon idx 1 gone
+      vitalsTaken: [false, true, false],
+      ammoTaken: AMMO_BOX_SPECS.map((_, i) => i === 0 || i === 3),
+      cardsTaken: [true, false],
+      weaponsTaken: [false, true],
       doors: [],
     };
     const { vitals, ammoBoxes, keycards, weaponPickups } = buildPickups(
@@ -267,7 +261,6 @@ describe('buildPickups ↔ takenFlags idx round-trip (the state-persistence inva
     const level = fixtureLevel();
     const fresh = buildPickups(level, null, stubFloorAt);
 
-    // 'collect' some of each kind: drop them from the live lists (what the shell's proximity loop does).
     const takenVital = new Set([1]);
     const takenAmmo = new Set([0, 3]);
     const takenCard = new Set([0]);
@@ -277,7 +270,6 @@ describe('buildPickups ↔ takenFlags idx round-trip (the state-persistence inva
     const remainCards = fresh.keycards.filter((k) => !takenCard.has(k.idx));
     const remainWeapons = fresh.weaponPickups.filter((p) => !takenWeapon.has(p.idx));
 
-    // Snapshot the taken-state (exactly as snapshotWorld does), then rebuild the zone from it.
     const snap: ZoneSnapshot = {
       enemies: [],
       barrels: [],
@@ -289,13 +281,11 @@ describe('buildPickups ↔ takenFlags idx round-trip (the state-persistence inva
     };
     const rebuilt = buildPickups(level, snap, stubFloorAt);
 
-    // The rebuilt zone shows exactly the pickups NOT collected — same idx set as the live remainder.
     expect(rebuilt.vitals.map((v) => v.idx)).toEqual(remainVitals.map((v) => v.idx));
     expect(rebuilt.ammoBoxes.map((b) => b.idx)).toEqual(remainAmmo.map((b) => b.idx));
     expect(rebuilt.keycards.map((k) => k.idx)).toEqual(remainCards.map((k) => k.idx));
     expect(rebuilt.weaponPickups.map((p) => p.idx)).toEqual(remainWeapons.map((p) => p.idx));
 
-    // And none of the collected idx reappear (the "respawn on return" bug), for every kind.
     expect(rebuilt.vitals.some((v) => takenVital.has(v.idx))).toBe(false);
     expect(rebuilt.ammoBoxes.some((b) => takenAmmo.has(b.idx))).toBe(false);
     expect(rebuilt.keycards.some((k) => takenCard.has(k.idx))).toBe(false);
@@ -305,11 +295,10 @@ describe('buildPickups ↔ takenFlags idx round-trip (the state-persistence inva
 
 describe('pickupFrame (turntable cell math)', () => {
   it('advances one cell per frameMs and wraps at the frame count', () => {
-    // 400 ms/frame, 6 frames: age 0 → cell 0, 0.4 s → 1, and 6 frames later it wraps back to 0.
     expect(pickupFrame(0, 400, 6)).toBe(0);
     expect(pickupFrame(0.4, 400, 6)).toBe(1);
     expect(pickupFrame(0.4 * 5, 400, 6)).toBe(5);
-    expect(pickupFrame(0.4 * 6, 400, 6)).toBe(0); // wrapped a full turn
+    expect(pickupFrame(0.4 * 6, 400, 6)).toBe(0);
     expect(pickupFrame(0.4 * 7, 400, 6)).toBe(1);
   });
 

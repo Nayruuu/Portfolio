@@ -3,16 +3,9 @@ import type { Texture } from '../../../core/lib/bsp-engine';
 import type { AtlasJob } from '../render/load-textures';
 import { AssetLoader, type AssetDecoders, type AssetLoaderHooks } from './asset-loader';
 
-/**
- * The asset loader's ORCHESTRATION net — the decode pipeline itself is Image / canvas heavy and low-value to
- * exercise for real, so it is injected as {@link AssetDecoders} stubs. What matters here is the completion
- * wiring (both texture sets applied, the atlas gate flipped + reserves seeded ONCE) and the dispose gate (a
- * decode landing after teardown is dropped — a stray `markAtlasesReady` would corrupt the next mount).
- */
 const TEXTURE = { width: 1, height: 1, pixels: new Uint8ClampedArray(4) } satisfies Texture;
 const JOB: AtlasJob = { name: 'ENEMY', url: '/enemy.webp', rows: 1 };
 
-/** Deterministic decoders — one env texture + one atlas sheet both decode successfully. */
 function decoders(overrides: Partial<AssetDecoders> = {}): AssetDecoders {
   return {
     loadEnvTextures: async () => new Map<string, Texture>([['FLOOR', TEXTURE]]),
@@ -22,7 +15,6 @@ function decoders(overrides: Partial<AssetDecoders> = {}): AssetDecoders {
   };
 }
 
-/** A spy hook set — the same shape the component wires, so the spec drives the exact seams. */
 function spyHooks(overrides: Partial<AssetLoaderHooks> = {}): AssetLoaderHooks {
   return {
     applyTextures: vi.fn(),
@@ -40,7 +32,7 @@ describe('AssetLoader', () => {
 
     await new AssetLoader(hooks, decoders()).load();
 
-    expect(hooks.applyTextures).toHaveBeenCalledTimes(2); // env WebP + atlas sheets
+    expect(hooks.applyTextures).toHaveBeenCalledTimes(2);
     expect(hooks.onEnvTexturesLoaded).toHaveBeenCalledExactlyOnceWith(true);
     expect(hooks.markAtlasesReady).toHaveBeenCalledTimes(1);
     expect(hooks.seedReserves).toHaveBeenCalledTimes(1);
@@ -55,7 +47,7 @@ describe('AssetLoader', () => {
     ).load();
 
     expect(hooks.onEnvTexturesLoaded).toHaveBeenCalledExactlyOnceWith(false);
-    expect(hooks.markAtlasesReady).not.toHaveBeenCalled(); // an empty atlas set keeps the deferred-spawn gate shut
+    expect(hooks.markAtlasesReady).not.toHaveBeenCalled();
     expect(hooks.seedReserves).not.toHaveBeenCalled();
   });
 
@@ -66,7 +58,7 @@ describe('AssetLoader', () => {
 
     expect(hooks.markAtlasesReady).not.toHaveBeenCalled();
     expect(hooks.seedReserves).not.toHaveBeenCalled();
-    expect(hooks.applyTextures).not.toHaveBeenCalled(); // the env callback is gated too
+    expect(hooks.applyTextures).not.toHaveBeenCalled();
     expect(hooks.onEnvTexturesLoaded).not.toHaveBeenCalled();
   });
 });

@@ -1,112 +1,52 @@
 import type { Texture } from './texture';
 
-/**
- * VOXEL-PROP CARVING — sculpts a directional rotation sheet (the art the billboards already ship) into
- * a coloured VOXEL GRID by visual-hull intersection: a voxel survives only where EVERY view's silhouette
- * has matter. No new assets — the carve runs once at load, off the served sheets, and the renderer then
- * draws the grid as a WORLD-ANCHORED VOLUME (the prop never turns with the camera; orbiting it shows
- * every intermediate angle in true perspective, Minecraft-style).
- *
- * VIEW WHEEL — the sheet contract is `orientSprite`'s (the in-game-proven rotation billboard): a 1×N
- * sheet's cell k is the view at wheel angle θk = k·2π/N. In GRID coordinates (see the axes below) the
- * viewer of cell k stands along (sin θk, −cos θk) — so the CARDINALS live at cells {0, N/4, N/2, 3N/4}
- * (front · +x flank · back · −x flank) and, at N = 8, the four DIAGONAL views in between tighten the
- * hull's corners (four planes leave a box; eight cut the 45° chamfers a real object has). NOTE: asset
- * pipelines label the flank cells "left"/"right" from the OPPOSITE convention; the wheel above is the
- * one the billboard renders with, which is what the volume must match.
- *
- * The lessons the validated prototype paid for (kept here on purpose — do not "simplify" them away):
- * - Generated frames are NOT centred consistently → each cardinal view maps its grid axis over ITS OWN
- *   horizontal alpha bbox (per-view recentring), never over the raw cell width.
- * - Cells BLEED into their neighbours (a view's art overflowing its 512px column) and some views are
- *   CLIPPED at a cell edge → a cell's span is its DOMINANT column-run (the gap-separated run containing
- *   the cell centre, else the most massive), not the raw alpha bbox — the bleed poisoned the whiteboard's
- *   depth ratio (a full-width "profile") and carved it degenerate.
- * - Mirror conventions vary per sheet → AUTO-CALIBRATION: try the flip combinations of the back and
- *   −x-flank views (the +x flank stays the unflipped reference — flipping it is provably inert, see
- *   `carveHull`), reject any that empties a z-slice where the front silhouette has >5 % matter, keep
- *   the most voluminous survivor.
- * - The grid's DEPTH span comes from the side views' own bbox ratio (side span / front span), so a flat
- *   whiteboard carves thin and an office chair carves deep.
- * - DIAGONAL views cannot be bbox-stretched (their art is exactly the clipped/bled kind): they carve at
- *   the turntable's SHARED SCALE (px per grid cell, measured off the front + flank spans) and are
- *   REGISTERED against the hull — an anchor (± {@link ANCHOR_RANGE} of the cell) × mirror search scored
- *   by silhouette IoU. A view that agrees below {@link IOU_MIN}, or whose trim would EMPTY an occupied
- *   z-slice, is skipped (the hull just stays cardinal there); a voxel projecting OUTSIDE the cell keeps
- *   the benefit of the doubt (clipped art says nothing about it).
- * - An optional TOP view (a separate single top-down image) stamps the plan FOOTPRINT: a column (x, y)
- *   survives only where the top silhouette is opaque — separating what profile views fuse (a chair
- *   base's star legs). Base orientation: IMAGE BOTTOM = OBJECT FRONT (y = 0), image x = grid +x; the
- *   mirror transforms are auto-calibrated against the hull footprint (IoU, base convention wins ties)
- *   with a hole guard and a loose IoU floor (a top legitimately SHRINKS a boxy hull).
- * - Colours project from the view that best matches each voxel's SURFACE NORMAL among ALL views (a
- *   decisive bonus for views whose ray actually SEES the voxel): the diagonals colour the 45° edges the
- *   cardinal-only pick striped, the top view colours upward faces (no more flank-tinted seat tops). A
- *   voxel NO view sees projects THROUGH the best-aligned view — the renderer's DDA exposes those faces.
- * - Every projection SUPERSAMPLES: a voxel averages the opaque sheet pixels its footprint covers
- *   (falling back to the nearest pixel when the footprint is sub-pixel or fully transparent) instead of
- *   point-sampling — at high grid resolutions the point pick sparkled noise across flat faces.
- *
- * GRID AXES (the renderer's world-anchoring contract): `x` runs along the front view's left→right
- * (world direction `(−sin facing, cos facing)` — the billboard's head-on U axis), `y` is the DEPTH,
- * 0 at the front face growing AWAY from the front viewer (world `−(cos facing, sin facing)`), `z` is
- * the height, 0 at the BOTTOM.
- *
- * ENCODING: the grid rides the ordinary {@link Texture} format — and therefore every existing texture
- * channel: the workers' structured clone and the GPU texel pool, with no new buffer or binding. `width`
- * = `n` (lateral cells), `height` = `voxelDepth · nz` (bottom-up slices of `voxelDepth` rows each):
- * voxel (x, y, z) lives at pixel (x, z · voxelDepth + y). Alpha 0 = empty, 255 = solid. RGBA8 direct —
- * no occupancy bitmask / palette indirection: the four shipped props total ≈ 6 MB (the 96³-class grids
- * ≈ 1.5–2.2 MB each), and the pool samples it exactly like any sprite texel, byte-identically on both
- * backends.
- */
+// Carves a directional rotation sheet into a coloured VOXEL GRID by visual-hull intersection (a voxel
+// survives only where EVERY view's silhouette has matter), drawn world-anchored by the renderer.
+//
+// View wheel (orientSprite's contract): cell k is the view at θk = k·2π/N; the viewer stands along
+// (sin θk, −cos θk), so cardinals live at {0, N/4, N/2, 3N/4} (front · +x flank · back · −x flank) and
+// N=8 adds the diagonals. TRAP: asset pipelines label the flank cells "left"/"right" the OPPOSITE way;
+// the wheel here is the one the billboard renders with, which the volume must match.
+//
+// Grid axes (renderer world-anchoring contract): x = front view left→right (world (−sin facing, cos
+// facing)); y = DEPTH, 0 at the front face growing away (world −(cos facing, sin facing)); z = height,
+// 0 at bottom. Encoding rides an ordinary Texture: width=n, height=voxelDepth·nz, voxel (x,y,z) at
+// pixel (x, z·voxelDepth+y), alpha 0=empty / 255=solid.
 
-/** Default lateral grid resolution (cells per side; the height follows the sheet's cell aspect). */
 export const VOXEL_GRID = 64;
 
-/** Above this alpha a sheet pixel is matter (the sheets are chroma-keyed with hard-ish edges). */
+// Sheets are chroma-keyed with hard-ish edges.
 const SOLID_ALPHA = 128;
 
-/** A flip combination is rejected when it empties a z-slice the front silhouette fills beyond this. */
+// A flip combo is rejected when it empties a z-slice the front silhouette fills beyond this.
 const HOLE_COVERAGE = 0.05;
 
-/** Scoring bonus for a view whose axis ray actually SEES the voxel (first hit): normal dots span
- *  [−2, 2], so a seeing view outranks every occluded one except at the exact extremes. */
+// Normal dots span [−2, 2], so a seeing view outranks every occluded one except at the exact extremes.
 const SEES_BONUS = 4;
 
-/** The diagonal registration searches anchors ± this fraction of the cell width around the span
- *  middle — wide enough to re-centre the measured edge-clipped 45° cells (~9 % off), cheap enough
- *  to stay a load-time blip. */
+// Anchor search ± this fraction of the cell width — wide enough to re-centre edge-clipped 45° cells.
 const ANCHOR_RANGE = 0.2;
 
-/** A diagonal view whose best registration overlaps the hull below this IoU is SKIPPED — the guard
- *  against mis-scaled art, a wrong axis, or plain junk: better an untrimmed corner than a silhouette
- *  stamped somewhere it doesn't belong. */
+// A diagonal view overlapping the hull below this IoU is SKIPPED (better an untrimmed corner than a
+// misplaced silhouette).
 const IOU_MIN = 0.5;
 
-/** The top view's own (much looser) IoU floor: a top footprint legitimately SHRINKS a boxy hull —
- *  a star base against a square plan sits near 0.4 — so this only rejects outright junk. */
+// Looser floor: a top footprint legitimately SHRINKS a boxy hull, so this only rejects outright junk.
 const TOP_IOU_MIN = 0.3;
 
-/** The cardinal views, as indices into the per-cardinal arrays (spans/masks/flips). The wheel cell of
- *  cardinal i is `i · cells/4`. */
+// Cardinal indices into the per-cardinal arrays. The wheel cell of cardinal i is i · cells/4.
 const FRONT = 0;
-const RIGHT = 1; // the +x flank (the wheel's 90° view) — see the module doc on the naming convention
+const RIGHT = 1; // the +x flank (wheel's 90° view) — see the naming-convention trap above
 const BACK = 2;
 const LEFT = 3;
 
-/** The optional extra views of {@link carveVoxelProp}. */
 export interface VoxelCarveViews {
-  /** The sheet's view-cell count (a multiple of 4; 4 = cardinals only, 8 adds the diagonals). */
-  readonly cells?: number;
-  /** A separate top-down image: stamps the plan footprint + colours upward faces. */
-  readonly top?: Texture;
+  readonly cells?: number; // multiple of 4; 4 = cardinals only, 8 adds the diagonals
+  readonly top?: Texture; // a separate top-down image: stamps the plan footprint + colours upward faces
 }
 
-/** One view cell's DOMINANT column-run `[first, last]` in cell-local pixels, or null when empty:
- *  gap-separated runs of occupied columns, keeping the one containing the cell centre (turntable art
- *  is centred) or, when the centre falls in a gap, the most massive — never the raw bbox, which
- *  neighbour-cell bleed and edge clipping poison (see the module doc). */
+// A cell's DOMINANT column-run (the gap-separated run containing the cell centre, else the most
+// massive) — never the raw bbox, which neighbour bleed and edge clipping poison.
 function cellSpan(sheet: Texture, cw: number, cell: number): readonly [number, number] | null {
   const columnMass = new Array<number>(cw).fill(0);
 
@@ -145,8 +85,7 @@ function cellSpan(sheet: Texture, cw: number, cell: number): readonly [number, n
   return best === null ? null : [best.first, best.last];
 }
 
-/** The sheet pixel index of view `cell` at (t, v) ∈ [0,1]² — t across the CELL'S OWN span (the
- *  per-view recentring), v down the sheet. */
+// t runs across the CELL'S OWN span (per-view recentring), v down the sheet.
 function sheetIndex(
   sheet: Texture,
   cw: number,
@@ -162,7 +101,7 @@ function sheetIndex(
   return (y * sheet.width + cell * cw + x) * 4;
 }
 
-/** Rasterise view `cell`'s silhouette into a `w × nz` mask (row = image v, TOP-down). */
+// Rasterises view `cell`'s silhouette into a w × nz mask (row = image v, TOP-down).
 function viewMask(
   sheet: Texture,
   cw: number,
@@ -186,10 +125,8 @@ function viewMask(
   return mask;
 }
 
-/** Average the OPAQUE sheet pixels under a voxel's image footprint (a `fx × fy` px rect centred on
- *  (`px`, `py`), clamped to the cell), or the nearest pixel when the footprint is sub-pixel or covers
- *  no matter — the supersampling every colour projection goes through. `px` is sheet-absolute.
- *  Writes RGB straight into `pixels` at `out` (this runs once per solid voxel — no tuple garbage). */
+// Averages the OPAQUE sheet pixels under a voxel's footprint (supersampling), or the nearest pixel when
+// sub-pixel / empty. Writes RGB straight into `pixels` — runs once per solid voxel, so no tuple garbage.
 function sampleCell(
   sheet: Texture,
   cellLeft: number,
@@ -238,21 +175,16 @@ function sampleCell(
   pixels[out + 2] = sheet.pixels[i + 2];
 }
 
-/** One carved hull: the kept flags (voxel (x,y,z) at `(z·ny + y)·n + x`, z TOP-down like the sheet),
- *  the voxel total, and the per-z-slice counts the hole check reads. */
+// kept: voxel (x,y,z) at (z·ny+y)·n+x, z TOP-down like the sheet.
 interface Hull {
   readonly kept: Uint8Array;
   readonly total: number;
   readonly perZ: readonly number[];
 }
 
-/** Intersect the four cardinal silhouettes into a hull under one flip combination (`f2` mirrors the
- *  back view's axis, `f3` the −x flank's — the auto-calibration's search space). The +x flank is the
- *  UNFLIPPED reference on purpose: mirroring it is provably inert. Flipping BOTH flanks only mirrors
- *  the hull in depth (a bijection — same volume, same per-slice counts, so the calibration could
- *  never strictly prefer it over the unflipped twin it iterates first), and flipping the +x flank
- *  alone is congruent to flipping the −x one; depth orientation is the visual hull's inherent mirror
- *  ambiguity, which silhouettes alone cannot resolve. */
+// f2 mirrors the back view's axis, f3 the −x flank's (the calibration's search space). The +x flank is
+// the UNFLIPPED reference on purpose: mirroring it is provably inert (flipping both flanks only mirrors
+// the hull in depth — same volume/counts; depth orientation is the visual hull's inherent ambiguity).
 function carveHull(
   front: Uint8Array,
   right: Uint8Array,
@@ -273,7 +205,7 @@ function carveHull(
       const leftT = f3 === 1 ? ny - 1 - y : y;
 
       if (right[z * ny + y] === 0 || left[z * ny + leftT] === 0) {
-        continue; // both flank silhouettes gate the whole (z, y) row — skip its x sweep outright
+        continue; // both flanks gate the whole (z, y) row — skip its x sweep
       }
       for (let x = 0; x < n; x++) {
         const backT = f2 === 1 ? n - 1 - x : x;
@@ -290,12 +222,9 @@ function carveHull(
   return { kept, total, perZ };
 }
 
-/** Test a projected voxel footprint `[p − s/2, p + s/2]` against one row of a cell-local silhouette
- *  (as per-row PREFIX SUMS, `cw + 1` entries per row — the O(1) range test the registration's
- *  anchor × mirror sweep leans on): `1` = covers matter, `0` = lies inside the cell on transparency,
- *  `-1` = fully OUTSIDE the cell (clipped art says nothing about it). Shared by the diagonal
- *  registration's scoring and its trim so both judge a voxel identically — scoring on bin CENTRES
- *  instead lets a half-bin anchor shift win on rounding phase alone and drift the whole cut. */
+// 1 = covers matter, 0 = inside the cell on transparency, -1 = fully OUTSIDE the cell (clipped art says
+// nothing about it). rowSums are per-row PREFIX SUMS (O(1) range test). Shared by the diagonal scoring
+// AND its trim so both judge a voxel identically — else a half-bin anchor shift drifts the whole cut.
 function footprintHit(
   rowSums: Int32Array,
   rowStart: number,
@@ -317,9 +246,6 @@ function footprintHit(
   return rowSums[rowStart + x1 + 1] - rowSums[rowStart + x0] > 0 ? 1 : 0;
 }
 
-/** A diagonal view REGISTERED against the hull (see {@link registerDiagonal}) — everything its trim
- *  applied and its colour sampling replays: the wheel direction (the outward normal it sees), the
- *  projection axis, and the calibrated anchor/flip mapping grid-centre u onto cell-local pixels. */
 interface DiagonalView {
   readonly cell: number;
   readonly dirX: number;
@@ -329,25 +255,19 @@ interface DiagonalView {
   readonly span: readonly [number, number];
   readonly anchor: number;
   readonly flip: number;
-  readonly adjacentA: number; // the two cardinals flanking this view on the wheel — their axis rays
-  readonly adjacentB: number; // "seeing" a voxel is the cheap stand-in for a true 45° visibility test
+  readonly adjacentA: number; // the two cardinals flanking this view — their axis rays "seeing" a voxel
+  readonly adjacentB: number; // is the cheap stand-in for a true 45° visibility test
 }
 
-/** The mutable hull state the extra views trim in place (the cardinal calibration built it). */
 interface HullState {
   readonly kept: Uint8Array;
   readonly perZ: number[];
   total: number;
 }
 
-/**
- * Register + apply one DIAGONAL view: rasterise its silhouette (dominant-run columns only — bleed is
- * transparent), project the hull onto the view's axis in whole-cell bins, then search anchor × mirror
- * for the best silhouette IoU at the turntable's shared scale `s` (px per grid cell). Skips the view
- * (returns null, hull untouched) when the best agreement stays under {@link IOU_MIN} or the trim would
- * empty an occupied z-slice; otherwise trims the hull in place and returns the view for colouring.
- * A voxel whose footprint projects fully OUTSIDE the cell is kept — clipped art says nothing about it.
- */
+// Projects the hull onto the view's axis in whole-cell bins, searches anchor × mirror for the best
+// silhouette IoU at shared scale `s`, then trims the hull in place. Returns null (hull untouched) when
+// the best IoU stays under IOU_MIN or the trim would empty an occupied z-slice.
 function registerDiagonal(
   sheet: Texture,
   cw: number,
@@ -369,9 +289,8 @@ function registerDiagonal(
   const axisY = Math.sin(theta);
   const cx = (n - 1) / 2;
   const cy = (ny - 1) / 2;
-  // The view silhouette at working resolution: nz rows (nearest sheet row per slice) × cw columns as
-  // per-row PREFIX SUMS (cw + 1 entries each — {@link footprintHit}'s O(1) range test), with columns
-  // outside the dominant run FORCED empty (neighbour bleed must not read as matter).
+  // The view silhouette as per-row prefix sums, columns outside the dominant run FORCED empty (bleed
+  // must not read as matter).
   const rowSums = new Int32Array(nz * (cw + 1));
 
   for (let z = 0; z < nz; z++) {
@@ -391,7 +310,7 @@ function registerDiagonal(
   const off = Math.ceil((n * Math.abs(axisX) + ny * Math.abs(axisY)) / 2) + 1;
   const bins = 2 * off + 1;
   const proj = new Uint8Array(nz * bins);
-  let maskArea = 0; // the silhouette's area in BIN units (columns / s), for the IoU's union term
+  let maskArea = 0; // silhouette area in BIN units (columns / s), for the IoU's union term
 
   for (let z = 0; z < nz; z++) {
     maskArea += rowSums[z * (cw + 1) + cw];
@@ -406,10 +325,8 @@ function registerDiagonal(
       }
     }
   }
-  // Registration: anchor (the pixel the grid centre projects to) × mirror, scored by silhouette IoU.
-  // EVERY hull bin counts toward the union — including the ones an anchor pushes outside the cell —
-  // or an extreme anchor could inflate its score by shoving the hull past the clip edge. `hullArea`
-  // is anchor-independent; only the intersection is sampled (out-of-cell bins can't match anything).
+  // EVERY hull bin counts toward the union (even ones an anchor pushes outside the cell), or an extreme
+  // anchor could inflate its score by shoving the hull past the clip edge.
   const mid = (span[0] + span[1]) / 2;
   const step = Math.max(1, s / 2);
   let hullArea = 0;
@@ -433,8 +350,7 @@ function registerDiagonal(
     }
     // hullArea ≥ 1 (the hull has voxels), so the denominator never zeroes.
     const iou = inter / (hullArea + maskArea - inter);
-    // Strict improvement, with an IoU plateau tie-broken toward the CENTRED anchor (turntable art
-    // is centred; without this, a flat maximum would let the anchor drift to the plateau's edge).
+    // IoU-plateau tie-break toward the CENTRED anchor (else a flat maximum drifts to the plateau edge).
     const closer = iou === best.iou && Math.abs(anchor - mid) < Math.abs(best.anchor - mid);
 
     if (iou > best.iou || closer) {
@@ -444,9 +360,8 @@ function registerDiagonal(
     return iou;
   };
 
-  // TWO-STAGE sweep per mirror: probe the whole ± ANCHOR_RANGE window at a coarse 4·step (mid itself
-  // included), then refine THIS mirror's own coarse winner at `step` across one coarse cell either
-  // side — a quarter of a flat sweep's evaluations for the same optimum.
+  // Two-stage sweep per mirror: coarse probe over ± ANCHOR_RANGE at 4·step, then refine this mirror's
+  // coarse winner at `step` — a quarter of a flat sweep's evaluations for the same optimum.
   for (const flip of [1, -1]) {
     const coarse = 4 * step;
     let around = mid;
@@ -471,11 +386,10 @@ function registerDiagonal(
   if (best.iou < IOU_MIN) {
     return null;
   }
-  // Trial-trim (pass 1): a voxel dies when its projected footprint lies inside the cell yet covers no
-  // matter. Reject the whole view if that would EMPTY a z-slice the hull occupies.
+  // Trial-trim (pass 1): reject the whole view if trimming would EMPTY a z-slice the hull occupies. A
+  // voxel dies only on a definite miss (inside the cell, no matter); a footprint outside the cell (−1)
+  // keeps the benefit of the doubt.
   const removedPerZ = new Array<number>(nz).fill(0);
-  // A voxel dies only on a definite miss: a footprint fully outside the cell (−1) keeps the benefit
-  // of the doubt — the clipped art says nothing about it.
   const doomed = (x: number, y: number, z: number): boolean =>
     footprintHit(
       rowSums,
@@ -524,11 +438,8 @@ function registerDiagonal(
   };
 }
 
-/** The TOP view CALIBRATED against the hull footprint (see {@link applyTop}): the mirror transform
- *  over the base "image bottom = object front, image x = grid +x" convention plus the image's alpha
- *  bboxes the footprint mapping stretches over. (No axis TRANSPOSITION in the search space: the
- *  per-axis bbox stretch would absorb a transposed image's aspect and make it structurally
- *  undetectable — the delivered convention pins which image axis is which.) */
+// No axis TRANSPOSITION in the search space: the per-axis bbox stretch would absorb a transposed image's
+// aspect and make it undetectable — the delivered convention pins which image axis is which.
 interface TopView {
   readonly tex: Texture;
   readonly flipU: boolean;
@@ -537,7 +448,6 @@ interface TopView {
   readonly spanY: readonly [number, number];
 }
 
-/** The top image pixel (sheet-absolute x, y) under a top view's transform for grid column (x, y). */
 function topPixel(
   top: TopView,
   n: number,
@@ -555,17 +465,10 @@ function topPixel(
   ];
 }
 
-/**
- * Calibrate + apply the optional TOP view: its silhouette (each axis stretched over its own alpha
- * bbox) stamps the plan FOOTPRINT — a column (x, y) survives only where the top-down image is opaque,
- * separating what four profile silhouettes fuse (a star base's legs). The 4 mirror transforms are
- * scored by IoU against the hull's own footprint (base convention first, strict improvement to
- * replace — so a symmetric tie keeps the documented orientation; note a cardinal-only hull's
- * footprint is a rectangle, where every mirror ties and the HOLE guard is the real discriminator);
- * a transform that would empty an occupied z-slice is invalid, and a best score under
- * {@link TOP_IOU_MIN} (or a degenerate/empty image) ignores the top entirely. Trims the hull in
- * place; returns the view for colouring, or null.
- */
+// Stamps the plan FOOTPRINT (a column survives only where the top image is opaque), separating what four
+// profile silhouettes fuse. The 4 mirror transforms are scored by IoU against the hull footprint (base
+// convention wins ties; a cardinal-only footprint is a rectangle where the HOLE guard is the real
+// discriminator). Ignores the top under TOP_IOU_MIN or on a degenerate image; trims in place.
 function applyTop(
   tex: Texture,
   hull: HullState,
@@ -672,15 +575,9 @@ function applyTop(
   return best.view;
 }
 
-/**
- * Carve a directional prop's rotation sheet into its voxel-grid {@link Texture} (see the module doc
- * for the axes + encoding), or `null` when the sheet can't produce a volume (a malformed width, a cell
- * count not a multiple of 4, any empty cardinal silhouette, or a hull that intersects to nothing) —
- * the caller then simply keeps the billboard sheet, the zero-regression fallback. `views` opts extra
- * silhouettes in: `cells: 8` reads the four diagonal cells, `top` stamps the plan footprint; both are
- * individually skipped (never fatal) when their art can't be trusted. Pure and deterministic: same
- * sheet, same grid.
- */
+// Returns null when the sheet can't produce a volume (malformed width, cells not a multiple of 4, an
+// empty cardinal silhouette, or a hull intersecting to nothing) — the caller keeps the billboard sheet
+// as the zero-regression fallback. Extra `views` are individually skipped, never fatal.
 export function carveVoxelProp(
   sheet: Texture,
   n = VOXEL_GRID,
@@ -692,7 +589,7 @@ export function carveVoxelProp(
     return null;
   }
   const cw = sheet.width / cells;
-  const quarter = cells / 4; // the wheel cell of cardinal i is i·quarter
+  const quarter = cells / 4; // wheel cell of cardinal i is i·quarter
   const spans = [FRONT, RIGHT, BACK, LEFT].map((i) => cellSpan(sheet, cw, i * quarter));
   const [frontSpan, rightSpan, backSpan, leftSpan] = spans;
 
@@ -700,16 +597,15 @@ export function carveVoxelProp(
     return null;
   }
   const nz = Math.max(2, Math.round((sheet.height / cw) * n));
-  // Depth from the flank view's own extent: flank span / front span (the prototype's lesson) — a
-  // plan-isotropic grid (ny cells over width·ratio world units, same cell size as x) the renderer
-  // relies on to use ONE plan scale for both axes.
+  // Depth from flank span / front span — a plan-isotropic grid (same cell size as x) so the renderer
+  // uses ONE plan scale for both axes.
   const depthRatio = (rightSpan[1] - rightSpan[0]) / Math.max(1, frontSpan[1] - frontSpan[0]);
   const ny = Math.max(2, Math.min(n, Math.round(n * depthRatio)));
   const front = viewMask(sheet, cw, frontSpan, FRONT * quarter, n, nz);
   const right = viewMask(sheet, cw, rightSpan, RIGHT * quarter, ny, nz);
   const back = viewMask(sheet, cw, backSpan, BACK * quarter, n, nz);
   const left = viewMask(sheet, cw, leftSpan, LEFT * quarter, ny, nz);
-  // The front view's per-slice coverage — the reference for "no slice may go empty".
+  // Front view per-slice coverage — the reference for "no slice may go empty".
   const ref = new Array<number>(nz).fill(0);
 
   for (let z = 0; z < nz; z++) {
@@ -718,12 +614,9 @@ export function carveVoxelProp(
     }
   }
 
-  // AUTO-CALIBRATION: try the 4 flip combos (back × −x flank — mirroring the +x flank is provably
-  // inert, see {@link carveHull}); reject any that empties a z-slice the front silhouette fills
-  // (> HOLE_COVERAGE); keep the most voluminous survivor. All rejected → the unflipped carve.
-  // The cardinal intersection is SEPARABLE — kept(z,y,x) = X-gate(z,x) ∧ Y-gate(z,y), so a combo's
-  // per-slice count is |X(z)| · |Y(z)| — which scores every combo in O(nz·(n + ny)); only the
-  // WINNER's hull is actually built ({@link carveHull}).
+  // Auto-calibration: try the 4 flip combos, reject any emptying a z-slice the front fills (>
+  // HOLE_COVERAGE), keep the most voluminous. The intersection is SEPARABLE — kept(z,y,x) = X-gate(z,x)
+  // ∧ Y-gate(z,y), so a combo scores in O(nz·(n+ny)); only the WINNER's hull is actually built.
   let bestFlips: { total: number; f2: number; f3: number } | null = null;
 
   for (const f2 of [0, 1]) {
@@ -761,8 +654,7 @@ export function carveVoxelProp(
   }
   const { kept } = best;
   const hull: HullState = { kept, perZ: [...best.perZ], total: best.total };
-  // The turntable's shared pixel scale (px per grid cell) — front + flank agree by construction
-  // (ny derives from their span ratio), the mean just splits their rounding.
+  // Shared pixel scale (px per grid cell) — front + flank agree by construction; the mean splits rounding.
   const scale =
     ((frontSpan[1] - frontSpan[0]) / (n - 1) + (rightSpan[1] - rightSpan[0]) / (ny - 1)) / 2;
   const diagonals: DiagonalView[] = [];
@@ -778,10 +670,8 @@ export function carveVoxelProp(
   }
   const top = views.top === undefined ? null : applyTop(views.top, hull, n, ny, nz);
 
-  // Per-axis first/last solid maps: a voxel is VISIBLE to a cardinal iff it is that axis ray's first
-  // hit (front sees ascending y, the +x flank descending x, …), and to the TOP view iff it is its
-  // column's highest solid — O(cells) once, instead of a scan per voxel. Diagonal visibility is the
-  // conjunction of the two flanking cardinals' (the cheap stand-in for a true 45° ray test).
+  // Per-axis first/last solid maps: a voxel is VISIBLE to a cardinal iff it is that axis ray's first hit
+  // — built O(cells) once instead of a scan per voxel. Diagonal visibility = the two flanking cardinals'.
   const firstY = new Int32Array(n * nz).fill(-1);
   const lastY = new Int32Array(n * nz).fill(-1);
   const firstX = new Int32Array(ny * nz).fill(-1);
@@ -808,9 +698,8 @@ export function carveVoxelProp(
     }
   }
 
-  // Colour + encode. Output slices are BOTTOM-up (the renderer's z), so the image row order flips.
-  // The per-voxel machinery (the score accumulator, the sampling helpers) is HOISTED out of the
-  // ~10⁵-voxel loop — per-voxel closures/arrays were a fifth of the whole carve's time.
+  // Colour + encode. Output slices are BOTTOM-up (the renderer's z), so the image row order flips. The
+  // per-voxel machinery is HOISTED out of the ~10⁵-voxel loop — per-voxel closures were a fifth of the time.
   const pixels = new Uint8ClampedArray(n * ny * nz * 4);
   const solid = (x: number, y: number, z: number): boolean =>
     x >= 0 && x < n && y >= 0 && y < ny && z >= 0 && z < nz && kept[(z * ny + y) * n + x] === 1;
@@ -837,8 +726,7 @@ export function carveVoxelProp(
         if (kept[(z * ny + y) * n + x] === 0) {
           continue;
         }
-        // The voxel's surface normal, from its empty neighbours (out of bounds = empty; mask z runs
-        // TOP-down, so "up" is z − 1), and the views that actually see it.
+        // Surface normal from empty neighbours (mask z runs TOP-down, so "up" is z − 1).
         const normalX = (solid(x + 1, y, z) ? 0 : 1) - (solid(x - 1, y, z) ? 0 : 1);
         const normalY = (solid(x, y + 1, z) ? 0 : 1) - (solid(x, y - 1, z) ? 0 : 1);
         const normalUp = (solid(x, y, z - 1) ? 0 : 1) - (solid(x, y, z + 1) ? 0 : 1);
@@ -847,14 +735,10 @@ export function carveVoxelProp(
         const seesBack = lastY[z * n + x] === y;
         const seesLeft = firstX[z * ny + y] === x; // the −x flank
 
-        // The view whose direction best matches the normal, with a decisive bonus for views whose
-        // ray actually SEES the voxel. A corner column's normal dots EQUALLY into its two faces, so
-        // the iteration order is the tie-break — flanks BEFORE front (the cardinal-only striping
-        // lesson), wheel views BEFORE the top (a rim edge keeps the rotation art's own edge pixels).
-        // The diagonals outscore both their cardinals on 45° edges (dot √2 vs 1), which is exactly
-        // where the cardinal pick used to bleed a face across its corner. A voxel NO view sees (a
-        // seat top's interior, an underside) projects THROUGH from the best-aligned view instead of
-        // a flat grey — the in-game DDA exposes those faces, and grey read as blobs there.
+        // Best view = direction most aligned with the normal, decisive bonus for views that SEE it.
+        // A corner column dots EQUALLY into its two faces, so iteration order is the tie-break: flanks
+        // BEFORE front, wheel views BEFORE top. Diagonals outscore their cardinals on 45° edges (√2 vs
+        // 1). A voxel no view sees projects THROUGH the best-aligned view (the DDA exposes those faces).
         chosen = -1;
         bestScore = -Infinity;
 

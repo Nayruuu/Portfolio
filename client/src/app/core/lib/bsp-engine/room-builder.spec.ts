@@ -4,7 +4,6 @@ import { RoomBuilder } from './room-builder';
 import type { RoomPoint, RoomSpec } from './room-builder';
 import type { LineDef, MapSource } from './types';
 
-/** A plain room spec — geometry is what these tests exercise, the dressing is a constant. */
 const SPEC: RoomSpec = {
   floorZ: 0,
   ceilZ: 4,
@@ -14,7 +13,6 @@ const SPEC: RoomSpec = {
   wallTex: 'WALL',
 };
 
-/** The 4-corner polygon of an axis-aligned rectangle, `(x1,y1)` = NW corner, `(x2,y2)` = SE. */
 const rect = (x1: number, y1: number, x2: number, y2: number): readonly RoomPoint[] => [
   [x1, y1],
   [x1, y2],
@@ -22,7 +20,6 @@ const rect = (x1: number, y1: number, x2: number, y2: number): readonly RoomPoin
   [x2, y1],
 ];
 
-/** A linedef with its endpoints resolved to coordinates, for geometry assertions. */
 interface ResolvedLine {
   readonly line: LineDef;
   readonly x1: number;
@@ -41,7 +38,6 @@ function resolve(map: MapSource): ResolvedLine[] {
   }));
 }
 
-/** All lines lying on the horizontal `y = value`, sorted by their west end. */
 function onY(map: MapSource, value: number): ResolvedLine[] {
   return resolve(map)
     .filter((l) => l.y1 === value && l.y2 === value)
@@ -50,7 +46,7 @@ function onY(map: MapSource, value: number): ResolvedLine[] {
 
 describe('RoomBuilder', () => {
   it('normalizes polygon winding: either orientation puts the interior on the right of every wall', () => {
-    const clockwise = rect(0, 0, 4, 4); // the canonical hand-authored winding
+    const clockwise = rect(0, 0, 4, 4);
     const counterClockwise = [...clockwise].reverse();
 
     for (const polygon of [clockwise, counterClockwise]) {
@@ -61,17 +57,15 @@ describe('RoomBuilder', () => {
       for (const { line, x1, y1, x2, y2 } of resolve(map)) {
         expect(line.front.sector).toBe(s);
         expect(line.back).toBeNull();
-        // The interior centroid (2,2) on the RIGHT of v1→v2: cross(direction, centroid - v1) < 0.
         expect((x2 - x1) * (2 - y1) - (y2 - y1) * (2 - x1)).toBeLessThan(0);
       }
-      expect(locateSubSector(buildBsp(map).root, 2, 2).sector).toBe(s); // and the BSP agrees
+      expect(locateSubSector(buildBsp(map).root, 2, 2).sector).toBe(s);
     }
   });
 
   it('keeps `walls` overrides on the same geometric edge when it reverses a mis-wound polygon', () => {
     const b = new RoomBuilder();
 
-    // Counter-clockwise input; edge 1 = (4,0) → (4,4) is the EAST wall whatever the final winding.
     b.room(
       [
         [0, 0],
@@ -88,20 +82,20 @@ describe('RoomBuilder', () => {
 
   it('splits a partial shared boundary into solid / opening / solid around the doorway', () => {
     const b = new RoomBuilder();
-    const a = b.room(rect(0, 0, 8, 4), SPEC); // a long south wall y=4, x0..8
-    const c = b.room(rect(2, 4, 6, 8), SPEC); // a narrower room below, x2..6
+    const a = b.room(rect(0, 0, 8, 4), SPEC);
+    const c = b.room(rect(2, 4, 6, 8), SPEC);
 
     b.connect(a, c);
     const boundary = onY(b.build(), 4);
 
-    expect(boundary).toHaveLength(3); // solid before, opening within, solid after
+    expect(boundary).toHaveLength(3);
     expect(boundary.map((l) => [Math.min(l.x1, l.x2), Math.max(l.x1, l.x2)])).toEqual([
       [0, 2],
       [2, 6],
       [6, 8],
     ]);
     expect(boundary[0].line.back).toBeNull();
-    expect(boundary[1].line.back?.sector).toBe(c); // the doorway, fronting room a
+    expect(boundary[1].line.back?.sector).toBe(c);
     expect(boundary[1].line.front.sector).toBe(a);
     expect(boundary[2].line.back).toBeNull();
   });
@@ -109,11 +103,11 @@ describe('RoomBuilder', () => {
   it("restricts the opening to the 'at' sub-span, walling up the rest on BOTH sides", () => {
     const b = new RoomBuilder();
     const a = b.room(rect(0, 0, 8, 4), SPEC);
-    const c = b.room(rect(0, 4, 8, 8), SPEC); // full shared edge x0..8…
+    const c = b.room(rect(0, 4, 8, 8), SPEC);
 
     b.connect(a, c, {
       at: [3, 4, 5, 4],
-    }); // …but the door is only x3..5
+    });
     const boundary = onY(b.build(), 4);
     const openings = boundary.filter((l) => l.line.back !== null);
     const solids = boundary.filter((l) => l.line.back === null);
@@ -123,7 +117,7 @@ describe('RoomBuilder', () => {
       Math.min(openings[0].x1, openings[0].x2),
       Math.max(openings[0].x1, openings[0].x2),
     ]).toEqual([3, 5]);
-    expect(solids).toHaveLength(4); // x0..3 + x5..8, once per room — the unconnected rest stays walled
+    expect(solids).toHaveLength(4);
     expect(solids.filter((l) => l.line.front.sector === a)).toHaveLength(2);
     expect(solids.filter((l) => l.line.front.sector === c)).toHaveLength(2);
   });
@@ -135,20 +129,19 @@ describe('RoomBuilder', () => {
     b.zonePortal(a, [3, 8, 5, 8], { zone: 'hangar', dx: 10, dy: -30 });
     const boundary = onY(b.build(), 8);
 
-    expect(boundary).toHaveLength(3); // solid before, the live seam, solid after
+    expect(boundary).toHaveLength(3);
     expect(boundary.map((l) => [Math.min(l.x1, l.x2), Math.max(l.x1, l.x2)])).toEqual([
       [0, 3],
       [3, 5],
       [5, 8],
     ]);
     expect(boundary[1].line.zonePortal).toEqual({ zone: 'hangar', dx: 10, dy: -30 });
-    expect(boundary[1].line.back).toBeNull(); // one-sided → solid for physics + hitscan
-    expect(boundary[1].line.front.sector).toBe(a); // fronts the room
-    expect(boundary[1].line.front.middleTex).toBe('WALL'); // fallback look = the wall's own texture
+    expect(boundary[1].line.back).toBeNull();
+    expect(boundary[1].line.front.sector).toBe(a);
+    expect(boundary[1].line.front.middleTex).toBe('WALL');
     expect(boundary[0].line.zonePortal).toBeUndefined();
     expect(boundary[2].line.zonePortal).toBeUndefined();
 
-    // An explicit `tex` overrides the fallback look.
     const b2 = new RoomBuilder();
     const a2 = b2.room(rect(0, 0, 8, 8), SPEC);
 
@@ -161,9 +154,7 @@ describe('RoomBuilder', () => {
     const a = b.room(rect(0, 0, 8, 8), SPEC);
     const portal = { zone: 'x', dx: 0, dy: 0 };
 
-    // Not colinear with any wall.
     expect(() => b.zonePortal(a, [10, 10, 12, 10], portal)).toThrow(/lies on no boundary edge/);
-    // Colinear with the y=8 wall's line, but outside the wall's span.
     expect(() => b.zonePortal(a, [10, 8, 12, 8], portal)).toThrow(/lies on no boundary edge/);
 
     const island = b.island(a, rect(2, 2, 4, 4), { ...SPEC, floorZ: 1 });
@@ -223,7 +214,7 @@ describe('RoomBuilder', () => {
     const b = new RoomBuilder();
     const a = b.room(rect(0, 0, 4, 4), SPEC);
     const c = b.room(rect(0, 4, 4, 8), SPEC);
-    const boundary = onY(b.build(), 4); // no connect() — an opaque dividing wall
+    const boundary = onY(b.build(), 4);
 
     expect(boundary).toHaveLength(2);
     expect(boundary.every((l) => l.line.back === null)).toBe(true);
@@ -258,7 +249,6 @@ describe('RoomBuilder', () => {
     for (const { line, x1, y1, x2, y2 } of walls) {
       expect(line.front.sector).toBe(host);
       expect(line.back).toBeNull();
-      // The pillar's centre (5,5) sits on the LEFT of v1→v2 — the host outside is the front.
       expect((x2 - x1) * (5 - y1) - (y2 - y1) * (5 - x1)).toBeGreaterThan(0);
     }
   });
@@ -273,7 +263,7 @@ describe('RoomBuilder', () => {
       ceilZ: 4,
       light: 200,
       wallTex: 'WALL',
-    }); // base edge west→east ⇒ climbs NORTH (the right of the edge, y down)
+    });
     const map = b.build();
 
     expect(steps).toHaveLength(3);
@@ -281,11 +271,11 @@ describe('RoomBuilder', () => {
     const portals = resolve(map).filter((l) => l.line.back !== null);
 
     expect(portals).toHaveLength(2);
-    expect(portals.map((l) => l.line.front.sector).sort()).toEqual([steps[0], steps[1]]); // fronts = lower steps
+    expect(portals.map((l) => l.line.front.sector).sort()).toEqual([steps[0], steps[1]]);
     const root = buildBsp(map).root;
 
-    expect(locateSubSector(root, 2, 9).sector).toBe(steps[0]); // y10 → 8
-    expect(locateSubSector(root, 2, 5).sector).toBe(steps[2]); // top step, y6 → 4
+    expect(locateSubSector(root, 2, 9).sector).toBe(steps[0]);
+    expect(locateSubSector(root, 2, 5).sector).toBe(steps[2]);
   });
 
   it('rejects degenerate polygons and impossible connections with clear messages', () => {
@@ -340,7 +330,7 @@ describe('RoomBuilder', () => {
   it('builds a 3-room map (door + island + column) a player can be located inside', () => {
     const b = new RoomBuilder();
     const lobby = b.room(rect(0, 0, 12, 8), SPEC);
-    const corridor = b.room(rect(4, 8, 8, 12), SPEC); // a doorway in the lobby's long south wall
+    const corridor = b.room(rect(4, 8, 8, 12), SPEC);
     const hall = b.room(rect(0, 12, 12, 20), SPEC);
     const dais = b.island(lobby, rect(1, 1, 3, 3), { ...SPEC, floorZ: 0.5 });
 
@@ -354,7 +344,7 @@ describe('RoomBuilder', () => {
     expect(map.things).toEqual([{ x: 6, y: 4, angle: 0, type: 'player_start' }]);
     expect(locateSubSector(root, 6, 4).sector).toBe(lobby);
     expect(locateSubSector(root, 6, 10).sector).toBe(corridor);
-    expect(locateSubSector(root, 2, 16).sector).toBe(hall); // west of the column
+    expect(locateSubSector(root, 2, 16).sector).toBe(hall);
     expect(locateSubSector(root, 2, 2).sector).toBe(dais);
   });
 
@@ -377,7 +367,7 @@ describe('RoomBuilder', () => {
   it('treats colinear walls that touch at a single point as no overlap', () => {
     const b = new RoomBuilder();
     const a = b.room(rect(0, 0, 4, 4), SPEC);
-    const corner = b.room(rect(4, 4, 8, 8), SPEC); // shares only the corner (4,4): colinear walls meet at a point
+    const corner = b.room(rect(4, 4, 8, 8), SPEC);
 
     expect(() => b.connect(a, corner)).toThrow(/no colinear boundary overlap/);
   });
@@ -385,7 +375,6 @@ describe('RoomBuilder', () => {
   it("skips a non-colinear overlap when 'at' selects a second shared wall on another line", () => {
     const b = new RoomBuilder();
     const a = b.room(rect(0, 0, 8, 8), SPEC);
-    // An L-shaped room wrapping a's SE corner: shares a's south wall (y=8) AND its east wall (x=8).
     const wrap = b.room(
       [
         [8, 0],
@@ -398,7 +387,6 @@ describe('RoomBuilder', () => {
       SPEC,
     );
 
-    // The door is on the EAST wall, so `restrict` must skip the (first-found) south overlap before matching it.
     b.connect(a, wrap, { at: [8, 2, 8, 6] });
     const opening = resolve(b.build()).find((l) => l.line.back !== null);
 
@@ -413,11 +401,11 @@ describe('RoomBuilder', () => {
 
   it('sorts the cuts when one wall carries two doorways given out of order', () => {
     const b = new RoomBuilder();
-    const a = b.room(rect(0, 0, 12, 4), SPEC); // one long south wall y=4
+    const a = b.room(rect(0, 0, 12, 4), SPEC);
     const west = b.room(rect(1, 4, 3, 8), SPEC);
     const east = b.room(rect(9, 4, 11, 8), SPEC);
 
-    b.connect(a, east); // east door registered FIRST → the two cuts arrive out of order, so the sort comparator runs
+    b.connect(a, east);
     b.connect(a, west);
     const boundary = onY(b.build(), 4);
     const openings = boundary.filter((l) => l.line.back !== null);
@@ -437,6 +425,6 @@ describe('RoomBuilder', () => {
       [0, 1],
       [3, 9],
       [11, 12],
-    ]); // solid / door / solid / door / solid
+    ]);
   });
 });

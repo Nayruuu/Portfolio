@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { nextOwnedIndex, shouldAutoEquip } from './weapon-progression';
 
 describe('nextOwnedIndex', () => {
-  // owned flags for an 8-deep arsenal where only the fist (0), the shotgun (3) and the BFG (7) are owned
   const owned = [true, false, false, true, false, false, false, true];
 
   it('cycles forward to the next owned index, skipping unowned slots', () => {
@@ -16,14 +15,14 @@ describe('nextOwnedIndex', () => {
   });
 
   it('wraps around both ends', () => {
-    expect(nextOwnedIndex(owned, 7, 1)).toBe(0); // forward off the end → back to the fist
-    expect(nextOwnedIndex(owned, 0, -1)).toBe(7); // backward off the start → the BFG
+    expect(nextOwnedIndex(owned, 7, 1)).toBe(0);
+    expect(nextOwnedIndex(owned, 0, -1)).toBe(7);
   });
 
   it('scans past a run of unowned slots that spans the wrap', () => {
     const sparse = [false, true, false, false, false, false, false, false];
 
-    expect(nextOwnedIndex(sparse, 1, 1)).toBe(1); // full loop lands back on the only owned slot
+    expect(nextOwnedIndex(sparse, 1, 1)).toBe(1);
     expect(nextOwnedIndex(sparse, 1, -1)).toBe(1);
   });
 
@@ -42,7 +41,7 @@ describe('nextOwnedIndex', () => {
 
 describe('shouldAutoEquip', () => {
   it('ALWAYS auto-equips a first pickup — the new tool in hand is the reward, whatever its slot', () => {
-    expect(shouldAutoEquip(false)).toBe(true); // fist → pistol, shotgun → pistol, anything → anything new
+    expect(shouldAutoEquip(false)).toBe(true);
   });
 
   it('never auto-equips a repeat pickup (an ammo top-up, not an upgrade)', () => {

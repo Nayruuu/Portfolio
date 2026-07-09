@@ -1,30 +1,20 @@
 import type { BBox, CompiledMap, MapSource, NodeChild, Partition, Seg, SubSector } from './types';
 
-/**
- * The BSP compiler. Carves a {@link MapSource} into a binary tree of convex {@link SubSector} leaves —
- * the structure the software renderer (SP2) walks front-to-back, and physics (SP4) uses for point
- * location. Simple-but-correct: partition selection just minimises splits + imbalance; a balanced/
- * optimised builder can come later without changing the output contract.
- *
- * Convention: a wall's FRONT is the right-hand side of `v1 -> v2`, which here is the **negative** signed
- * side (see {@link signedSide}). A two-sided linedef yields two opposing segs, one fronting each sector.
- */
+// Convention: a wall's FRONT is the right-hand side of v1->v2 — the NEGATIVE signed side (see signedSide).
 
 const EPS = 1e-9;
 
-/** Signed side of point (`px`,`py`) vs the directed partition line. < 0 = front (right), > 0 = back. */
+// < 0 = front (right), > 0 = back.
 export function signedSide(part: Partition, px: number, py: number): number {
   return part.dx * (py - part.y) - part.dy * (px - part.x);
 }
 
-/** The infinite line carrying a seg, as a partition. */
 function partitionOf(seg: Seg): Partition {
   return { x: seg.v1.x, y: seg.v1.y, dx: seg.v2.x - seg.v1.x, dy: seg.v2.y - seg.v1.y };
 }
 
 type Classification = 'front' | 'back' | 'spanning' | 'coincident';
 
-/** Where a seg falls relative to a partition line. */
 function classify(part: Partition, seg: Seg): Classification {
   const d1 = signedSide(part, seg.v1.x, seg.v1.y);
   const d2 = signedSide(part, seg.v2.x, seg.v2.y);
@@ -44,7 +34,6 @@ function classify(part: Partition, seg: Seg): Classification {
   return 'coincident'; // both endpoints on the line
 }
 
-/** Split a spanning seg at the partition line into its front and back pieces. */
 function split(part: Partition, seg: Seg): { front: Seg; back: Seg } {
   const d1 = signedSide(part, seg.v1.x, seg.v1.y);
   const d2 = signedSide(part, seg.v2.x, seg.v2.y);
@@ -56,7 +45,7 @@ function split(part: Partition, seg: Seg): { front: Seg; back: Seg } {
   return d1 < 0 ? { front: a, back: b } : { front: b, back: a };
 }
 
-/** Pick the seg whose line best partitions the set (fewest splits, most balanced), or null if convex. */
+// Best splitter = fewest splits, most balanced; null when the set is already convex.
 function chooseSplitter(segs: readonly Seg[]): Seg | null {
   let best: Seg | null = null;
   let bestScore = Infinity;
@@ -97,7 +86,6 @@ function chooseSplitter(segs: readonly Seg[]): Seg | null {
   return best;
 }
 
-/** Axis-aligned bounds of a seg set. */
 function boundsOf(segs: readonly Seg[]): BBox {
   let minX = Infinity;
   let minY = Infinity;
@@ -114,7 +102,7 @@ function boundsOf(segs: readonly Seg[]): BBox {
   return { minX, minY, maxX, maxY };
 }
 
-/** Build a leaf, recording it in the accumulator. The leaf's sector is its segs' (a convex cell is one). */
+// The leaf's sector is its segs' — a convex cell is a single sector.
 function makeLeaf(segs: readonly Seg[], outSegs: Seg[], outSubs: SubSector[]): NodeChild {
   const subsector: SubSector = { segs, sector: segs[0].sector };
 
@@ -124,7 +112,6 @@ function makeLeaf(segs: readonly Seg[], outSegs: Seg[], outSubs: SubSector[]): N
   return { kind: 'leaf', subsector };
 }
 
-/** Recursively partition a seg set into a BSP subtree. */
 function build(segs: readonly Seg[], outSegs: Seg[], outSubs: SubSector[]): NodeChild {
   const splitter = chooseSplitter(segs);
 
@@ -168,7 +155,6 @@ function build(segs: readonly Seg[], outSegs: Seg[], outSubs: SubSector[]): Node
   };
 }
 
-/** Generate the initial segs: one per one-sided wall, two (opposing) for each two-sided portal. */
 function initialSegs(map: MapSource): Seg[] {
   const segs: Seg[] = [];
 
@@ -185,7 +171,6 @@ function initialSegs(map: MapSource): Seg[] {
   return segs;
 }
 
-/** Compile a source map into its BSP tree, segs, and subsectors. */
 export function buildBsp(map: MapSource): CompiledMap {
   const segs: Seg[] = [];
   const subsectors: SubSector[] = [];
@@ -194,7 +179,6 @@ export function buildBsp(map: MapSource): CompiledMap {
   return { source: map, segs, subsectors, root };
 }
 
-/** Walk the BSP to the subsector containing (`x`,`y`). */
 export function locateSubSector(root: NodeChild, x: number, y: number): SubSector {
   let child = root;
 

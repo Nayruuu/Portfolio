@@ -3,27 +3,13 @@ import { locateSubSector, signedSide } from './node-builder';
 import { missingTexture, TEX_WORLD, type Texture, type TextureLibrary } from './texture';
 import type { CompiledMap, NodeChild, Sector, Seg, ThingType, ZonePortalDef } from './types';
 
-/**
- * The software renderer (SP2–SP5). Walks the BSP front-to-back from the camera and, per column, draws the
- * near sector's textured CEILING (above), the wall (solid, or a portal's upper/lower bands), and the
- * textured FLOOR (below) — each sampled + distance-shaded, with a per-column occlusion window. It then
- * draws SPRITES (things), depth-tested per pixel against the wall z-buffer, with alpha: camera-facing
- * billboards, and — for `voxel` props whose grid decoded — world-anchored VOXEL VOLUMES ray-marched per
- * pixel with an exact 3D DDA (Build/Blood-style column rendering; grids carved by `voxel-carve.ts`).
- *
- * Walls texture by U along the wall (perspective-correct) and V by world height. Floors/ceilings are cast
- * per pixel: a precomputed per-row distance table gives the world point under each screen pixel, which
- * samples the flat's texture (no per-pixel divide for depth). Pitch shears the horizon (look up/down).
- * Pure: `(map, camera, config, textures, target?) -> Uint8ClampedArray`; the canvas blit lives outside.
- *
- * ZONE PORTALS: a one-sided linedef carrying {@link ZonePortalDef} is a LIVE window into another zone's
- * map. The primary walk records its per-column opening (like glass records panes) and closes the column;
- * a NEIGHBOR pass then re-walks that zone's BSP with the camera translated by (−dx, −dy), restricted to
- * the recorded windows, into the same framebuffer + z-buffer (translation preserves distances, so depth
- * stays coherent for sprites and the glass blend). Depth is capped at 1 — see {@link renderNeighbors}.
- */
+// Walks the BSP front-to-back and per column draws ceiling / wall / floor (sampled + distance-shaded,
+// per-column occlusion window), then sprites (billboards + world-anchored voxel volumes) z-tested per
+// pixel. Pure: (map, camera, config, textures, target?) -> Uint8ClampedArray; the canvas blit is outside.
+// ZONE PORTALS: a one-sided ZonePortalDef line is a LIVE window; the primary walk records its per-column
+// opening, a NEIGHBOR pass re-walks that zone with the camera translated by (−dx, −dy). Translation
+// preserves distances, so depth stays coherent for sprites and glass. Depth capped at 1.
 
-/** Internal framebuffer dimensions + horizontal field of view. */
 export interface RenderConfig {
   readonly width: number;
   readonly height: number;
@@ -32,17 +18,13 @@ export interface RenderConfig {
 
 type Rgb = readonly [number, number, number];
 
-/** A wall endpoint in camera space, carrying the texture coordinate `u` (distance along the linedef). */
 interface WallVert {
   readonly forward: number;
   readonly side: number;
-  readonly u: number;
+  readonly u: number; // texture coordinate = distance along the linedef
 }
 
-/**
- * Framebuffer dimensions + the row band this pass is responsible for, `[rowStart, rowEnd)`. A full-frame
- * render uses `[0, height)`; a worker renders only its horizontal slice, so writes clamp to the band.
- */
+// [rowStart, rowEnd): a worker renders only its horizontal slice, so writes clamp to the band.
 interface Dims {
   readonly width: number;
   readonly height: number;
@@ -50,27 +32,18 @@ interface Dims {
   readonly rowEnd: number;
 }
 
-/** Background fallback colours (columns no wall reaches): ceiling above the horizon, floor below.
- *  Exported so the GPU command path reproduces the exact same backdrop. */
+// Background fallback (columns no wall reaches). Exported so the GPU command path reproduces it exactly.
 export const BG_CEILING: Rgb = [34, 36, 46];
 export const BG_FLOOR: Rgb = [54, 48, 42];
-/** Near clip plane (forward distance). Exported: the GPU voxel replay clamps its DDA entry to it. */
-export const NEAR = 0.02;
+export const NEAR = 0.02; // near clip plane (forward distance); the GPU voxel replay clamps its DDA to it
 
-/** World-Z anchor for wall vertical tiling, above any ceiling → texture row ≥ 0. (Exported: the GPU
- *  compute shader must anchor its wall V exactly the same way for pixel parity.) */
+// Wall/flat tiling anchors: large offsets keeping texture UV ≥ 0. The GPU compute shader MUST anchor the
+// same way for pixel parity.
 export const TEX_ANCHOR = 64;
-/** World-XY anchor for floor/ceiling tiling (a whole number of tiles) → UV ≥ 0. (Exported for the GPU
- *  compute shader — same parity contract as {@link TEX_ANCHOR}.) */
 export const FLAT_ANCHOR = 1024;
 
-/** How a thing type renders as a sprite: its texture name + world size (none = not a sprite).
- *  `rotations` marks a DIRECTIONAL prop: its texture is a 1×`rotations` view-angle sheet (front · right ·
- *  back · left). `voxel` upgrades the directional prop to a WORLD-ANCHORED VOXEL VOLUME when its texture
- *  resolves to a carved grid (see `voxel-carve.ts`) — the object never turns with the camera; every
- *  orbit angle is true perspective. Where no grid decoded (SSR / procedural fallback) the same def
- *  renders as the cell-switched rotation billboard, unchanged.
- *  Radially-symmetric props (a plant, a cooler) stay single-frame billboards. */
+// `rotations` marks a directional prop (a 1×N view-angle sheet); `voxel` upgrades it to a world-anchored
+// volume when its texture resolves to a carved grid, else it falls back to the rotation billboard.
 interface SpriteDef {
   readonly tex: string;
   readonly width: number;
@@ -78,28 +51,19 @@ interface SpriteDef {
   readonly rotations?: number;
   readonly voxel?: true;
 }
+// A voxel prop's `width` spans its carved grid (the front cell's TRIMMED art bbox), so on-screen size
+// matches the billboard's. A cubic .vox needs width == height or it renders distorted.
 const SPRITES: Partial<Record<ThingType, SpriteDef>> = {
   barrel: { tex: 'BARREL', width: 0.8, height: 1.1 },
   prop: { tex: 'PROP', width: 0.8, height: 1.6 }, // potted plant — symmetric, one frame
-  // Every directional prop renders as a world-anchored VOXEL volume — the billboard "turning with the
-  // camera" was the visible tell the user rejected. Small, detail-dense props carve on a finer 96 grid
-  // (with the screen's 1×8 diagonals + top view as extra hull constraints) so they stay crisp; the
-  // per-prop resolutions live with the carve call in the feature loader (`load-textures.ts`). A prop's
-  // `width` spans its carved grid, which covers the front cell's TRIMMED art bbox — so voxel widths are
-  // the billboard cell width × the art's bbox fraction, keeping the on-screen size the billboard had.
-  prop_screen: { tex: 'PROP_SCREEN', width: 0.57, height: 0.6, rotations: 8, voxel: true }, // crashed desk CRT (0.65 billboard × its 448/512 front bbox; 1×8 sheet + a served top view)
-  prop_totem: { tex: 'PROP_TOTEM', width: 1.25, height: 2.0, rotations: 4, voxel: true }, // free-standing directory totem (wide plinth — w/h = the sheet's trimmed cell aspect)
-  prop_board: { tex: 'PROP_BOARD', width: 1.49, height: 1.7, rotations: 4, voxel: true }, // whiteboard on casters (1.6 billboard × its 476/512 front bbox; the dominant-run span fixed its once-degenerate depth)
-  prop_chair: { tex: 'PROP_CHAIR', width: 1.2, height: 1.2, rotations: 4, voxel: true }, // office swivel chair — hand-sculpted .vox (48³ cubic box → width MUST equal height so the model renders undistorted; sized so the seat reads at eye level, base + backrest to scale)
+  prop_screen: { tex: 'PROP_SCREEN', width: 0.57, height: 0.6, rotations: 8, voxel: true }, // 1×8 sheet + served top view
+  prop_totem: { tex: 'PROP_TOTEM', width: 1.25, height: 2.0, rotations: 4, voxel: true },
+  prop_board: { tex: 'PROP_BOARD', width: 1.49, height: 1.7, rotations: 4, voxel: true },
+  prop_chair: { tex: 'PROP_CHAIR', width: 1.2, height: 1.2, rotations: 4, voxel: true }, // hand-sculpted .vox — width MUST equal height
   prop_cooler: { tex: 'PROP_COOLER', width: 0.6, height: 1.5 }, // water cooler — symmetric, one frame
 };
 
-/**
- * A billboard to paint this frame: a world position + base height `z` + the texture/size to draw there. `z`
- * is the world height of the sprite's bottom — the sector floor for decor (so a barrel rests on the ground),
- * or eye height for a shot in flight. The static decor of a map comes from {@link mapSprites}; the game
- * passes its own list each frame for moving/dying entities.
- */
+// `z` is the world height of the sprite's bottom (sector floor for decor, eye height for a shot in flight).
 export interface Sprite {
   readonly x: number;
   readonly y: number;
@@ -107,43 +71,30 @@ export interface Sprite {
   readonly tex: string;
   readonly width: number;
   readonly height: number;
-  // Optional atlas cell: the texture is a `cols`×`rows` grid and only cell (`col`,`row`) is drawn (an animated
-  // directional enemy frame). Omitted → the whole texture is drawn (a plain billboard — barrels, projectiles).
+  // Atlas cell: only cell (col,row) of a cols×rows grid is drawn. Omitted → the whole texture.
   readonly cols?: number;
   readonly rows?: number;
   readonly col?: number;
   readonly row?: number;
-  // Optional DOOM-style rotation metadata (a directional decor prop): `rotations` says the texture is a
-  // 1×`rotations` view-angle sheet and `facing` is the thing's authored heading — `orientSprite` re-picks
-  // `col` from these for the frame's viewpoint. Omitted → the cell (if any) is view-independent.
+  // Directional prop: `rotations` = a 1×N view-angle sheet, `facing` the authored heading — orientSprite
+  // re-picks `col` for the frame's viewpoint.
   readonly rotations?: number;
   readonly facing?: number;
-  // A VOXEL prop (see `voxel-carve.ts`): when its texture resolves to a carved grid (`voxelDepth`), the
-  // prop renders as a WORLD-ANCHORED VOLUME ray-marched per pixel — `col` is ignored (the grid holds
-  // every angle). Without a grid the flag is inert and the sprite stays the rotation billboard above —
-  // the zero-regression fallback for SSR / failed decodes / the procedural library.
+  // When the texture resolves to a carved grid (voxelDepth), render as a world-anchored VOLUME (col
+  // ignored); without a grid the flag is inert and the rotation billboard is the fallback.
   readonly voxel?: boolean;
-  readonly flash?: number; // 0..1 white hit-flash blend (0 / omitted = normal shading)
+  readonly flash?: number; // 0..1 white hit-flash blend
 }
 
-/**
- * One zone visible through this map's LIVE zone portals: its compiled map plus (optionally) the billboards
- * ALIVE in it this frame, in ITS OWN coordinates — a warm neighbor's enemies/pickups/decor, drawn through
- * the seam windows, z-tested like local sprites. Without `sprites` the neighbor renders geometry only.
- */
+// A zone visible through this map's live portals, plus (optionally) the sprites ALIVE in it this frame in
+// ITS OWN coordinates. Without `sprites` the neighbor renders geometry only.
 export interface ZoneNeighbor {
   readonly map: CompiledMap;
   readonly sprites?: readonly Sprite[];
 }
 
-/**
- * The static decor sprites authored into a map: every thing whose type has a sprite def, resting on its
- * floor. A DIRECTIONAL prop (its def carries `rotations`) is emitted as a 1×`rotations` atlas sprite
- * carrying the thing's authored facing, resting on FRONT (column 0) — the game's per-frame list re-picks
- * the cell for the viewpoint via `orientSprite`. A VOXEL prop (def opts into `voxel` — all four
- * directional props do) additionally renders as a world-anchored volume wherever its carved grid is in
- * the texture library; the rotation metadata stays on the sprite as its billboard fallback.
- */
+// A directional prop rests on FRONT (column 0); the game's per-frame list re-picks the cell via
+// orientSprite. A voxel prop also renders as a volume wherever its carved grid is in the library.
 export function mapSprites(map: CompiledMap): Sprite[] {
   const sprites: Sprite[] = [];
 
@@ -181,22 +132,19 @@ export function mapSprites(map: CompiledMap): Sprite[] {
   return sprites;
 }
 
-/** The "missing texture" drawn when a surface names a texture absent from the library. */
 const MISSING = missingTexture();
 
-/** A sector whose `ceilTex` is this renders its ceiling as open SKY (a gradient) instead of a textured flat. */
+// A sector whose `ceilTex` is this renders its ceiling as open SKY (a gradient).
 export const SKY = 'SKY';
 
-// A see-through GLASS line renders the back sector through its opening, then `blendGlass` washes this cool
-// translucent tint over that opening so it reads as a PANE, not a hole. `out = src*KEEP + TINT` per channel.
+// Glass wash washed over the see-through opening so it reads as a PANE, not a hole: out = src*KEEP + TINT.
 const GLASS_ALPHA = 0.22;
 const GLASS_KEEP = 1 - GLASS_ALPHA;
-const GLASS_TINT_R = (150 * GLASS_ALPHA) | 0; // a light cool blue, pre-multiplied by alpha
+const GLASS_TINT_R = (150 * GLASS_ALPHA) | 0; // light cool blue, pre-multiplied by alpha
 const GLASS_TINT_G = (195 * GLASS_ALPHA) | 0;
 const GLASS_TINT_B = (225 * GLASS_ALPHA) | 0;
 
-/** The glass-wash parameters, exported for the GPU compute shader (its WGSL transcribes
- *  {@link coolGlassTint} with these exact constants — same keep factor, same pre-multiplied tint). */
+// Exported so the GPU shader transcribes coolGlassTint with these exact constants.
 export const GLASS_TINT = {
   keep: GLASS_KEEP,
   r: GLASS_TINT_R,
@@ -204,9 +152,8 @@ export const GLASS_TINT = {
   b: GLASS_TINT_B,
 } as const;
 
-/** Wash a packed RGBA pixel with the cool glass tint (keep `GLASS_KEEP` of it + add the pre-multiplied tint) —
- *  used both by `blendGlass` on the clear pane and by `drawSprites` on a sprite seen THROUGH a pane.
- *  (Exported as the f64 reference the GPU parity executor replays.) */
+// Used by blendGlass on the clear pane and by drawSprites on a sprite seen THROUGH a pane; the GPU parity
+// executor replays this as its f64 reference.
 export function coolGlassTint(c: number): number {
   const r = (((c & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_R;
   const g = ((((c >> 8) & 0xff) * GLASS_KEEP) | 0) + GLASS_TINT_G;
@@ -215,17 +162,15 @@ export function coolGlassTint(c: number): number {
   return (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
 }
 
-/** Pack an opaque RGB into a little-endian RGBA uint32 for bulk framebuffer fills (all modern browsers). */
+// Little-endian RGBA uint32 for bulk framebuffer fills.
 function packRgb(c: Rgb): number {
   return ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
 }
 
-/** Resolve a texture name against the library, falling back to the magenta MISSING texture. */
 function resolve(textures: TextureLibrary, name: string): Texture {
   return textures.get(name) ?? MISSING;
 }
 
-/** Walk the tree front-to-back from the camera, visiting each leaf's segs nearest-first. */
 function eachSegFrontToBack(child: NodeChild, camera: Camera, visit: (seg: Seg) => void): void {
   if (child.kind === 'leaf') {
     for (const seg of child.subsector.segs) {
@@ -242,7 +187,7 @@ function eachSegFrontToBack(child: NodeChild, camera: Camera, visit: (seg: Seg) 
   eachSegFrontToBack(cameraInFront ? node.back : node.front, camera, visit);
 }
 
-/** Clip a camera-space wall to the near plane (interpolating `u`), or null if fully behind. */
+// Clip a camera-space wall to the near plane (interpolating u), or null if fully behind.
 function clipNear(a: WallVert, b: WallVert): readonly [WallVert, WallVert] | null {
   if (a.forward < NEAR && b.forward < NEAR) {
     return null;
@@ -265,15 +210,8 @@ function clipNear(a: WallVert, b: WallVert): readonly [WallVert, WallVert] | nul
   return [na, nb];
 }
 
-/**
- * Paint a vertical wall span in column `x`, rows `[y0,y1]`, sampling `tex` at column `texCol`. Writes one
- * packed RGBA word per pixel (`buf32`) instead of four clamped byte stores — fewer ops, no per-store clamp.
- *
- * Z-tested against `zbuf` (the wall's per-column `forward` depth): a span only writes where it is the
- * NEAREST surface so far. The occlusion window already culls most overdraw, but a far wall seen past a
- * portal can still reach rows a nearer flat already filled (a raised sector's top vs the wall behind it);
- * the z-test is what stops that wall repainting over the floor. One arbiter (the z-buffer) for all surfaces.
- */
+// Z-tested against zbuf so a far wall seen past a portal can't repaint over a nearer flat a window already
+// filled — one arbiter (the z-buffer) for all surfaces.
 function paintWall(
   buf32: Uint32Array,
   zbuf: Float32Array,
@@ -294,8 +232,7 @@ function paintWall(
   const tw = tex.width;
   const th = tex.height;
   const px = tex.pixels;
-  // SQUARE texels: the texture's HEIGHT spans `worldSize` world units, so a 4-tall wall with worldSize 4
-  // shows one full panel (no vertical repeat); the same texels/unit drive U so the art keeps its aspect.
+  // SQUARE texels: HEIGHT spans `worldSize` world units, and the same texels/unit drive U so art keeps aspect.
   const perUnit = th / (tex.worldSize ?? TEX_WORLD);
   const texCol = (u * perUnit) & (tw - 1); // constant down the column (tw/th are powers of two → & wraps)
   let vRaw = (TEX_ANCHOR - (camZ + (horizon - lo) * zPerRow)) * perUnit;
@@ -315,14 +252,8 @@ function paintWall(
   }
 }
 
-/**
- * Cast a textured floor/ceiling span in column `x`, rows `[y0,y1]`. `rowScale[y]` (= focal/(y−horizon))
- * turns the plane height into the world distance at that row, giving the world point under each pixel.
- *
- * That distance `dist` IS the pixel's camera-forward depth, in the same metric the walls write — so we
- * z-test it against `zbuf`: each pixel keeps the NEAREST flat. This makes adjacent sectors' floors/ceilings
- * (e.g. a raised platform's top vs the room behind it) resolve by depth, not draw order — no z-fighting.
- */
+// rowScale[y] = focal/(y−horizon) turns plane height into world distance per row. That distance IS the
+// pixel's camera-forward depth (same metric as walls), z-tested so adjacent flats resolve by depth.
 function castFlat(
   buf32: Uint32Array,
   zbuf: Float32Array,
@@ -367,12 +298,8 @@ function castFlat(
   }
 }
 
-/**
- * Fill a {@link SKY} ceiling span in column `x`, rows `[y0,y1]`, with a vertical gradient — deep blue
- * overhead fading to a hazy band at the horizon — only where nothing nearer was drawn (`zbuf` still
- * Infinity). It leaves the z-buffer untouched (the sky is infinitely far), so sprites + nearer flats still
- * paint in front. No texture sampling: an open roof, distance-independent.
- */
+// A vertical gradient where nothing nearer was drawn. Leaves the z-buffer untouched (the sky is infinitely
+// far), so sprites + nearer flats still paint in front.
 function castSky(
   buf32: Uint32Array,
   zbuf: Float32Array,
@@ -399,63 +326,50 @@ function castSky(
   }
 }
 
-/** Up to this many glass surfaces STACK per column (an entrance axis: frontage pane + outer + inner sliding
- *  door + an interior partition). The BSP walk is front-to-back, so layers append in ascending depth; a fifth,
- *  farther surface behind a full column is dropped (invisible anyway behind four tinted panes). (Exported —
- *  the GPU command builder records the same per-column layer cap.) */
+// Glass surfaces STACK per column, front-to-back (ascending depth); a fifth farther surface is dropped.
+// The GPU command builder records the same per-column cap.
 export const GLASS_LAYERS = 4;
 
-/** Per-column LAYERED record of the visible glass a frame produced (nearest layer first — the front-to-back
- *  walk guarantees ascending depth), consumed by the deferred {@link blendGlass} pass. Layer `k` of column `x`
- *  lives at index `x * GLASS_LAYERS + k`; `count[x]` is the column's live layer count. (Exported with its
- *  make/reset pair: the GPU command builder records glass through the same structure, then serializes it.) */
+// Nearest layer first (front-to-back walk). Layer k of column x is at index x·GLASS_LAYERS + k.
 export interface GlassPanes {
   readonly count: Uint8Array; // live layers per column (0 = no glass there)
-  readonly top: Int32Array; // the CLIPPED (on-screen) span to paint, per layer
+  readonly top: Int32Array; // CLIPPED (on-screen) span to paint, per layer
   readonly bot: Int32Array;
-  readonly vTop: Int32Array; // the UNCLIPPED pane top/bottom (may run off-screen) — the texture's V anchor
+  readonly vTop: Int32Array; // UNCLIPPED pane top/bottom (may run off-screen) — the texture's V anchor
   readonly vBot: Int32Array;
-  readonly tu: Float32Array; // the layer's texture column (−1 = a plain window → flat tint)
-  readonly shade: Float32Array; // per-layer shade for a leaf/pane's opaque texels
-  readonly depth: Float32Array; // the layer's wall distance → z-buffered at opaque texels so sprites occlude
-  readonly tex: (Texture | null)[]; // per-layer glass image (door leaf / window pane); null = plain window
-  readonly name: string[]; // the layer texture's LIBRARY name (the command builder keys GPU ids off it)
+  readonly tu: Float32Array; // texture column (−1 = a plain window → flat tint)
+  readonly shade: Float32Array; // per-layer shade for opaque texels
+  readonly depth: Float32Array; // wall distance → z-buffered at opaque texels so sprites occlude
+  readonly tex: (Texture | null)[]; // per-layer glass image; null = plain window
+  readonly name: string[]; // library name (the command builder keys GPU ids off it)
 }
 
-/** Allocate an empty per-column glass-layer record (see {@link GlassPanes}) — held in the per-context
- *  {@link frameScratch} and REUSED across frames; {@link resetGlass} re-arms it per pass. */
+// Held in frameScratch and REUSED across frames; resetGlass re-arms it per pass.
 export function makeGlass(width: number): GlassPanes {
   return {
-    count: new Uint8Array(width), // live layers per column (0 = no glass)
-    top: new Int32Array(width * GLASS_LAYERS), // CLIPPED (on-screen) span to actually paint, per layer
+    count: new Uint8Array(width),
+    top: new Int32Array(width * GLASS_LAYERS),
     bot: new Int32Array(width * GLASS_LAYERS),
-    vTop: new Int32Array(width * GLASS_LAYERS), // UNCLIPPED pane top/bottom (may be off-screen) → texture-V
-    vBot: new Int32Array(width * GLASS_LAYERS), // reference, so the art keeps world scale off-screen up close
-    tu: new Float32Array(width * GLASS_LAYERS), // layer texture column (−1 = plain window → flat tint)
-    shade: new Float32Array(width * GLASS_LAYERS), // per-layer shade for opaque frame texels
-    depth: new Float32Array(width * GLASS_LAYERS), // layer wall distance → z-buffered at opaque texels
-    tex: new Array<Texture | null>(width * GLASS_LAYERS).fill(null), // per-layer glass image (null = plain)
-    name: new Array<string>(width * GLASS_LAYERS).fill(''), // per-layer texture name (GPU id lookup)
+    vTop: new Int32Array(width * GLASS_LAYERS),
+    vBot: new Int32Array(width * GLASS_LAYERS),
+    tu: new Float32Array(width * GLASS_LAYERS),
+    shade: new Float32Array(width * GLASS_LAYERS),
+    depth: new Float32Array(width * GLASS_LAYERS),
+    tex: new Array<Texture | null>(width * GLASS_LAYERS).fill(null),
+    name: new Array<string>(width * GLASS_LAYERS).fill(''),
   };
 }
 
-/** Re-arm a reused glass record for a fresh wall pass: zeroing the per-column layer COUNTS is the whole
- *  reset — every other slot (spans, depths, textures…) is only ever read below `count[x]`, so stale
- *  entries from the previous frame are unreachable. O(width), instead of refilling eight arrays. */
+// Zeroing the per-column COUNTS is the whole reset — every other slot is read only below count[x], so
+// stale entries are unreachable.
 export function resetGlass(panes: GlassPanes): GlassPanes {
   panes.count.fill(0);
 
   return panes;
 }
 
-/**
- * Per-column record of the LIVE zone-portal windows the primary wall pass hit: `seam[x]` indexes `seams`
- * (−1 = none) and `top`/`bot` is the column's open span into the neighbor. A seam entry is one zonePortal
- * LINEDEF whose neighbor map was provided — however many segs the BSP carved it into — with its zone record
- * (map + this frame's sprites) and world translation resolved once; `columns` counts its recorded columns
- * (0 → its pass is skipped). (Exported with its make/reset pair — the GPU command builder records portal
- * windows through the same structure, then serializes them.)
- */
+// seam[x] indexes `seams` (−1 = none); top/bot is the column's open span into the neighbor. `columns`
+// counts a seam's recorded columns (0 → its pass is skipped).
 export interface PortalSpans {
   readonly seam: Int16Array;
   readonly top: Int32Array;
@@ -469,8 +383,7 @@ export interface PortalSpans {
   }[];
 }
 
-/** Allocate an empty zone-portal record (see {@link PortalSpans}) — held in the per-context
- *  {@link frameScratch} and REUSED across frames; {@link resetPortals} re-arms it per frame. */
+// Held in frameScratch and REUSED across frames; resetPortals re-arms it per frame.
 export function makePortals(width: number): PortalSpans {
   return {
     seam: new Int16Array(width).fill(-1),
@@ -480,8 +393,7 @@ export function makePortals(width: number): PortalSpans {
   };
 }
 
-/** Re-arm a reused zone-portal record: close every column (−1) and drop the resolved seams. `top`/`bot`
- *  are only read where `seam[x]` points at a seam registered THIS frame, so they need no refill. */
+// top/bot are read only where seam[x] points at a seam registered THIS frame, so they need no refill.
 export function resetPortals(spans: PortalSpans): PortalSpans {
   spans.seam.fill(-1);
   spans.seams.length = 0;
@@ -489,16 +401,8 @@ export function resetPortals(spans: PortalSpans): PortalSpans {
   return spans;
 }
 
-/**
- * The per-context render scratch: every buffer {@link renderFrame} needs per call, allocated ONCE and
- * REUSED frame after frame (resized only when the render resolution changes). A JS context — the main
- * thread, or one render worker — is single-threaded and never nests renderFrame calls, so reuse is safe;
- * without it, each frame allocated ~a dozen arrays per pass (× workers × fps = constant GC churn, the
- * intermittent frame-time spikes). `renderFrame` stays externally pure: its OUTPUT depends only on its
- * inputs — the scratch is re-armed on use ({@link resetGlass} / {@link resetPortals} / cheap fills), and
- * the primary and neighbor passes each own a dedicated glass/clip slot (a neighbor pass runs while the
- * primary records stay live; the sequential seam loop reuses the one neighbor slot safely).
- */
+// Allocated ONCE and REUSED frame after frame (a JS context is single-threaded and never nests
+// renderFrame calls, so reuse is safe). renderFrame stays externally pure — the scratch is re-armed on use.
 interface FrameScratch {
   width: number;
   height: number;
@@ -514,7 +418,7 @@ interface FrameScratch {
 
 let scratch: FrameScratch | null = null;
 
-/** The context's {@link FrameScratch}, (re)allocated only when the render resolution changes. */
+// (Re)allocated only when the render resolution changes.
 function frameScratch(width: number, height: number): FrameScratch {
   if (scratch === null || scratch.width !== width) {
     scratch = {
@@ -538,16 +442,14 @@ function frameScratch(width: number, height: number): FrameScratch {
   return scratch;
 }
 
-/** The zone-portal wiring of a PRIMARY wall pass: the per-column span record plus the available neighbor
- *  zones by key. `null` = recording off — no neighbors were provided, or the pass IS a neighbor render
- *  (the depth-1 cap: a portal seen through a portal paints its solid middle texture instead). */
+// null = recording off (no neighbors, or the pass IS a neighbor render — the depth-1 cap: a portal seen
+// through a portal paints its solid middle texture instead).
 export interface PortalPass {
   readonly spans: PortalSpans;
   readonly neighbors: ReadonlyMap<string, ZoneNeighbor>;
 }
 
-/** Find (or register) the seam slot for zone-portal `linedef`, or −1 when `neighbors` carries no zone for
- *  its key — the seam then paints its solid middle texture, the graceful fallback. */
+// Returns −1 when `neighbors` carries no zone for the key — the seam paints its solid middle texture.
 function registerSeam(
   spans: PortalSpans,
   linedef: number,
@@ -569,14 +471,8 @@ function registerSeam(
   return spans.seams.length - 1;
 }
 
-/**
- * Deferred GLASS pass, run AFTER the wall pass drew the back sector through each opening (the single
- * front-to-back pass can't blend over content it hasn't drawn yet). Each column's recorded layers blend
- * FARTHEST → NEAREST, so a nearer pane tints (or frames over) what already shows through a farther one.
- * A PLAIN window layer just gets a cool translucent tint. A TEXTURED layer (sliding-door leaf / window pane)
- * samples its texture per pixel: an opaque texel stamps the aluminium frame / mullion; a clear (alpha) texel
- * is see-through glass and gets the same tint.
- */
+// Deferred: run AFTER the wall pass drew the back sector through each opening (a single front-to-back pass
+// can't blend over content it hasn't drawn yet). Layers blend FARTHEST → NEAREST.
 function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: GlassPanes): void {
   const { width, rowStart, rowEnd } = dims;
   const { count, top, bot, vTop, vBot, tu, shade, depth, tex } = panes;
@@ -595,16 +491,15 @@ function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: G
       const tw = img?.width ?? 0;
       const th = img?.height ?? 0;
       const col = layerTex !== null ? Math.min(tw - 1, tu[l] | 0) : 0;
-      const vt = vTop[l]; // anchor the texture V to the FULL pane extent (may be off-screen), not the clipped
-      const vh = vBot[l] - vt; // span, so the art keeps world scale + its top/bottom run off-screen up close
+      const vt = vTop[l]; // texture V anchored to the FULL pane extent (may be off-screen), not the
+      const vh = vBot[l] - vt; // clipped span, so the art keeps world scale up close
       const sh = shade[l];
       let i = y0 * width + x;
 
       for (let y = y0; y <= y1; y++) {
         if (zbuf[i] < depth[l]) {
           i += width;
-          continue; // a NEARER opaque surface occupies this pixel (e.g. a counter in front of the pane) — the
-          // glass is behind it, so neither its tint nor its frame may paint over it
+          continue; // a NEARER opaque surface occupies this pixel — the glass is behind it
         }
         let framed = false;
         let cr = 0;
@@ -616,7 +511,7 @@ function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: G
           const ti = (v * tw + col) << 2;
 
           if (layerTex[ti + 3] >= 128) {
-            framed = true; // an opaque aluminium frame / mullion / handle texel
+            framed = true; // an opaque frame / mullion / handle texel
             cr = (layerTex[ti] * sh) | 0;
             cg = (layerTex[ti + 1] * sh) | 0;
             cb = (layerTex[ti + 2] * sh) | 0;
@@ -624,9 +519,9 @@ function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: G
         }
         if (framed) {
           buf32[i] = (0xff000000 | (cb << 16) | (cg << 8) | cr) >>> 0;
-          zbuf[i] = depth[l]; // the frame is opaque at the layer's depth → sprites behind it are now occluded
+          zbuf[i] = depth[l]; // opaque at the layer's depth → sprites behind it are now occluded
         } else {
-          buf32[i] = coolGlassTint(buf32[i]); // clear glass (plain window, or an alpha texel) → cool tint
+          buf32[i] = coolGlassTint(buf32[i]); // clear glass → cool tint
         }
         i += width;
       }
@@ -634,9 +529,8 @@ function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: G
   }
 }
 
-/** Restrict a NEIGHBOR pass's sprites to seam `index`'s recorded portal windows: a pixel may only paint
- *  where `seam[x]` is this seam and the row falls inside its `[top[x], bot[x]]` span — outside the window
- *  the z-buffer holds LOCAL depths a translated neighbor sprite must never compete with. */
+// Restricts a NEIGHBOR pass's sprites to seam `index`'s windows — outside the window the z-buffer holds
+// LOCAL depths a translated neighbor sprite must never compete with.
 interface SpriteWindow {
   readonly seam: Int16Array;
   readonly top: Int32Array;
@@ -644,12 +538,8 @@ interface SpriteWindow {
   readonly index: number;
 }
 
-/**
- * Per-face shading of a voxel volume — the "Minecraft readability" the flat billboard art lacks: the
- * DDA's entry axis names the face a pixel shows, and its factor multiplies the sprite's distance/light
- * shade (channels clamp at 255). Exported: the WGSL compute shader interpolates these EXACT constants,
- * the CPU/GPU parity contract.
- */
+// The DDA's entry axis names the face a pixel shows; its factor multiplies the sprite's shade. Exported:
+// the WGSL shader interpolates these EXACT constants (CPU/GPU parity).
 export const VOXEL_SHADE = {
   top: 1.18, // entered descending z — the sunlit face
   bottom: 0.55, // entered ascending z — the underside
@@ -657,65 +547,48 @@ export const VOXEL_SHADE = {
   sideY: 1.0, // entered along the depth axis (the front/back the art was authored from)
 } as const;
 
-/** The WGSL DDA's loop bound: a ray crosses at most n+ny+nz cells (≤ 96+96+128 across the shipped
- *  grids' resolutions) before a bounds-exit break, so the cap NEVER binds — it exists only so the
- *  shader loop is provably finite to the GPU. The CPU march needs no cap: its breaks terminate it. */
+// A ray crosses at most n+ny+nz cells before a bounds-exit break, so this cap NEVER binds — it exists only
+// so the shader loop is provably finite to the GPU. The CPU march needs no cap.
 export const VOXEL_MAX_STEPS = 512;
 
-/**
- * The extra projection a VOXEL prop carries on its {@link SpriteQuad}: everything the per-pixel 3D DDA
- * needs, pre-resolved into the prop's GRID SPACE so the march itself is camera-free (and a zone-portal
- * NEIGHBOR pass — whose camera is translated — records exactly as a local one). Grid space: `x` lateral
- * (`n` cells over `Sprite.width` world units), `y` depth (`ny` cells, same plan scale — the carve keeps
- * plan cells square), `z` up (`nz` cells over `Sprite.height`), so a screen column's ray direction is
- * `fwdG + ((width/2 − x)/focal) · rightG` in the plan and `((horizon − y)/focal) · zScale` vertically,
- * and the ray parameter IS the camera-forward depth (the walls' z-buffer metric — `fwdG`/`rightG` are
- * the unit camera axes rotated/scaled into the grid).
- */
+// Everything the per-pixel 3D DDA needs, pre-resolved into GRID SPACE so the march is camera-free (a
+// translated NEIGHBOR pass records exactly like a local one). Grid space: x lateral (n cells over
+// Sprite.width), y depth (ny, same plan scale), z up (nz over Sprite.height); the ray parameter IS the
+// camera-forward depth. fwdG/rightG are the unit camera axes rotated/scaled into the grid.
 export interface VoxelQuad {
   readonly n: number; // grid cells: lateral × depth × up
   readonly ny: number;
   readonly nz: number;
-  readonly camGX: number; // the camera position in grid coordinates
+  readonly camGX: number; // camera position in grid coordinates
   readonly camGY: number;
   readonly camGZ: number;
-  readonly fwdGX: number; // the camera FORWARD axis in grid units per world unit (plan)
+  readonly fwdGX: number; // camera FORWARD axis in grid units per world unit (plan)
   readonly fwdGY: number;
-  readonly rightGX: number; // the screen-column offset axis, same units
+  readonly rightGX: number; // screen-column offset axis, same units
   readonly rightGY: number;
   readonly zScale: number; // grid z cells per world unit (nz / world height)
 }
 
-/**
- * A sprite PROJECTED for one frame: the screen-space quad + the sampling/shading parameters the paint
- * loop needs — everything {@link drawSprites} derives per sprite before its pixel loops. Exported as the
- * seam between the projection (the smart, cheap part — shared) and the per-pixel work: the CPU paints the
- * quads immediately; the GPU command builder serializes the SAME quads into sprite records a compute
- * shader executes (the WalkSink split, for sprites). A quad is either a camera-facing BILLBOARD
- * (`vox` absent — constant depth, fixed vertical span) or a world-anchored VOXEL VOLUME (`vox`
- * present — per-pixel depth via a 3D DDA, see {@link VoxelQuad}); `yTop`/`yBottom` (and `left`/`right`)
- * are then the volume's conservative screen ENVELOPE used for early rejection, not the painted span.
- */
+// The seam between projection (shared, cheap) and per-pixel work: the CPU paints these quads; the GPU
+// builder serializes the SAME quads. A BILLBOARD (vox absent) has constant depth; a VOXEL VOLUME (vox
+// present) has per-pixel depth, and its left/right/yTop/yBottom are the conservative screen ENVELOPE.
 export interface SpriteQuad {
   readonly tex: Texture;
-  readonly name: string; // the texture's library name (the command builder keys GPU ids off it)
-  readonly forward: number; // the sprite's camera depth (its centre) — the far-to-near sort key
+  readonly name: string; // library name (the command builder keys GPU ids off it)
+  readonly forward: number; // camera depth of the centre — the far-to-near sort key
   readonly left: number; // screen quad, inclusive (may run off-screen — painters clamp)
   readonly right: number;
   readonly yTop: number;
   readonly yBottom: number;
-  readonly u0: number; // the atlas cell: origin + size in texels (the whole texture for a plain billboard)
+  readonly u0: number; // atlas cell origin + size in texels (the whole texture for a plain billboard)
   readonly v0: number;
   readonly cellW: number;
   readonly cellH: number;
-  readonly shade: number; // sector light × distance falloff × (1 + hit-flash) — channels clamp at 255
+  readonly shade: number; // sector light × falloff × (1 + hit-flash) — channels clamp at 255
   readonly vox?: VoxelQuad;
 }
 
-/** One sprite surface awaiting projection: the camera-space centre plus, for a voxel prop whose grid
- *  resolved, its grid texture and depth-cell count (`voxelDepth`, checked present at collection) —
- *  a billboard carries its atlas `cell` instead (a voxel grid has none). `depth` (the centre's
- *  camera-forward) is the far-to-near sort key. */
+// A billboard carries its atlas `cell`; a voxel surface carries its grid + depth-cell count instead.
 type SpriteSurface = {
   readonly spr: Sprite;
   readonly depth: number;
@@ -725,14 +598,8 @@ type SpriteSurface = {
   | { readonly kind: 'voxel'; readonly grid: Texture; readonly ny: number }
 );
 
-/**
- * Project a frame's sprites to screen-space {@link SpriteQuad}s: cull behind the near plane, sort
- * far-to-near (nearer surfaces overdraw), and resolve each surface's texture/cell/shade. A `voxel`
- * sprite whose texture resolved to a carved grid becomes a VOXEL quad (grid-space DDA inputs + a
- * conservative screen envelope); without a grid it falls through to the billboard path — the
- * zero-regression fallback. Pure — shared by the CPU painter ({@link drawSprites}) and the GPU
- * command builder, so both derive identical quads.
- */
+// Cull behind the near plane, sort far-to-near (nearer overdraws), resolve texture/cell/shade. Pure —
+// shared by the CPU painter and the GPU command builder, so both derive identical quads.
 export function projectSprites(
   sprites: readonly Sprite[],
   map: CompiledMap,
@@ -757,8 +624,7 @@ export function projectSprites(
         visible.push({ spr, depth: cam.forward, kind: 'voxel', cam, grid, ny: grid.voxelDepth });
         continue;
       }
-      // No carved grid in the library (SSR / failed decode / the procedural fallback): fall through —
-      // the sprite draws as the rotation billboard, with the cell `orientSprite` picked.
+      // No carved grid (SSR / failed decode / procedural fallback): fall through to the rotation billboard.
     }
     visible.push({ spr, depth: cam.forward, kind: 'billboard', cam, cell: spr.col ?? 0 });
   }
@@ -771,23 +637,20 @@ export function projectSprites(
   for (const s of visible) {
     const sector = map.source.sectors[locateSubSector(map.root, s.spr.x, s.spr.y).sector];
     const tex = resolve(textures, s.spr.tex);
-    // Additive hit-flash: brighten the sprite's OWN colours toward white (×(1+flash), clipped per channel) —
-    // mirrors the grid's `lighter` re-blit, not a flat white wash.
+    // Additive hit-flash: brighten the sprite's OWN colours toward white (×(1+flash)), not a flat wash.
     const flash = Math.max(0, Math.min(1, s.spr.flash ?? 0));
     const shade = (sector.light / 255) * Math.max(0.25, Math.min(1, 6 / s.depth)) * (1 + flash);
     const common = { tex, name: s.spr.tex, forward: s.depth, shade };
 
     if (s.kind === 'voxel') {
-      // A VOXEL VOLUME: resolve the camera and the ray axes into the prop's GRID SPACE once (the
-      // per-pixel DDA's inputs — see {@link VoxelQuad}) and project a CONSERVATIVE screen envelope
+      // Resolve the camera + ray axes into GRID SPACE once, then project a CONSERVATIVE screen envelope
       // off the footprint corners for early rejection (the DDA decides exact coverage per pixel).
       const grid = s.grid;
       const n = grid.width;
       const ny = s.ny;
       const nz = grid.height / ny;
       const facing = s.spr.facing ?? 0;
-      // Grid axes in world space: x along the front view's left→right (the billboard's head-on U
-      // axis), y away from the front viewer (the carve's depth axis), z up.
+      // Grid axes in world space: x = front view left→right, y = away from the front viewer, z up.
       const uX = -Math.sin(facing);
       const uY = Math.cos(facing);
       const vX = -Math.cos(facing);
@@ -887,18 +750,10 @@ export function projectSprites(
   return quads;
 }
 
-/**
- * Ray-march one VOXEL VOLUME quad: for each pixel of the (clamped) screen envelope, build the pixel's
- * ray IN GRID SPACE off the quad's precomputed axes and walk the grid with an EXACT 3D DDA (Amanatides
- * & Woo — no fixed step: cell-crossing distances are computed, not accumulated by sampling, which is
- * what keeps the f32 GPU replay aligned with this f64 reference). The ray parameter is the pixel's
- * camera-forward depth (the z-buffer metric), so the march starts at the box entry (clamped to
- * {@link NEAR}) and the FIRST solid voxel wins the pixel: its colour × the sprite shade × the per-face
- * factor ({@link VOXEL_SHADE} — the DDA's entry axis names the face). Pixels z-test against `zbuf` AND
- * WRITE their depth — the volume is real geometry to later-painted sprites, and the march exits early
- * the moment it passes the buffer's depth. Alpha (0 = empty cell) and glass-tint behaviour mirror the
- * billboard painter.
- */
+// Per pixel of the screen envelope, walks the grid with an EXACT 3D DDA (Amanatides & Woo — cell-crossing
+// distances are computed, not accumulated by sampling, which keeps the f32 GPU replay aligned with this
+// f64 reference). The ray parameter is the camera-forward depth; the FIRST solid voxel wins. Pixels z-test
+// AND WRITE their depth — the volume is real geometry to later sprites.
 function drawVoxel(
   buf32: Uint32Array,
   zbuf: Float32Array,
@@ -915,10 +770,8 @@ function drawVoxel(
   const px = tex.pixels;
   const { n, ny, nz, camGX, camGY, camGZ, fwdGX, fwdGY, rightGX, rightGY, zScale } = vox;
   const halfW = width / 2;
-  // Per-axis march state, reused across the quad's pixels (grid axes 0 = lateral, 1 = depth, 2 = up).
-  // One shared code path per axis keeps the exact-zero-direction guards testable — a ray is EXACTLY
-  // axis-parallel only where the trig is exact (facing 0 / angle 0), which only the lateral axis can
-  // produce in a fixture; the loop lets that one case exercise the guard for all three axes.
+  // Per-axis march state (grid axes 0 = lateral, 1 = depth, 2 = up). One shared code path per axis keeps
+  // the exact-zero-direction guard testable — a ray is EXACTLY axis-parallel only where the trig is exact.
   const origin3 = [camGX, camGY, camGZ] as const;
   const size3 = [n, ny, nz] as const;
   const dir3 = new Float64Array(3);
@@ -933,7 +786,7 @@ function drawVoxel(
 
     if (window !== null) {
       if (window.seam[x] !== window.index) {
-        continue; // this column shows no opening of the seam — the volume must not leak past it
+        continue; // no opening of the seam here — the volume must not leak past it
       }
       winTop = Math.max(winTop, window.top[x]);
       winBot = Math.min(winBot, window.bot[x]);
@@ -1062,12 +915,8 @@ function drawVoxel(
   }
 }
 
-/**
- * Draw sprites (things) after the walls: camera-facing billboard quads and voxel-volume quads (via
- * {@link projectSprites} — sorted far-to-near), depth-tested PER PIXEL against the wall z-buffer (so
- * steps/canopies occlude correctly), with per-texel alpha. A NEIGHBOR pass passes its seam's
- * {@link SpriteWindow} so its sprites stay inside the portal opening.
- */
+// Billboard + voxel-volume quads, depth-tested PER PIXEL against the wall z-buffer, with per-texel alpha.
+// A NEIGHBOR pass passes its seam's SpriteWindow so its sprites stay inside the portal opening.
 function drawSprites(
   buf32: Uint32Array,
   zbuf: Float32Array,
@@ -1121,9 +970,8 @@ function drawSprites(
             (Math.min(255, (px[ti + 1] * shade) | 0) << 8) |
             Math.min(255, (px[ti] * shade) | 0);
 
-          // Seen THROUGH glass (behind a layer, inside its recorded span) → wash the same cool tint over the
-          // sprite, ONCE PER PANE in front of it (an enemy behind two panes tints twice, like the wall behind
-          // it). Layers are nearest-first, so stop at the first layer at/beyond the sprite's own depth.
+          // Seen THROUGH glass → wash the cool tint ONCE PER PANE in front (layers nearest-first, so stop
+          // at the first layer at/beyond the sprite's own depth).
           if (glass !== null) {
             for (let k = 0; k < glass.count[x]; k++) {
               const l = x * GLASS_LAYERS + k;
@@ -1143,18 +991,11 @@ function drawSprites(
   }
 }
 
-/**
- * Where a wall pass SENDS the per-column spans it computes — the seam between the walk (BSP order,
- * clipping, projection: the smart, cheap part) and the per-pixel work. The CPU renderer plugs in a sink
- * that paints immediately ({@link castSky} / {@link castFlat} / {@link paintWall}); the GPU command
- * builder plugs in one that RECORDS the same spans into a command buffer a compute shader executes.
- * Each span carries the resolved texture AND its library name (a paint sink samples the texture; a
- * command sink maps the name to a GPU texture id). Ranges may be empty (`y1 < y0`) — sinks skip those.
- */
+// The seam between the walk (BSP order, clipping, projection) and per-pixel work: a CPU sink paints
+// immediately, a GPU sink RECORDS spans. Each span carries the resolved texture AND its library name.
+// Ranges may be empty (y1 < y0) — sinks skip those.
 export interface WalkSink {
-  /** An open-SKY ceiling span (gradient — no texture, infinitely far). */
   sky(x: number, y0: number, y1: number): void;
-  /** A floor/ceiling span of the near sector: per-row perspective cast off the plane height. */
   flat(
     x: number,
     y0: number,
@@ -1167,7 +1008,6 @@ export interface WalkSink {
     falloff: number,
     light: number,
   ): void;
-  /** A vertical wall band (solid middle, or a portal's upper/lower): constant depth down the column. */
   wall(
     x: number,
     y0: number,
@@ -1181,12 +1021,8 @@ export interface WalkSink {
   ): void;
 }
 
-/**
- * Everything one wall pass over one map needs. The PRIMARY pass owns the frame setup and records glass +
- * zone-portal spans; a NEIGHBOR pass (see {@link renderNeighbors}) reuses the same framebuffer, z-buffer
- * and projection, with the clip windows pre-loaded from the recorded portal columns and `portals: null`
- * (the recursion cap). Painting goes through `sink` — the walk itself never touches a framebuffer.
- */
+// A NEIGHBOR pass reuses the same framebuffer/z-buffer/projection with clip windows pre-loaded and
+// `portals: null` (the recursion cap). Painting goes through `sink` — the walk never touches a framebuffer.
 export interface WallPassCtx {
   readonly map: CompiledMap;
   readonly camera: Camera;
@@ -1202,9 +1038,7 @@ export interface WallPassCtx {
   readonly sink: WalkSink;
 }
 
-/** One front-to-back wall walk: per column, the near sector's flats + the wall (solid, portal bands, a
- *  recorded glass layer, or a recorded zone-portal window), narrowing the per-column clip windows. All
- *  visible spans go to `ctx.sink` — paint (CPU) or record (GPU command build). */
+// One front-to-back wall walk, narrowing the per-column clip windows; all visible spans go to ctx.sink.
 export function wallPass(ctx: WallPassCtx): void {
   const { map, camera, dims, focal, horizon, sink } = ctx;
   const { textures, topClip, botClip, glass, slides, portals } = ctx;
@@ -1270,9 +1104,8 @@ export function wallPass(ctx: WallPassCtx): void {
     const uOverZa = pa.u * invFa;
     const uOverZb = pb.u * invFb;
     const span = xb - xa;
-    // A LIVE ZONE PORTAL (one-sided only): resolve the seg's seam slot once. `seamSpans` stays null when
-    // recording is off (no neighbors provided / inside a neighbor pass) or the zone has no map — the seam
-    // then paints its solid middle texture below, exactly like a plain wall.
+    // A live zone portal (one-sided): seamSpans stays null when recording is off or the zone has no map —
+    // the seam then paints its solid middle texture below, like a plain wall.
     let seam = -1;
     let seamSpans: PortalSpans | null = null;
 
@@ -1300,8 +1133,7 @@ export function wallPass(ctx: WallPassCtx): void {
       const yCeil = Math.round(horizon - (near.ceilZ - camera.z) * focal * invF);
       const yFloor = Math.round(horizon - (near.floorZ - camera.z) * focal * invF);
 
-      // Ceiling above + floor below are this sector's, regardless of wall vs portal. An open SKY ceiling
-      // renders a gradient instead of a textured flat.
+      // Ceiling above + floor below are this sector's, wall or portal. An open SKY ceiling is a gradient.
       if (near.ceilTex === SKY) {
         sink.sky(x, top, Math.min(bot, yCeil - 1));
       } else {
@@ -1333,9 +1165,8 @@ export function wallPass(ctx: WallPassCtx): void {
 
       if (neighbour === null) {
         if (seamSpans !== null) {
-          // ZONE PORTAL: record the column's open window into the neighbor instead of painting the middle
-          // (rows clamped into Int16 range — the neighbor pass reloads them into the clip arrays). The
-          // z-buffer stays untouched here: the neighbor pass writes its own true depths into the window.
+          // Record the column's open window instead of painting (rows clamped into Int16 range). The
+          // z-buffer stays untouched — the neighbor pass writes its own true depths into the window.
           seamSpans.seam[x] = seam;
           seamSpans.top[x] = Math.max(top, Math.min(dims.height, yCeil));
           seamSpans.bot[x] = Math.min(bot, Math.max(-1, yFloor));
@@ -1361,10 +1192,8 @@ export function wallPass(ctx: WallPassCtx): void {
       const yNeighCeil = Math.round(horizon - (neighbour.ceilZ - camera.z) * focal * invF);
       const yNeighFloor = Math.round(horizon - (neighbour.floorZ - camera.z) * focal * invF);
 
-      // GLASS: record this pane's see-through opening (between the neighbour's ceiling and floor, clipped to
-      // the column's open window) so `blendGlass` can wash a tint over it once the back sector is drawn. A
-      // SLIDING door is a DOUBLE door — two panels meeting at the centre, each retracting to its own side —
-      // so only the two still-covered edge bands are recorded; the clear gap grows from the middle outward.
+      // GLASS: record this pane's see-through opening so blendGlass can wash a tint once the back sector is
+      // drawn. A sliding door records only its two still-covered edge bands; the clear gap grows from centre.
       if (line.glass && glass) {
         let covered = line.sliding !== true; // a plain window always records; a sliding leaf only where covered
         let leafU = -1; // the door-leaf texture column for this covered pixel (−1 = plain window)
@@ -1376,8 +1205,7 @@ export function wallPass(ctx: WallPassCtx): void {
           const open = slides?.[seg.linedef] ?? 0;
           const half = (1 - open) * halfClosed; // each leaf's remaining covered width
 
-          // The texture SLIDES with the leaf (offset by `open × width`): the leaf's outer edge disappears into
-          // the wall pocket first, so the handle keeps its size and translates — it does NOT stretch/clip in place.
+          // Texture SLIDES with the leaf so the handle keeps its size and translates (no stretch in place).
           if (u <= half) {
             leafU = (u / halfClosed + open) * midImg.width; // left leaf, retracting toward the pocket at u=0
             covered = true;
@@ -1385,24 +1213,21 @@ export function wallPass(ctx: WallPassCtx): void {
             leafU = ((lineLen - u) / halfClosed + open) * midImg.width; // right leaf, mirrored
             covered = true;
           }
-          // NB `<=` / `>=` (not `<` / `>`): when shut, half === lineLen/2, so the two leaves must MEET at the
-          // exact centre seam — a strict compare leaves that one column uncovered → a see-through hole that
-          // slides across the door as you strafe.
+          // `<=`/`>=` (not `<`/`>`): shut, the two leaves must MEET at the exact centre — a strict compare
+          // leaves that column uncovered → a see-through hole that slides as you strafe.
         } else if (line.pane === true) {
           const v2 = map.source.vertices[line.v2];
           const lineLen = Math.hypot(v2.x - lineStart.x, v2.y - lineStart.y);
 
-          leafU = (u / lineLen) * midImg.width; // a fixed textured pane: the glass image maps once across the window
+          leafU = (u / lineLen) * midImg.width; // fixed pane: the glass image maps once across the window
         }
-        // The pane's TRUE opening is the INTERSECTION of both sectors (capped by the NEAR ceiling/floor too),
-        // not the neighbour's raw extent — otherwise a door between a low room and a tall one maps its leaf to
-        // the tall side's height when viewed from the low side (handles bigger from behind than from the front).
+        // TRUE opening = the INTERSECTION of both sectors (not the neighbour's raw extent), else a door
+        // between a low and a tall room maps its leaf to the tall side's height from the low side.
         const openTop = Math.max(yCeil, yNeighCeil);
         const openBot = Math.min(yFloor, yNeighFloor);
 
-        // APPEND this surface as the column's next glass layer: the walk is front-to-back, so layers arrive
-        // nearest-first (an entrance axis stacks frontage pane + two sliding doors + a partition). A surface
-        // beyond a full column is dropped — it sits behind GLASS_LAYERS tinted panes and reads invisible.
+        // APPEND as the column's next glass layer (front-to-back → nearest-first). A surface beyond a full
+        // column is dropped — invisible behind GLASS_LAYERS tinted panes.
         if (covered && glass.count[x] < GLASS_LAYERS) {
           const l = x * GLASS_LAYERS + glass.count[x];
 
@@ -1411,11 +1236,11 @@ export function wallPass(ctx: WallPassCtx): void {
           glass.top[l] = Math.max(top, openTop);
           glass.bot[l] = Math.min(bot, openBot);
           glass.tu[l] = leafU;
-          glass.vTop[l] = openTop; // the pane's TRUE extent (unclipped by the screen) — the art anchors here,
-          glass.vBot[l] = openBot; // identical from either side, and keeps world scale / runs off-screen up close
+          glass.vTop[l] = openTop; // TRUE extent (unclipped by the screen) — identical from either side,
+          glass.vBot[l] = openBot; // so the art keeps world scale up close
           glass.shade[l] = shade;
-          glass.tex[l] = leafU >= 0 ? midImg : null; // this layer's glass image (null = plain flat-tint window)
-          glass.name[l] = side.middleTex; // its library name — the GPU command builder keys texel-pool ids off it
+          glass.tex[l] = leafU >= 0 ? midImg : null; // null = plain flat-tint window
+          glass.name[l] = side.middleTex; // library name — the GPU builder keys texel-pool ids off it
         }
       }
 
@@ -1452,8 +1277,7 @@ export function wallPass(ctx: WallPassCtx): void {
   });
 }
 
-/** The CPU paint sink: routes each walked span straight to the software painters over one framebuffer —
- *  the immediate-mode twin of the GPU command builder's recording sink. */
+// Routes each walked span straight to the software painters — the immediate-mode twin of the GPU sink.
 function paintSink(
   buf32: Uint32Array,
   zbuf: Float32Array,
@@ -1487,20 +1311,10 @@ function paintSink(
   };
 }
 
-/**
- * The NEIGHBOR passes: for each zone-portal seam the primary walk recorded, re-walk that zone's BSP with
- * the camera TRANSLATED into its coordinate space, restricted to the seam's recorded columns/windows, into
- * the same framebuffer + z-buffer. A pure translation preserves distances, so the depths written are the
- * true camera-forward depths — nearer local geometry already excluded the windows, and sprites drawn later
- * depth-test correctly against neighbor pixels. Each neighbor's own glass blends INSIDE its pass, before
- * the (nearer) primary glass — deferred ordering stays farthest-first overall.
- *
- * Depth cap = 1: the neighbor pass runs with `portals: null`, so a zone portal seen through a zone portal
- * paints its solid middle texture. A neighbor's SPRITES (a warm zone's live enemies/pickups, supplied on
- * its {@link ZoneNeighbor}) draw after its glass blend, clipped to the seam's recorded windows and z-tested
- * like local sprites (translation preserves depth). Its sliding doors still render shut (`slides` unknown
- * across zones).
- */
+// For each recorded seam, re-walk that zone's BSP with the camera TRANSLATED into its space, restricted to
+// the seam's windows, into the same framebuffer + z-buffer. Translation preserves distances, so the depths
+// written are true camera-forward depths. Each neighbor's own glass blends INSIDE its pass (farther than
+// the primary glass). Depth cap = 1: the pass runs with `portals: null`. Sliding doors render shut.
 function renderNeighbors(
   spans: PortalSpans,
   camera: Camera,
@@ -1521,7 +1335,7 @@ function renderNeighbors(
     const seam = spans.seams[s];
 
     if (seam.columns === 0) {
-      continue; // the seam was visited but every column was already occluded — nothing to fill
+      continue; // visited but every column already occluded — nothing to fill
     }
     // Open exactly this seam's recorded windows; every other column stays closed (top 1 > bot 0).
     for (let x = 0; x < width; x++) {
@@ -1530,8 +1344,7 @@ function renderNeighbors(
       topClip[x] = mine ? spans.top[x] : 1;
       botClip[x] = mine ? spans.bot[x] : 0;
     }
-    // The neighbor's world is offset by (dx,dy) relative to ours, so its view is OUR camera translated the
-    // other way (angle/z/pitch carry over — translation only, no rotation).
+    // Our camera translated by (−dx,−dy) — translation only, no rotation (angle/z/pitch carry over).
     const ncam: Camera = { ...camera, x: camera.x - seam.dx, y: camera.y - seam.dy };
     const map = seam.neighbor.map;
     const glass = map.source.linedefs.some((l) => l.glass === true)
@@ -1555,9 +1368,8 @@ function renderNeighbors(
     if (glass !== null) {
       blendGlass(buf32, zbuf, dims, glass); // the neighbor's own panes, farther than any primary glass
     }
-    // The neighbor's LIVE billboards (a warm zone's enemies/pickups/decor, in ITS coordinates): z-tested
-    // against the window's true depths, tinted by the neighbor's own panes, and CLIPPED to this seam's
-    // recorded windows — outside them the z-buffer holds local depths a translated sprite must not fight.
+    // The neighbor's LIVE billboards (in ITS coordinates), CLIPPED to this seam's windows — outside them
+    // the z-buffer holds local depths a translated sprite must not fight.
     const sprites = seam.neighbor.sprites;
 
     if (sprites !== undefined && sprites.length > 0) {
@@ -1571,22 +1383,10 @@ function renderNeighbors(
   }
 }
 
-/**
- * Render one frame of the compiled map from `camera`, resolving each surface's texture by name. Pass
- * `target` (e.g. an `ImageData.data`) to render in place — avoids an 8 MB allocation + copy per frame.
- *
- * `rowStart`/`rowEnd` restrict the work to a horizontal band `[rowStart, rowEnd)` — geometry is still
- * walked in full (cheap), but every pixel write clamps to the band. Many workers each render their own
- * band into ONE shared framebuffer/z-buffer; default `[0, height)` is the single-threaded whole frame.
- *
- * `neighbors` (zone key → {@link ZoneNeighbor}: its compiled map + optional live sprites) lights up the
- * map's LIVE zone portals: without it — or for a zone key it lacks — a portal seam just paints its solid
- * middle texture.
- *
- * Internal working buffers live in a REUSED per-context scratch ({@link FrameScratch}) instead of being
- * reallocated per call; the function stays externally PURE — the returned pixels depend only on the
- * arguments, and two identical calls produce identical output (the scratch is re-armed on entry).
- */
+// Pass `target` (e.g. an ImageData.data) to render in place. `rowStart`/`rowEnd` restrict writes to a
+// horizontal band (geometry still walked in full) so many workers share ONE framebuffer/z-buffer.
+// `neighbors` lights up the map's live zone portals; without it a seam paints its solid middle texture.
+// Externally PURE — the reused scratch is re-armed on entry, so identical calls produce identical output.
 export function renderFrame(
   map: CompiledMap,
   camera: Camera,
@@ -1607,16 +1407,13 @@ export function renderFrame(
   const zbuf = zbuffer ?? new Float32Array(width * height); // per-pixel depth → flat/sprite occlusion
 
   zbuf.fill(Infinity, rowStart * width, rowEnd * width);
-  // Pitch is a y-shear: shift the horizon up/down. It may leave the screen on a steep look (a sheared frustum
-  // is still a valid projection — flats/walls/sprites all re-project off this horizon), so nothing here may
-  // assume it sits in [0, height).
+  // Pitch is a horizon y-shear that may leave the screen on a steep look, so nothing here may assume it
+  // sits in [0, height).
   const horizon = (height >> 1) + Math.round((camera.pitch ?? 0) * (height >> 1));
   const dims = { width, height, rowStart, rowEnd };
 
-  // Background fallback for columns no wall reaches (e.g. viewed from outside); flats overdraw it in-room.
-  // `skyEnd` is the ceiling/floor split row, CLAMPED into the band: a horizon off the top fills all-floor, off
-  // the bottom all-ceiling. (Unclamped, a negative end makes `TypedArray.fill` wrap to `length + end` and paint
-  // garbage bands — the look-down glitch.)
+  // skyEnd (the ceiling/floor split) is CLAMPED into the band — unclamped, a negative end makes
+  // TypedArray.fill wrap to length+end and paint garbage bands (the look-down glitch).
   const bandLo = rowStart * width;
   const bandHi = rowEnd * width;
   const skyEnd = Math.max(bandLo, Math.min(bandHi, horizon * width));
@@ -1624,8 +1421,6 @@ export function renderFrame(
   buf32.fill(packRgb(BG_CEILING), bandLo, skyEnd);
   buf32.fill(packRgb(BG_FLOOR), skyEnd, bandHi);
 
-  // Per-frame buffers come from the REUSED per-context scratch (see {@link FrameScratch}) — refilled or
-  // re-armed here, never reallocated, so a 120fps × N-worker session stops churning the GC.
   const scr = frameScratch(width, height);
   // Per-row world distance scale (focal / (y − horizon)); the horizon row is unused (gaps exclude it).
   const rowScale = scr.rowScale;
@@ -1637,10 +1432,7 @@ export function renderFrame(
   const topClip = scr.topClip.fill(0);
   const botClip = scr.botClip.fill(height - 1);
 
-  // A see-through GLASS line records its opening span per column here during the wall pass (LAYERED — up to
-  // GLASS_LAYERS stacked surfaces per column, appended in the walk's front-to-back = ascending-depth order);
-  // `blendGlass` then paints them farthest-first (deferred — the back sector must be drawn through the opening
-  // first). Only re-armed when the map has glass, so glass-free levels pay nothing per frame.
+  // Re-armed only when the map has glass, so glass-free levels pay nothing per frame.
   const glass: GlassPanes | null = map.source.linedefs.some((l) => l.glass === true)
     ? resetGlass(scr.glass)
     : null;
@@ -1665,14 +1457,13 @@ export function renderFrame(
     sink: paintSink(buf32, zbuf, dims, camera, rowScale, horizon),
   });
 
-  // NEIGHBOR passes AFTER the local walk (the recorded windows + z-buffer are final) and BEFORE the local
-  // glass blend — a local pane standing in front of a seam must tint what the seam shows.
+  // AFTER the local walk (windows + z-buffer final) and BEFORE the local glass blend — a local pane in
+  // front of a seam must tint what the seam shows.
   if (portals !== null && portals.spans.seams.length > 0) {
     renderNeighbors(portals.spans, camera, textures, buf32, zbuf, dims, focal, horizon, rowScale);
   }
 
-  // Deferred glass tint over each recorded pane (after the walls drew the back through it, before sprites so a
-  // sprite in front of the pane still occludes it).
+  // Deferred: after the walls drew the back through each pane, before sprites (so a sprite in front still occludes).
   if (glass) {
     blendGlass(buf32, zbuf, dims, glass);
   }

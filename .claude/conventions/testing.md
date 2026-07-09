@@ -100,21 +100,25 @@ in the individual spec's `configureTestingModule`.
 These are enforced by the Vitest runner across the whole project. A run under any threshold fails.
 
 **Excluded from coverage** (`angular.json` `coverageExclude`): the BSP game's browser-only render
-code — `features/bsp-demo/bsp-demo.component.{ts,html}`, `render-pool.ts`, `gpu-renderer.ts`,
-`load-textures.ts`. These are the `<canvas>` render loop + `SharedArrayBuffer` worker pool + WebGPU
-device/compute plumbing + texture-upload paths (`afterNextRender`, `requestAnimationFrame`, `Worker`,
-`navigator.gpu`, raw `CanvasRenderingContext2D`) with no meaningful unit surface or DOM-free seam to test. Every other file — including the pure/testable
-bsp-demo helpers (`level-*.ts`, `demo-map.ts`, `pickups.ts`, `enemies.ts`) — still rides the global
-thresholds above.
+code — `features/bsp-demo/bsp-demo.component.{ts,html}` and the `features/bsp-demo/render/` browser layer
+(`render-pool.ts`, `gpu-renderer.ts`, `load-textures.ts`, `render-host.ts`). These are the `<canvas>` render
+loop + `SharedArrayBuffer` worker pool + WebGPU device/compute plumbing + texture-upload paths
+(`afterNextRender`, `requestAnimationFrame`, `Worker`, `navigator.gpu`, raw `CanvasRenderingContext2D`) with
+no meaningful unit surface or DOM-free seam to test. Every other file rides the global thresholds above —
+including the remaining feature-tier pure units (`features/bsp-demo/world/pickups.ts` + the state-owning
+runtimes, painters, sprite builder, input controller). The game's level content + authoring builders +
+enemy roster now live under `core/` (below) and are held to the stricter **100 % guard**, not the global
+thresholds.
 
 **The game's *tested* surface** (the counterpart to that exclusion): everything under `core/` rides the
 **100 % guard** below — `core/lib/bsp-engine/*` (the `camera` projection, the `node-builder` BSP
 compiler, `physics` slide + step-up, hitscan `raycast`, the `renderer` wall/floor/ceiling + sprite
 passes against the frozen `sample-map`, the `frame-commands` GPU command builder, and the procedural
 `texture`s), `core/lib/game/*` (the `arsenal`
-magazine/fire-rate/reload `stepArsenal`, the `combat-constants`, the `render-governor`, and the combat `types`), and
+magazine/fire-rate/reload `stepArsenal`, the `game-tuning` balance sheet, the `render-governor`, the enemy
+AI + combat frames, the door/seam kernels, the levels + registry, and the combat `types`), and
 `GameService` (`core/services/game/` — `enter`/`exit`/`running` + pause-resume). The **shared
-presentational helpers** in `shared/game/*` (`doom-hud`, `weapon-view`, `climb-view` + the `weapons` /
+presentational helpers** in `shared/game/*` (`doom-hud`, `weapon-view`, `climb-view`, `gaze` + the `weapons` /
 `effects` JSON bridges) each carry a `.spec.ts` on the global thresholds. So the game's logic is fully
 unit-tested; there is **no** game E2E spec, and the live game `<canvas>` is **never** screenshotted (the
 `home` visual baseline masks the whole `.player`).

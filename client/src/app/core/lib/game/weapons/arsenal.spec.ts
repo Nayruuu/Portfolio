@@ -108,8 +108,8 @@ describe('stepArsenal', () => {
     );
 
     expect(done.reloadClock).toBe(0);
-    expect(done.mag).toBe(10); // refilled to magSize
-    expect(done.reserve).toBe(43); // 50 − 7 loaded
+    expect(done.mag).toBe(10);
+    expect(done.reserve).toBe(43);
   });
 
   it('ignores a reload request when full, out of reserve, mid-reload, or for a magazine-less weapon', () => {
@@ -123,7 +123,7 @@ describe('stepArsenal', () => {
     expect(
       stepArsenal(COMBAT, state({ mag: 3, reloadClock: 1 }), { fire: false, reload: true }, 0.016)
         .reloadClock,
-    ).toBeCloseTo(0.984); // already reloading → the request does not restart it
+    ).toBeCloseTo(0.984);
     expect(
       stepArsenal(weapon({ magSize: 0 }), state({ mag: 0 }), { fire: false, reload: true }, 0.016)
         .reloadClock,

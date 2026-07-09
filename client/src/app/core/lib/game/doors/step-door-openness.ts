@@ -1,12 +1,6 @@
 import { DOOR_OPEN_SPEED } from '../game-tuning';
 
-/**
- * Advance one animated door's openness for a frame. A player within trigger range who may open it (holds
- * the required badge — `hasCard`, or the door needs none) raises it toward fully open at DOOR_OPEN_SPEED,
- * clamped at 1. Otherwise the openness holds unchanged: an opened door is a PERMANENT unlock (it never
- * auto-closes), and a locked door approached without the badge stays shut. The shell owns the proximity
- * test (feeding `near`), the inventory (feeding `hasCard`), and the "badge requis" hint on the shut case.
- */
+// Holds openness unchanged when not opening — an opened door is a PERMANENT unlock (never auto-closes).
 export function stepDoorOpenness(
   openness: number,
   dt: number,

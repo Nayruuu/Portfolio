@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ZoneStates, zoneStates, type ZoneSnapshot } from './zone-state';
 
-/** A representative snapshot: a moved+hurt enemy, a corpse, a popped barrel, taken pickups, an open door. */
 function sample(): ZoneSnapshot {
   return {
     enemies: [

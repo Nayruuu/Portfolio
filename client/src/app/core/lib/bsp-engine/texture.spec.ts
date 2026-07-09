@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { brickTexture, ceilTexture, floorTexture, type Texture } from './texture';
 
-/** Distinct colours + opacity of a texture (covers the seam + tinted-cell branches). */
 function survey(tex: Texture): { colours: number; opaque: boolean } {
   const seen = new Set<string>();
   let opaque = true;
@@ -42,8 +41,8 @@ describe('brickTexture', () => {
       }
     }
 
-    expect(mortar).toBe(true); // the mortar lines
-    expect(colours.size).toBeGreaterThan(4); // tinted bricks → several distinct colours
+    expect(mortar).toBe(true);
+    expect(colours.size).toBeGreaterThan(4);
   });
 });
 
@@ -55,7 +54,7 @@ describe('floor/ceiling textures', () => {
     expect(tex.width).toBe(64);
     expect(tex.height).toBe(64);
     expect(opaque).toBe(true);
-    expect(colours).toBeGreaterThan(4); // tiles + seams → several colours
+    expect(colours).toBeGreaterThan(4);
   });
 
   it('the ceiling is a distinct, opaque tile texture', () => {
@@ -64,7 +63,6 @@ describe('floor/ceiling textures', () => {
 
     expect(ceil.opaque).toBe(true);
     expect(ceil.colours).toBeGreaterThan(4);
-    // Different base colours → the two textures are not identical.
     expect(ceilTexture().pixels[0]).not.toBe(floorTexture().pixels[0]);
     expect(floor.colours).toBeGreaterThan(0);
   });

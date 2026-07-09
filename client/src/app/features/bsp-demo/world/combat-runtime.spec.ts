@@ -16,15 +16,6 @@ import { ARSENAL, ammoTypeMax } from '../../../shared/game/weapons';
 import type { WarmZone } from './zone-world';
 import { CombatRuntime, type CombatRuntimeHooks } from './combat-runtime';
 
-/**
- * The player-combat subsystem's real net — the Playwright specs shoot the portfolio pages, never the game
- * interior, so the combat/inventory logic is characterized ONLY here. Each test wires a real {@link
- * CombatRuntime} over a tiny OPEN room (a compiled BSP with clear line-of-sight), a shared camera + config,
- * a real {@link DoomHud}, and local FX pools the runtime pushes into by reference — then drives the exact
- * methods the frame loop calls and asserts the mutation over a fixture world + a {@link CombatEnemy}.
- */
-
-// --- A tiny OPEN world (mirrors the player-combat fixture): a 60×60 room, floor 0 / ceil 4, clear LOS. -----
 const side: SideDef = {
   sector: 0,
   xOffset: 0,
@@ -59,9 +50,8 @@ const ENEMY_SPEC: EnemyCombat = {
   meleeDamage: 10,
 };
 
-const CHAINGUN = ARSENAL.findIndex((weapon) => weapon.id === 'chaingun'); // auto, mag 80, reload 1.6, bullets
+const CHAINGUN = ARSENAL.findIndex((weapon) => weapon.id === 'chaingun');
 
-/** A living enemy at (35, 30) — a radius east of the player, in the open room. */
 function makeEnemy(): CombatEnemy {
   return {
     spec: ENEMY_SPEC,
@@ -78,9 +68,6 @@ function makeEnemy(): CombatEnemy {
   };
 }
 
-/** A fixture world carrying only the fields the combat runtime reads (cast to the full {@link WarmZone}).
- *  `overrides` is loosely typed so a test can seat a bare {@link CombatEnemy} where the world declares the
- *  wider `Foe` — the runtime only ever reads the {@link CombatEnemy} surface of them. */
 function makeWorld(overrides: Record<string, unknown> = {}): WarmZone {
   return {
     map: OPEN,
@@ -101,7 +88,6 @@ interface Harness {
   readonly fx: { projectiles: Projectile[]; impacts: Impact[]; arcs: Arc[] };
 }
 
-/** Wire a runtime over a fresh camera / config / HUD / fixture world + live FX pools (pushed to by ref). */
 function setup(overrides: Record<string, unknown> = {}): Harness {
   const camera = { x: 30, y: 30, angle: 0, z: 1.4, pitch: 0 };
   const config = { width: 1280, height: 720, fov: Math.PI / 2 };
@@ -130,14 +116,14 @@ describe('CombatRuntime — taking damage', () => {
 
     expect(cr.hp).toBe(85);
     expect(cr.armor).toBe(0);
-    expect(cr.hurtFx).toBe(HURT_FX_DURATION); // the red damage flash is armed
+    expect(cr.hurtFx).toBe(HURT_FX_DURATION);
   });
 
   it('soaks a third of the hit into armour (floored), the rest into health', () => {
     const { cr } = setup();
 
     cr.addArmor(30);
-    cr.hurtPlayer(30); // soak = min(30, floor(30/3)=10) = 10 → armour 20, health −20
+    cr.hurtPlayer(30);
 
     expect(cr.armor).toBe(20);
     expect(cr.hp).toBe(80);
@@ -160,7 +146,7 @@ describe('CombatRuntime — taking damage', () => {
     expect(cr.hp).toBe(0);
     expect(cr.dead).toBe(true);
 
-    cr.hurtPlayer(10); // dead → no-op
+    cr.hurtPlayer(10);
 
     expect(cr.hp).toBe(0);
   });
@@ -211,7 +197,7 @@ describe('CombatRuntime — combat frames', () => {
     expect(frame.px).toBe(camera.x);
     expect(frame.py).toBe(camera.y);
 
-    frame.hurt(20); // the enemy steppers land a hit through this callback
+    frame.hurt(20);
 
     expect(cr.hp).toBe(80);
   });
@@ -220,13 +206,13 @@ describe('CombatRuntime — combat frames', () => {
     const enemies = [makeEnemy()];
     const { cr, fx, camera } = setup({ enemies });
 
-    camera.pitch = 0.5; // focal = 640 (fov 90°, width 1280) → vSlope = (0.5·360)/640
+    camera.pitch = 0.5;
     const frame = cr.playerCombatFrame();
 
     expect(frame.cameraX).toBe(camera.x);
     expect(frame.cameraZ).toBe(camera.z);
     expect(frame.angle).toBe(camera.angle);
-    expect(frame.projectiles).toBe(fx.projectiles); // the live pool, by reference
+    expect(frame.projectiles).toBe(fx.projectiles);
     expect(frame.enemies).toBe(enemies);
     expect(frame.vSlope).toBeCloseTo((0.5 * 360) / 640, 6);
 
@@ -236,7 +222,7 @@ describe('CombatRuntime — combat frames', () => {
     frame.addImpact('impact_metal', 1, 2, 3);
     expect(fx.impacts).toEqual([{ kind: 'impact_metal', x: 1, y: 2, z: 3, age: 0 }]);
 
-    frame.addImpact('', 4, 5, 6); // an empty kind spawns nothing
+    frame.addImpact('', 4, 5, 6);
     expect(fx.impacts).toHaveLength(1);
 
     const arc = { ax: 0, ay: 0, bx: 1, by: 1, age: 0 } as unknown as Arc;
@@ -255,14 +241,14 @@ describe('CombatRuntime — the weapon fire step', () => {
     cr.selectWeapon(CHAINGUN);
     cr.beginFire();
 
-    cr.stepWeapon(0.02, false); // fires: chaingun mag 80 → 79, arms a 0.07s cooldown
+    cr.stepWeapon(0.02, false);
     expect(cr.mag[CHAINGUN]).toBe(79);
     expect(cr.shotFx).toBe(SHOT_FX_DURATION);
 
-    cr.stepWeapon(0.02, false); // cooldown 0.05 still up → no shot
+    cr.stepWeapon(0.02, false);
     expect(cr.mag[CHAINGUN]).toBe(79);
 
-    cr.stepWeapon(0.06, false); // cooldown elapses → another shot
+    cr.stepWeapon(0.06, false);
     expect(cr.mag[CHAINGUN]).toBe(78);
   });
 
@@ -273,7 +259,7 @@ describe('CombatRuntime — the weapon fire step', () => {
     cr.selectWeapon(CHAINGUN);
     cr.beginFire();
 
-    cr.stepWeapon(0.02, true); // mantle active → steps nothing
+    cr.stepWeapon(0.02, true);
 
     expect(cr.mag[CHAINGUN]).toBe(80);
     expect(cr.shotFx).toBe(0);
@@ -288,15 +274,15 @@ describe('CombatRuntime — the weapon fire step', () => {
     const reserveBefore = cr.reserveOf('bullets');
 
     cr.beginFire();
-    cr.stepWeapon(0.02, false); // one shot: mag 79
+    cr.stepWeapon(0.02, false);
     cr.endFire();
     expect(cr.mag[CHAINGUN]).toBe(79);
 
     cr.reload();
-    cr.stepWeapon(0.02, false); // reload starts (magazine not full, reserve available)
-    expect(cr.mag[CHAINGUN]).toBe(79); // not yet transferred
+    cr.stepWeapon(0.02, false);
+    expect(cr.mag[CHAINGUN]).toBe(79);
 
-    cr.stepWeapon(1.7, false); // past the 1.6s reload → 1 round moves reserve → mag
+    cr.stepWeapon(1.7, false);
     expect(cr.mag[CHAINGUN]).toBe(80);
     expect(cr.reserveOf('bullets')).toBe(reserveBefore - 1);
   });
@@ -310,7 +296,7 @@ describe('CombatRuntime — the weapon fire step', () => {
     const reserveBefore = cr.reserveOf('bullets');
 
     cr.reload();
-    cr.stepWeapon(1.7, false); // mag already full → the reload never starts, reserve untouched
+    cr.stepWeapon(1.7, false);
 
     expect(cr.mag[CHAINGUN]).toBe(80);
     expect(cr.reserveOf('bullets')).toBe(reserveBefore);
@@ -321,7 +307,7 @@ describe('CombatRuntime — weapon selection', () => {
   it('ignores a switch to an UNOWNED slot (the DOOM progression)', () => {
     const { cr } = setup();
 
-    cr.selectWeapon(CHAINGUN); // not owned yet — the run starts fists-only
+    cr.selectWeapon(CHAINGUN);
 
     expect(cr.weaponIndex).toBe(0);
   });
@@ -341,17 +327,17 @@ describe('CombatRuntime — weapon selection', () => {
     cr.selectWeapon(CHAINGUN);
 
     expect(cr.weaponIndex).toBe(CHAINGUN);
-    expect(cr.weaponView).toBeDefined(); // the viewmodel was rebuilt for the new weapon
+    expect(cr.weaponView).toBeDefined();
   });
 
   it('cycles only across owned weapons on the wheel', () => {
     const { cr } = setup();
 
-    cr.cycleWeapon(1); // fists-only → nothing to cycle to
+    cr.cycleWeapon(1);
     expect(cr.weaponIndex).toBe(0);
 
     cr.grantWeapon('chaingun');
-    cr.cycleWeapon(1); // now owns fist + chaingun → advances to the chaingun
+    cr.cycleWeapon(1);
     expect(cr.weaponIndex).toBe(CHAINGUN);
   });
 });
@@ -360,11 +346,11 @@ describe('CombatRuntime — the grant API', () => {
   it('heals up to the player ceiling', () => {
     const { cr } = setup();
 
-    cr.hurtPlayer(80); // health 20
+    cr.hurtPlayer(80);
     cr.heal(15);
     expect(cr.hp).toBe(35);
 
-    cr.heal(1000); // capped
+    cr.heal(1000);
     expect(cr.hp).toBe(100);
   });
 
@@ -379,7 +365,7 @@ describe('CombatRuntime — the grant API', () => {
   it('adds ammo to a reserve, clamped to the passed cap', () => {
     const { cr } = setup();
 
-    cr.addAmmo('bullets', 10, 8); // from 0, clamped to 8
+    cr.addAmmo('bullets', 10, 8);
 
     expect(cr.reserveOf('bullets')).toBe(8);
   });
@@ -400,7 +386,7 @@ describe('CombatRuntime — the grant API', () => {
     cr.grantWeapon('chaingun');
     cr.selectWeapon(CHAINGUN);
     cr.beginFire();
-    cr.stepWeapon(0.02, false); // mag 79
+    cr.stepWeapon(0.02, false);
     expect(cr.mag[CHAINGUN]).toBe(79);
 
     cr.refillMag();
@@ -413,7 +399,7 @@ describe('CombatRuntime — seeding reserves', () => {
   it('fills every ammo type to RESERVE_START clamped to its cap', () => {
     const { cr } = setup();
 
-    expect(cr.reserveOf('bullets')).toBe(0); // unseeded at construction
+    expect(cr.reserveOf('bullets')).toBe(0);
 
     cr.seedReserves();
 
@@ -426,45 +412,45 @@ describe('CombatRuntime — FX decay', () => {
   it('fades the muzzle, hurt and discharge feedback timers each frame', () => {
     const { cr } = setup();
 
-    cr.hurtPlayer(5); // hurtFx = 0.35
+    cr.hurtPlayer(5);
     cr.decayFx(0.1);
     expect(cr.hurtFx).toBeCloseTo(HURT_FX_DURATION - 0.1, 5);
 
-    cr.decayFx(1); // clamps at 0
+    cr.decayFx(1);
     expect(cr.hurtFx).toBe(0);
   });
 });
 
 describe('CombatRuntime — the debug stress load', () => {
   beforeEach(() => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.5); // deterministic spawn positions + cooldowns
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
   });
 
   it('ramps synthetic enemies and fires their shots into the shared projectile pool once toggled on', () => {
     const { cr, fx } = setup();
 
     cr.toggleStress();
-    cr.stepStress(1); // 8 enemies spawn at (7.5, 6) with 0.75s cooldown; dt 1 elapses it → each fires
+    cr.stepStress(1);
 
     expect(cr.stressEnemyCount).toBe(8);
     expect(fx.projectiles).toHaveLength(8);
     expect(fx.projectiles[0].kind).toBe('nail');
-    expect(fx.projectiles[0].damage).toBe(0); // stress shots never hurt the real enemies
+    expect(fx.projectiles[0].damage).toBe(0);
     expect(cr.aiMs).toBeGreaterThanOrEqual(0);
   });
 
   it('is inert until toggled and clears the roster when toggled back off', () => {
     const { cr, fx } = setup();
 
-    cr.stepStress(1); // never toggled → no-op
+    cr.stepStress(1);
     expect(cr.stressEnemyCount).toBe(0);
     expect(fx.projectiles).toHaveLength(0);
 
-    cr.toggleStress(); // on
+    cr.toggleStress();
     cr.stepStress(1);
     expect(cr.stressEnemyCount).toBe(8);
 
-    cr.toggleStress(); // off → roster + AI cost cleared
+    cr.toggleStress();
     expect(cr.stressEnemyCount).toBe(0);
     expect(cr.aiMs).toBe(0);
   });
@@ -474,15 +460,14 @@ describe('CombatRuntime — the new-game reset', () => {
   it('restores health, armour, the fists-only loadout, full magazines and seeded reserves', () => {
     const { cr } = setup();
 
-    // Drift the state away from a fresh game.
     cr.seedReserves();
     cr.grantWeapon('chaingun');
     cr.selectWeapon(CHAINGUN);
     cr.beginFire();
-    cr.stepWeapon(0.02, false); // spends a round
-    cr.hurtPlayer(60); // health 40
+    cr.stepWeapon(0.02, false);
+    cr.hurtPlayer(60);
     cr.addArmor(50);
-    cr.win(); // latch the win
+    cr.win();
 
     cr.resetPlayer();
 
@@ -493,7 +478,7 @@ describe('CombatRuntime — the new-game reset', () => {
     expect(cr.weaponIndex).toBe(0);
     expect(cr.owns('chaingun')).toBe(false);
     expect(cr.owns('fist')).toBe(true);
-    expect(cr.mag[CHAINGUN]).toBe(80); // magazines refilled
+    expect(cr.mag[CHAINGUN]).toBe(80);
     expect(cr.reserveOf('bullets')).toBe(Math.min(ammoTypeMax('bullets'), 50));
   });
 });

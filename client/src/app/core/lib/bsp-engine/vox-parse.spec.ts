@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { parseVox } from './vox-parse';
 import type { Texture } from './texture';
 
-/** Little-endian int32 as 4 bytes. */
 function u32(v: number): Uint8Array {
   const b = new Uint8Array(4);
 
@@ -12,7 +11,6 @@ function u32(v: number): Uint8Array {
   return b;
 }
 
-/** A 4-char chunk tag as bytes. */
 function tag(s: string): Uint8Array {
   return new Uint8Array([s.charCodeAt(0), s.charCodeAt(1), s.charCodeAt(2), s.charCodeAt(3)]);
 }
@@ -30,7 +28,6 @@ function concat(...parts: readonly Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** A chunk: `id · contentSize · childrenSize · content · children`. */
 function chunk(
   id: string,
   content: Uint8Array,
@@ -39,14 +36,13 @@ function chunk(
   return concat(tag(id), u32(content.length), u32(children.length), content, children);
 }
 
-type Voxel = readonly [number, number, number, number]; // x, y, z, colorIndex
+type Voxel = readonly [number, number, number, number];
 
-/** Assemble a `.vox` ArrayBuffer from dims + voxels (+ an optional RGBA palette chunk + extra chunks). */
 function vox(opts: {
   dims: readonly [number, number, number];
   voxels: readonly Voxel[];
-  palette?: Uint8Array; // 1024 bytes = the RGBA chunk content
-  extra?: readonly Uint8Array[]; // pre-built child chunks appended after XYZI
+  palette?: Uint8Array;
+  extra?: readonly Uint8Array[];
 }): ArrayBuffer {
   const size = chunk('SIZE', concat(u32(opts.dims[0]), u32(opts.dims[1]), u32(opts.dims[2])));
   const xyzi = chunk(
@@ -67,7 +63,6 @@ function vox(opts: {
   return file.buffer as ArrayBuffer;
 }
 
-/** A 1024-byte RGBA chunk from a sparse map of stored-entry index → [r,g,b,a] (rest black/opaque). */
 function paletteChunk(
   entries: Readonly<Record<number, readonly [number, number, number, number]>>,
 ): Uint8Array {
@@ -85,7 +80,6 @@ function paletteChunk(
   return raw;
 }
 
-/** Decode voxel (gx, gy, gz) — grid gz bottom-up, gy depth, gx lateral (the encoding contract). */
 function voxelAt(
   grid: Texture,
   gx: number,
@@ -112,13 +106,12 @@ function solidCount(grid: Texture): number {
 
 describe('parseVox', () => {
   it('decodes a single voxel into the carve grid encoding (dims, voxelDepth, bottom-up slices)', () => {
-    // n=3, ny=4, nz=5; one voxel at MV (2,1,3) → grid (gx=2, gy=1, gz=3).
     const grid = parseVox(vox({ dims: [3, 4, 5], voxels: [[2, 1, 3, 1]] }));
 
     expect(grid).toMatchObject({ width: 3, height: 4 * 5, voxelDepth: 4 });
     expect(solidCount(grid)).toBe(1);
-    expect(voxelAt(grid, 2, 1, 3)[3]).toBe(255); // solid + opaque
-    expect(voxelAt(grid, 0, 0, 0)[3]).toBe(0); // an untouched cell stays empty
+    expect(voxelAt(grid, 2, 1, 3)[3]).toBe(255);
+    expect(voxelAt(grid, 0, 0, 0)[3]).toBe(0);
   });
 
   it('maps MV (x,y,z) → grid (x, y, z) with no transposition (distinct sizes prove the axes)', () => {
@@ -126,10 +119,9 @@ describe('parseVox', () => {
 
     expect(grid).toMatchObject({ width: 5, voxelDepth: 3, height: 3 * 7 });
     expect(voxelAt(grid, 4, 2, 6)[3]).toBe(255);
-    // Neighbours along each axis are empty — proving the voxel sits at (x,y,z), not a swapped index.
-    expect(voxelAt(grid, 3, 2, 6)[3]).toBe(0); // one less on x
-    expect(voxelAt(grid, 4, 1, 6)[3]).toBe(0); // one less on y (depth)
-    expect(voxelAt(grid, 4, 2, 5)[3]).toBe(0); // one less on z (height)
+    expect(voxelAt(grid, 3, 2, 6)[3]).toBe(0);
+    expect(voxelAt(grid, 4, 1, 6)[3]).toBe(0);
+    expect(voxelAt(grid, 4, 2, 5)[3]).toBe(0);
   });
 
   it('supports non-cubic models with many voxels', () => {
@@ -147,7 +139,6 @@ describe('parseVox', () => {
   });
 
   it('uses the MagicaVoxel default palette when there is no RGBA chunk', () => {
-    // Default palette index 1 = 0xffffffff (white); index 255 = 0xff111111 (r=g=b=17).
     const grid = parseVox(
       vox({
         dims: [2, 1, 1],
@@ -175,8 +166,8 @@ describe('parseVox', () => {
       }),
     );
 
-    expect(voxelAt(grid, 0, 0, 0)).toEqual([10, 20, 30, 255]); // colorIndex 1 ← stored entry 0
-    expect(voxelAt(grid, 1, 0, 0)).toEqual([40, 50, 60, 255]); // colorIndex 2 ← stored entry 1
+    expect(voxelAt(grid, 0, 0, 0)).toEqual([10, 20, 30, 255]);
+    expect(voxelAt(grid, 1, 0, 0)).toEqual([40, 50, 60, 255]);
   });
 
   it('forces a solid voxel opaque even when its palette alpha is 0 (alpha = occupancy)', () => {
@@ -190,7 +181,7 @@ describe('parseVox', () => {
     const dupSize = chunk('SIZE', concat(u32(9), u32(9), u32(9)));
     const dupXyzi = chunk('XYZI', concat(u32(1), new Uint8Array([5, 5, 5, 3])));
     const dupRgba = chunk('RGBA', paletteChunk({ 0: [1, 1, 1, 255] }));
-    const material = chunk('MATL', new Uint8Array([1, 2, 3, 4, 5])); // unknown → skipped
+    const material = chunk('MATL', new Uint8Array([1, 2, 3, 4, 5]));
     const grid = parseVox(
       vox({
         dims: [2, 1, 1],
@@ -200,9 +191,9 @@ describe('parseVox', () => {
       }),
     );
 
-    expect(grid.width).toBe(2); // the FIRST SIZE (not the duplicate 9×9×9)
-    expect(solidCount(grid)).toBe(1); // the FIRST XYZI (not the duplicate)
-    expect(voxelAt(grid, 0, 0, 0)).toEqual([77, 88, 99, 255]); // the FIRST RGBA
+    expect(grid.width).toBe(2);
+    expect(solidCount(grid)).toBe(1);
+    expect(voxelAt(grid, 0, 0, 0)).toEqual([77, 88, 99, 255]);
   });
 
   it('accepts a Uint8Array as well as an ArrayBuffer', () => {
@@ -267,19 +258,18 @@ describe('parseVox', () => {
   });
 
   it('throws on a truncated header (MAIN sizes cut off)', () => {
-    const bad = concat(tag('VOX '), u32(150), tag('MAIN')); // no content/children sizes
+    const bad = concat(tag('VOX '), u32(150), tag('MAIN'));
 
     expect(() => parseVox(bad)).toThrow(/truncated/);
   });
 
   it('throws on a truncated chunk tag inside MAIN', () => {
-    const bad = concat(tag('VOX '), u32(150)); // MAIN tag itself is cut off
+    const bad = concat(tag('VOX '), u32(150));
 
     expect(() => parseVox(bad)).toThrow(/truncated/);
   });
 
   it('throws on a truncated XYZI chunk (count exceeds the bytes present)', () => {
-    // Claim 100 voxels but supply the payload for one.
     const xyzi = chunk('XYZI', concat(u32(100), new Uint8Array([0, 0, 0, 1])));
     const size = chunk('SIZE', concat(u32(2), u32(2), u32(2)));
     const main = chunk('MAIN', new Uint8Array(0), concat(size, xyzi));
@@ -289,7 +279,7 @@ describe('parseVox', () => {
   });
 
   it('throws on a truncated RGBA chunk (fewer than 1024 bytes present)', () => {
-    const rgba = chunk('RGBA', new Uint8Array(16)); // claims 16, needs 1024
+    const rgba = chunk('RGBA', new Uint8Array(16));
     const size = chunk('SIZE', concat(u32(1), u32(1), u32(1)));
     const xyzi = chunk('XYZI', concat(u32(1), new Uint8Array([0, 0, 0, 1])));
     const main = chunk('MAIN', new Uint8Array(0), concat(size, xyzi, rgba));

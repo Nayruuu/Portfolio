@@ -11,9 +11,6 @@ import { collectHittables } from './hittables';
 import { fireWeapon, fireSpread, resolveHitscan } from './weapon-fire';
 import { stepProjectiles, detonate, chainFrom } from './projectile-step';
 
-// --- A tiny world -----------------------------------------------------------
-// The player sits at (30, 30) looking +x (angle 0). One OPEN 60×60 room (floor 0, ceiling 4): clear line of
-// sight/hitscan everywhere inside, the east wall at x=60 is 30 cells ahead.
 const side: SideDef = {
   sector: 0,
   xOffset: 0,
@@ -40,9 +37,8 @@ const OPEN = buildBsp(OPEN_SOURCE);
 
 const PLAYER_X = 30;
 const PLAYER_Y = 30;
-const EYE_Z = 1; // camera height: a barrel of height 2 (mid z=1) sits dead on the straight aim line
+const EYE_Z = 1;
 
-// --- Fixtures ---------------------------------------------------------------
 const makeSprite = (x: number, y: number, z = 0, height = 2): Sprite => ({
   x,
   y,
@@ -125,7 +121,6 @@ const makeProjectile = (over: Partial<Projectile> = {}): Projectile => ({
   ...over,
 });
 
-// The bag carries real plain-signature callbacks for the engine, plus spies the assertions read.
 interface TestBag extends PlayerCombatFrame {
   readonly hurtSpy: ReturnType<typeof vi.fn>;
   readonly impactSpy: ReturnType<typeof vi.fn>;
@@ -161,7 +156,6 @@ const makeBag = (
   };
 };
 
-// --- collectHittables -------------------------------------------------------
 describe('collectHittables', () => {
   it('includes a standing barrel + its pop closure, at its billboard mid-height', () => {
     const barrel = makeBarrel(40, 30);
@@ -171,10 +165,10 @@ describe('collectHittables', () => {
 
     expect(hittables).toHaveLength(1);
     expect(hittables[0].x).toBe(40);
-    expect(hittables[0].z).toBe(1); // z(0) + height(2)/2
+    expect(hittables[0].z).toBe(1);
     expect(hittables[0].target.radius).toBeGreaterThan(0);
 
-    hittables[0].hit(5); // a barrel pops on any hit (damage ignored)
+    hittables[0].hit(5);
     expect(barrel.alive).toBe(false);
   });
 
@@ -194,7 +188,7 @@ describe('collectHittables', () => {
     const hittables = collectHittables(bag);
 
     expect(hittables).toHaveLength(1);
-    expect(hittables[0].z).toBe(1); // z(0) + worldHeight(2)/2
+    expect(hittables[0].z).toBe(1);
 
     hittables[0].hit(7);
     expect(bag.hurtSpy).toHaveBeenCalledWith(enemy, 7);
@@ -219,17 +213,16 @@ describe('collectHittables', () => {
   });
 });
 
-// --- resolveHitscan ---------------------------------------------------------
 describe('resolveHitscan', () => {
   it('hits the nearest target in the cone and sparks an impact on it (returns true)', () => {
     const near = makeBarrel(40, 30);
     const far = makeBarrel(50, 30);
-    const bag = makeBag({ targets: [far, near] }); // deliberately unordered
+    const bag = makeBag({ targets: [far, near] });
 
     const hit = resolveHitscan(bag, 1, 0, 0, 40, 'impact_metal', 20);
 
     expect(hit).toBe(true);
-    expect(near.alive).toBe(false); // the nearer barrel took it
+    expect(near.alive).toBe(false);
     expect(far.alive).toBe(true);
     expect(bag.impactSpy).toHaveBeenCalledWith('impact_metal', 40, 30, 1);
   });
@@ -244,8 +237,8 @@ describe('resolveHitscan', () => {
   });
 
   it('misses a target the aim line sails over (vertical tolerance), returning false', () => {
-    const barrel = makeBarrel(40, 30, 0, 2); // zMax 2 at proj 10
-    const bag = makeBag({ targets: [barrel], vSlope: 0.5 }); // aimZ = 1 + 0.5*10 = 6, well over the top
+    const barrel = makeBarrel(40, 30, 0, 2);
+    const bag = makeBag({ targets: [barrel], vSlope: 0.5 });
 
     const hit = resolveHitscan(bag, 1, 0, 0, 40, 'impact_metal', 20);
 
@@ -254,7 +247,7 @@ describe('resolveHitscan', () => {
   });
 
   it('a wide cone catches an off-centre target a zero cone would miss', () => {
-    const barrel = makeBarrel(40, 33); // 3 cells off the +x axis at proj 10
+    const barrel = makeBarrel(40, 33);
     const narrow = makeBag({ targets: [makeBarrel(40, 33)] });
     const wide = makeBag({ targets: [barrel] });
 
@@ -263,27 +256,27 @@ describe('resolveHitscan', () => {
   });
 
   it('sparks on the floor for a downward shot past the muzzle grace (no target)', () => {
-    const bag = makeBag({ vSlope: -0.5 }); // floor (z=0) reached at proj 2, beyond the 1.5 grace
+    const bag = makeBag({ vSlope: -0.5 });
 
     const hit = resolveHitscan(bag, 1, 0, 0, 10, 'impact_metal', 20);
 
     expect(hit).toBe(false);
     expect(bag.impactSpy).toHaveBeenCalledTimes(1);
     expect(bag.impactSpy.mock.calls[0][0]).toBe('impact_metal');
-    expect(bag.impactSpy.mock.calls[0][3]).toBeCloseTo(0, 5); // sparked at floor height
+    expect(bag.impactSpy.mock.calls[0][3]).toBeCloseTo(0, 5);
   });
 
   it('respects the muzzle grace: a steep downward shot within it does NOT spark at the feet', () => {
-    const bag = makeBag({ vSlope: -1 }); // would cross the floor at proj 1, inside the 1.5 grace
+    const bag = makeBag({ vSlope: -1 });
 
-    const hit = resolveHitscan(bag, 1, 0, 0, 1.2, 'impact_metal', 20); // range shorter than the grace
+    const hit = resolveHitscan(bag, 1, 0, 0, 1.2, 'impact_metal', 20);
 
     expect(hit).toBe(false);
     expect(bag.impactSpy).not.toHaveBeenCalled();
   });
 
   it('sparks on a wall at the aim height when nothing else is in the way', () => {
-    const bag = makeBag(); // straight +x, east wall at x=60 → dist 30
+    const bag = makeBag();
 
     const hit = resolveHitscan(bag, 1, 0, 0, 40, 'impact_metal', 20);
 
@@ -292,11 +285,11 @@ describe('resolveHitscan', () => {
 
     expect(kind).toBe('impact_metal');
     expect(x).toBeCloseTo(60, 3);
-    expect(z).toBeCloseTo(EYE_Z, 5); // cameraZ + vSlope(0) * reach
+    expect(z).toBeCloseTo(EYE_Z, 5);
   });
 
   it('sparks nothing when the shot reaches neither target, floor, nor wall', () => {
-    const bag = makeBag(); // straight, range shorter than the wall, no target, level aim
+    const bag = makeBag();
 
     const hit = resolveHitscan(bag, 1, 0, 0, 5, 'impact_metal', 20);
 
@@ -305,7 +298,6 @@ describe('resolveHitscan', () => {
   });
 });
 
-// --- fireWeapon / fireSpread ------------------------------------------------
 describe('fireWeapon', () => {
   it('launches a travelling projectile for a projectile weapon (fields from the combat spec)', () => {
     const chain: ChainSpec = { targets: 3, range: 4, falloff: 0.6 };
@@ -335,11 +327,11 @@ describe('fireWeapon', () => {
     expect(p.kind).toBe('plasma');
     expect(p.impactKind).toBe('impact_plasma');
     expect(p.damage).toBe(30);
-    expect(p.radius).toBeCloseTo(0.2, 5); // width(0.4) / 2
+    expect(p.radius).toBeCloseTo(0.2, 5);
     expect(p.splashR).toBe(2.5);
     expect(p.chain).toBe(chain);
-    expect(p.x).toBeGreaterThan(PLAYER_X); // spawned a touch ahead of the camera
-    expect(p.z).toBeGreaterThan(EYE_Z); // lifted onto the aim line at the spawn point
+    expect(p.x).toBeGreaterThan(PLAYER_X);
+    expect(p.z).toBeGreaterThan(EYE_Z);
   });
 
   it('launches nothing when the projectile kind has no known width', () => {
@@ -366,7 +358,7 @@ describe('fireWeapon', () => {
 
     fireWeapon(bag, makeCombat({ pellets: 5, cone: 0.2 }));
 
-    expect(barrel.alive).toBe(false); // at least one centred pellet connected
+    expect(barrel.alive).toBe(false);
     expect(bag.impactSpy).toHaveBeenCalled();
   });
 
@@ -382,7 +374,7 @@ describe('fireWeapon', () => {
 
 describe('fireSpread', () => {
   it('fires exactly `pellets` rays across the cone', () => {
-    const bag = makeBag(); // no targets → each ray sparks on the far wall
+    const bag = makeBag();
 
     fireSpread(bag, makeCombat({ pellets: 4, cone: 0.15 }));
 
@@ -395,17 +387,16 @@ describe('fireSpread', () => {
 
     fireSpread(bag, makeCombat({ pellets: 1, cone: 0.15 }));
 
-    expect(barrel.alive).toBe(false); // the lone pellet aims dead centre
+    expect(barrel.alive).toBe(false);
   });
 });
 
-// --- stepProjectiles --------------------------------------------------------
 describe('stepProjectiles', () => {
   it('advances a shot through open space, climbing along its pitch, keeping it alive', () => {
     const p = makeProjectile({ vSlope: 0.1, speed: 10 });
     const bag = makeBag({ projectiles: [p] });
 
-    stepProjectiles(bag, 0.1); // step = 1
+    stepProjectiles(bag, 0.1);
 
     expect(bag.projectiles).toHaveLength(1);
     expect(p.x).toBeCloseTo(PLAYER_X + 1, 5);
@@ -414,11 +405,11 @@ describe('stepProjectiles', () => {
   });
 
   it('detonates on a direct target hit: deals damage, sparks, and is culled', () => {
-    const barrel = makeBarrel(30.5, 30); // half a cell ahead
+    const barrel = makeBarrel(30.5, 30);
     const p = makeProjectile({ speed: 10, damage: 40, impactKind: 'impact_metal' });
     const bag = makeBag({ targets: [barrel], projectiles: [p] });
 
-    stepProjectiles(bag, 0.1); // step 1 reaches the barrel
+    stepProjectiles(bag, 0.1);
 
     expect(barrel.alive).toBe(false);
     expect(bag.impactSpy).toHaveBeenCalledWith('impact_metal', 30.5, 30, 1);
@@ -427,7 +418,7 @@ describe('stepProjectiles', () => {
 
   it('applies splash to every barrel + enemy within the blast radius on a direct hit', () => {
     const struck = makeBarrel(30.5, 30);
-    const splashed = makeBarrel(31.5, 30); // within 2.0 of the hit
+    const splashed = makeBarrel(31.5, 30);
     const outside = makeBarrel(40, 30);
     const enemy = makeEnemy(31.6, 30);
     const p = makeProjectile({ speed: 10, damage: 40, splashR: 2 });
@@ -442,13 +433,13 @@ describe('stepProjectiles', () => {
     expect(struck.alive).toBe(false);
     expect(splashed.alive).toBe(false);
     expect(outside.alive).toBe(true);
-    expect(bag.hurtSpy).toHaveBeenCalledWith(enemy, 40); // splash damage = direct damage
+    expect(bag.hurtSpy).toHaveBeenCalledWith(enemy, 40);
   });
 
   it('chains lightning between nearby barrels in nearest-first order on a plasma hit', () => {
     const struck = makeBarrel(30.5, 30);
-    const hopA = makeBarrel(32, 30); // 1.5 from the struck point
-    const hopB = makeBarrel(33.5, 30); // 1.5 from hopA
+    const hopA = makeBarrel(32, 30);
+    const hopB = makeBarrel(33.5, 30);
     const chain: ChainSpec = { targets: 2, range: 3, falloff: 0.6 };
     const p = makeProjectile({ speed: 10, chain });
     const bag = makeBag({ targets: [struck, hopA, hopB], projectiles: [p] });
@@ -464,17 +455,17 @@ describe('stepProjectiles', () => {
     const p = makeProjectile({ vSlope: -0.5, speed: 10, splashR: 0 });
     const bag = makeBag({ projectiles: [p] });
 
-    stepProjectiles(bag, 0.3); // step 3, crosses the floor beyond the 1.5 grace
+    stepProjectiles(bag, 0.3);
 
     expect(bag.projectiles).toHaveLength(0);
-    expect(bag.impactSpy.mock.calls[0][3]).toBeCloseTo(0, 5); // burst on the floor
+    expect(bag.impactSpy.mock.calls[0][3]).toBeCloseTo(0, 5);
   });
 
   it('detonates on a wall it strikes', () => {
-    const p = makeProjectile({ x: 59, y: 30, dx: 1, dy: 0, speed: 20 }); // 1 cell from the east wall
+    const p = makeProjectile({ x: 59, y: 30, dx: 1, dy: 0, speed: 20 });
     const bag = makeBag({ projectiles: [p] });
 
-    stepProjectiles(bag, 0.1); // step 2 overshoots the wall
+    stepProjectiles(bag, 0.1);
 
     expect(bag.projectiles).toHaveLength(0);
     expect(bag.impactSpy).toHaveBeenCalled();
@@ -482,42 +473,41 @@ describe('stepProjectiles', () => {
   });
 
   it('spends a shot once it has flown its maximum range', () => {
-    const p = makeProjectile({ x: 20, y: 30, speed: 10, traveled: 39.5 }); // max range 40
+    const p = makeProjectile({ x: 20, y: 30, speed: 10, traveled: 39.5 });
     const bag = makeBag({ projectiles: [p] });
 
-    stepProjectiles(bag, 0.1); // +1 → traveled 40.5 > MAX
+    stepProjectiles(bag, 0.1);
 
     expect(bag.projectiles).toHaveLength(0);
   });
 
   it('a shot flying over a short barrel sails past it', () => {
-    const low = makeBarrel(35, 30, 0, 0.5); // zMax 0.5
-    const p = makeProjectile({ z: 3, vSlope: 0, speed: 10 }); // flying at z=3, well above
+    const low = makeBarrel(35, 30, 0, 0.5);
+    const p = makeProjectile({ z: 3, vSlope: 0, speed: 10 });
     const bag = makeBag({ targets: [low], projectiles: [p] });
 
     stepProjectiles(bag, 0.1);
 
     expect(low.alive).toBe(true);
-    expect(bag.projectiles).toHaveLength(1); // still flying
+    expect(bag.projectiles).toHaveLength(1);
   });
 
   it('compacts the pool in place, keeping the survivors in order', () => {
     const flying = makeProjectile({ x: 20, y: 30 });
-    const walled = makeProjectile({ x: 59, y: 30, speed: 20 }); // step 2 overshoots the east wall
+    const walled = makeProjectile({ x: 59, y: 30, speed: 20 });
     const flying2 = makeProjectile({ x: 22, y: 30 });
     const pool = [flying, walled, flying2];
     const bag = makeBag({ projectiles: pool });
 
     stepProjectiles(bag, 0.1);
 
-    expect(bag.projectiles).toBe(pool); // same array object (in-place)
+    expect(bag.projectiles).toBe(pool);
     expect(bag.projectiles).toHaveLength(2);
     expect(bag.projectiles[0]).toBe(flying);
     expect(bag.projectiles[1]).toBe(flying2);
   });
 });
 
-// --- detonate ---------------------------------------------------------------
 describe('detonate', () => {
   it('with a positive radius pops barrels and hurts enemies within it, then sparks', () => {
     const inside = makeBarrel(30.5, 30);
@@ -555,19 +545,18 @@ describe('detonate', () => {
   });
 });
 
-// --- chainFrom --------------------------------------------------------------
 describe('chainFrom', () => {
   it('hops nearest-first, culling each barrel and drawing an arc, up to the hop count', () => {
-    const hopA = makeBarrel(31, 30); // 1 from origin
-    const hopB = makeBarrel(32.5, 30); // 1.5 from hopA
-    const bag = makeBag({ targets: [hopB, hopA] }); // unordered
+    const hopA = makeBarrel(31, 30);
+    const hopB = makeBarrel(32.5, 30);
+    const bag = makeBag({ targets: [hopB, hopA] });
     const chain: ChainSpec = { targets: 3, range: 2, falloff: 0.5 };
 
     chainFrom(bag, 30, 30, 1, chain);
 
     expect(hopA.alive).toBe(false);
     expect(hopB.alive).toBe(false);
-    expect(bag.arcSpy).toHaveBeenCalledTimes(2); // only two within reach
+    expect(bag.arcSpy).toHaveBeenCalledTimes(2);
   });
 
   it('stops when no standing barrel remains within range', () => {

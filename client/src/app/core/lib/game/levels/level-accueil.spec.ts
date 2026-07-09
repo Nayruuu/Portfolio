@@ -6,8 +6,6 @@ const RADIUS = 0.3;
 const STEP_MAX = 1.1;
 const HEADROOM = 0.8;
 
-/** Walk the player through a sequence of straight-line-clear waypoints, returning the final position — proves
- *  two points are connected (collisions block it short of the goal if a wall is in the way). */
 function walkLegs(
   map: CompiledMap,
   start: readonly [number, number],
@@ -54,11 +52,11 @@ describe('L1 Accueil', () => {
   });
 
   it('seats the spawn, the badge dais (mantle) and the atrium (sunken) at their intended heights', () => {
-    const [exitX, exitY] = ACCUEIL.exit ?? [Number.NaN, Number.NaN]; // legacy exit — present on this level
+    const [exitX, exitY] = ACCUEIL.exit ?? [Number.NaN, Number.NaN];
 
-    expect(floorAt(ACCUEIL.spawn.x, ACCUEIL.spawn.y)).toBe(0); // réception floor
-    expect(floorAt(ACCUEIL.keycards[0][0], ACCUEIL.keycards[0][1])).toBe(1.6); // badge dais — a mantle ledge
-    expect(floorAt(exitX, exitY)).toBe(-0.8); // sunken octagonal atrium
+    expect(floorAt(ACCUEIL.spawn.x, ACCUEIL.spawn.y)).toBe(0);
+    expect(floorAt(ACCUEIL.keycards[0][0], ACCUEIL.keycards[0][1])).toBe(1.6);
+    expect(floorAt(exitX, exitY)).toBe(-0.8);
   });
 
   it('places every enemy + pickup on a real, sensible floor (none stranded in the void)', () => {
@@ -73,8 +71,8 @@ describe('L1 Accueil', () => {
       const z = floorAt(x, y);
 
       expect(Number.isFinite(z)).toBe(true);
-      expect(z).toBeGreaterThanOrEqual(-0.8); // on the courtyard/atrium floor band, never below the map
-      expect(z).toBeLessThanOrEqual(0); // flat-floor entities (the dais/keycard is the only raised pickup)
+      expect(z).toBeGreaterThanOrEqual(-0.8);
+      expect(z).toBeLessThanOrEqual(0);
     }
   });
 
@@ -90,7 +88,7 @@ describe('L1 Accueil', () => {
       ],
     );
 
-    expect(toAtrium.x).toBeGreaterThan(40); // reached deep into the atrium → door slab is passable when open
+    expect(toAtrium.x).toBeGreaterThan(40);
     expect(floorAt(toAtrium.x, toAtrium.y)).toBe(-0.8);
 
     const toCubicles = walkLegs(
@@ -104,12 +102,10 @@ describe('L1 Accueil', () => {
       ],
     );
 
-    expect(toCubicles.y).toBeGreaterThan(20); // crossed the north corridor into the cubicles (key branch)
+    expect(toCubicles.y).toBeGreaterThan(20);
   });
 
   it('puts the badge in the cubicle branch — reachable WITHOUT crossing the locked door (key before lock)', () => {
-    // The door gates the ATRIUM (east); the badge dais is north in the cubicles, so the key is always
-    // obtainable before the lock matters.
     expect(ACCUEIL.doors[0].sector).not.toBe(
       locateSubSector(map.root, ACCUEIL.keycards[0][0], ACCUEIL.keycards[0][1]).sector,
     );

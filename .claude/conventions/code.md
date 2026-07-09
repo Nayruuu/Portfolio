@@ -86,6 +86,23 @@ and this note updated.
   unit-tested, not inlined. Refactor **test-first**: characterise the behaviour with unit tests on the
   extracted pure unit, then move it; the component shell stays under the Playwright visual net.
 
+### Comments earn their place — the WHY, never the WHAT
+
+Names carry the *what*; a comment exists only where the code cannot speak for itself. **Default to none.**
+
+- **Keep** only: a non-obvious **why** or a **trap/gotcha** whose absence would let someone break the code
+  (`// mutated in place — do not copy`, `// runs on drawDt, not the advance dt`, `// same bound ref or the
+  teardown leaks`, `// read live by the renderer — no copy`); the mandated **terse-math-symbol** definitions
+  (→ §7); and **functional** comments that are not documentation at all (`eslint-disable*`, `@ts-expect-error`,
+  `// @vitest-environment …`, other pragmas). Keep them to one line.
+- **Delete** everything that restates the code: JSDoc that repeats the signature, a field/const explained by
+  its own name, a trailing `// …` naming the obvious, prose paragraphs, module-header essays. Litmus test: if
+  the comment would still read true after you *renamed* the thing it sits on, it's restating — cut it.
+- A public export earns a doc comment only when a caller cannot infer usage from its name + signature.
+
+Comments are a maintenance liability that drift out of sync with the code; the fewer there are, the more each
+surviving one is trusted.
+
 ---
 
 ## 2. Signals for all state
@@ -339,4 +356,5 @@ guards stop this from becoming a licence for cryptic code:
 - [ ] braces on all blocks; blank line before `return`; blank line after declaration runs
 - [ ] no `enum`; closed unions / `as const`-derived; named constants; explicit non-abbreviated identifiers
 - [ ] functions ≤ 50 lines; one file = one responsibility; UI-less logic in `core/lib` (test-first)
+- [ ] comments earn their place — a non-obvious WHY / trap only; no restating JSDoc, no field/const essays (§1)
 - [ ] `make lint` clean

@@ -3,18 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Camera, MapSource } from '../../../core/lib/bsp-engine';
 import { RenderHost, type PerfState } from './render-host';
 
-/**
- * The render-confluence's unit net. Under Vitest (jsdom) there is no cross-origin isolation and no WebGPU, so
- * {@link RenderHost} bootstraps with a NULL worker pool + NULL GPU — the single-threaded fallback path. That is
- * exactly the seam this spec pins: the config-mutated-in-place contract, the frame-stats roll-up feeding the
- * fps/frameMs/max readouts, the perf-beacon gate, and the queued between-frames actuations. The real pool/GPU
- * render + the scaled pixel output ride on the Playwright webkit player-scene specs (a broken pool/config/render
- * path fails those), never here.
- */
-
 const CAMERA: Camera = { x: 1, y: 2, angle: 0.5, z: 1.4, pitch: 0.25 };
 
-/** A 2D-context stand-in: RenderHost only ever calls `createImageData`, sizing a plain RGBA buffer. */
 function fakeContext(): CanvasRenderingContext2D {
   return {
     createImageData: (width: number, height: number) =>
@@ -22,12 +12,10 @@ function fakeContext(): CanvasRenderingContext2D {
   } as unknown as CanvasRenderingContext2D;
 }
 
-/** A canvas stand-in: RenderHost only reads/writes the backing-store width/height. */
 function fakeCanvas(): HTMLCanvasElement {
   return { width: 0, height: 0 } as HTMLCanvasElement;
 }
 
-/** Bootstrap a host on the CPU fallback path (forceCpu skips the async GPU init; the pool is null in jsdom). */
 function bootstrap(
   host: RenderHost,
   overrides: { perfRing?: boolean; perfState?: () => PerfState } = {},
@@ -36,7 +24,7 @@ function bootstrap(
     context: fakeContext(),
     canvas: fakeCanvas(),
     zoneKey: 'z1',
-    mapSource: {} as MapSource, // unread on the null-pool path (createRenderPool returns null first)
+    mapSource: {} as MapSource,
     neighborSources: new Map(),
     perfRing: overrides.perfRing ?? false,
     noGovernor: false,
@@ -69,17 +57,17 @@ describe('RenderHost', () => {
       bootstrap(host);
       host.applyResolution(1920, 1080);
 
-      expect(host.config).toBe(configRef); // identity preserved — a fullscreen switch reaches every holder
+      expect(host.config).toBe(configRef);
       expect(host.config.width).toBe(1920);
       expect(host.config.height).toBe(1080);
-      expect(host.config.fov).toBeCloseTo(Math.PI / 2); // fov untouched by a resolution switch
+      expect(host.config.fov).toBeCloseTo(Math.PI / 2);
     });
 
     it('resizes the framebuffer to the new resolution', () => {
       const host = new RenderHost();
 
       bootstrap(host);
-      expect(host.frame.width).toBe(1280); // the windowed tier the host seeds itself at
+      expect(host.frame.width).toBe(1280);
       expect(host.frame.height).toBe(720);
 
       host.applyResolution(1920, 1080);
@@ -96,7 +84,7 @@ describe('RenderHost', () => {
 
       bootstrap(host);
       host.queueResolution(1920, 1080);
-      expect(host.config.width).toBe(1280); // not applied until the flush
+      expect(host.config.width).toBe(1280);
 
       host.flushPending();
       expect(host.config.width).toBe(1920);
@@ -107,7 +95,7 @@ describe('RenderHost', () => {
       const host = new RenderHost();
 
       bootstrap(host);
-      host.queueResolution(1280, 720); // same as current — a no-op
+      host.queueResolution(1280, 720);
       host.flushPending();
 
       expect(host.config.width).toBe(1280);
@@ -118,11 +106,11 @@ describe('RenderHost', () => {
     it('are safe no-ops when there is no pool (the single-threaded fallback)', () => {
       const host = new RenderHost();
 
-      bootstrap(host); // pool is null in jsdom
+      bootstrap(host);
       expect(() => {
         host.setMaps('z2', {} as MapSource, new Map());
         host.swapTo('z2', new Map());
-        host.flushPending(); // drains the queue against a null pool without throwing
+        host.flushPending();
       }).not.toThrow();
     });
   });
@@ -132,14 +120,14 @@ describe('RenderHost', () => {
       const host = new RenderHost();
 
       bootstrap(host);
-      expect(host.measureDisplay(1000).roll).toBeNull(); // opens the window at t=1000
+      expect(host.measureDisplay(1000).roll).toBeNull();
 
       host.recordRender(4, 1, 0, 0);
       host.recordRender(6, 3, 0, 0);
 
-      const snapshot = host.measureDisplay(1300); // 300ms ≥ the 250ms window → distil
+      const snapshot = host.measureDisplay(1300);
 
-      expect(snapshot.roll).toEqual({ fps: 7, meanMs: 5, maxMs: 6 }); // 2 renders / 0.3s ≈ 7fps, mean 5, worst 6
+      expect(snapshot.roll).toEqual({ fps: 7, meanMs: 5, maxMs: 6 });
     });
 
     it('reports the backend readouts every frame (pool/GPU absent → cpu, single-threaded)', () => {
@@ -151,7 +139,7 @@ describe('RenderHost', () => {
       expect(snapshot.backend).toBe('cpu');
       expect(snapshot.threads).toBe(1);
       expect(snapshot.poolSize).toBe(1);
-      expect(snapshot.roll).toBeNull(); // the window is still filling
+      expect(snapshot.roll).toBeNull();
     });
   });
 
@@ -160,13 +148,13 @@ describe('RenderHost', () => {
       const host = new RenderHost();
 
       bootstrap(host);
-      host.measureDisplay(1000); // open the window
+      host.measureDisplay(1000);
       expect(() => host.afterRender(performance.now())).not.toThrow();
 
       const snapshot = host.measureDisplay(1300);
 
       expect(snapshot.roll).not.toBeNull();
-      expect(snapshot.roll?.meanMs).not.toBeNull(); // the render was ingested into the mean
+      expect(snapshot.roll?.meanMs).not.toBeNull();
     });
   });
 
@@ -198,11 +186,11 @@ describe('RenderHost', () => {
       const host = new RenderHost();
 
       bootstrap(host, { perfState });
-      host.measureDisplay(1000); // opens the window
+      host.measureDisplay(1000);
       host.recordRender(5, 2, 0, 0);
-      expect(perfState).not.toHaveBeenCalled(); // read lazily — no beacon yet, no state pulled
+      expect(perfState).not.toHaveBeenCalled();
 
-      host.measureDisplay(1300); // rolls up → the localhost beacon fires
+      host.measureDisplay(1300);
 
       expect(beacon).toHaveBeenCalledTimes(1);
       expect(perfState).toHaveBeenCalledTimes(1);
@@ -218,7 +206,7 @@ describe('RenderHost', () => {
       const host = new RenderHost();
 
       bootstrap(host);
-      (host as unknown as { perfLog: boolean }).perfLog = false; // simulate a non-localhost host
+      (host as unknown as { perfLog: boolean }).perfLog = false;
       host.measureDisplay(1000);
       host.recordRender(5, 2, 0, 0);
       host.measureDisplay(1300);
@@ -242,9 +230,9 @@ describe('RenderHost', () => {
       expect(ring).toBeDefined();
       expect(ring.n).toBe(0);
 
-      host.measureDisplay(1000); // first frame only seeds perfRingLast (no previous timestamp)
+      host.measureDisplay(1000);
       host.recordRender(5, 2, 0, 0);
-      host.measureDisplay(1016); // second frame writes a row
+      host.measureDisplay(1016);
 
       expect(ring.n).toBe(1);
       expect(ring.delta[0]).toBeCloseTo(16);

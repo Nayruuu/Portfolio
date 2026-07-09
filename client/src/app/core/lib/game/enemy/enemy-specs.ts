@@ -1,10 +1,5 @@
-// core/lib/game/enemy/enemy-specs — the enemy ROSTER: the per-kind full specs (art + combat) and the
-// `ENEMY_SPECS` list the loader/spawner iterate. Pure data: four kinds — the melee Corporate Husk, the
-// hitscan-shotgun Security Guard, the projectile-lobbing Junior Office Drone, and the fast melee-lunging
-// Remote Consultant Husk.
 import type { EnemySpec } from './enemy-art';
 
-/** The "Corporate Husk" — a melee rusher. Walk cell 512×716, feet-anchored. */
 export const PINKY_SPEC: EnemySpec = {
   texName: 'PINKY_WALK',
   atlasUrl: '/game/enemies/pinky/pinky_walk_atlas.webp',
@@ -33,8 +28,6 @@ export const PINKY_SPEC: EnemySpec = {
   meleeDamage: 12,
 };
 
-/** The "Security Guard" — a tanky SHOTGUNNER: closes to short range, fires an instant blast (a muzzle burst,
- *  no flying projectile), brawls if cornered. Wide cell 704×776, 4-frame attack. */
 export const SHOTGUNGUY_SPEC: EnemySpec = {
   texName: 'SHOTGUNGUY_WALK',
   atlasUrl: '/game/enemies/shotgunguy/walk_atlas.webp',
@@ -45,32 +38,29 @@ export const SHOTGUNGUY_SPEC: EnemySpec = {
   deathFrames: 6,
   deathFps: 9,
   attackTexName: 'SHOTGUNGUY_ATTACK',
-  attackUrl: '/game/enemies/shotgunguy/attack_shotgun.webp', // raise → aim → FIRE (muzzle flash on frame 2)
+  attackUrl: '/game/enemies/shotgunguy/attack_shotgun.webp',
   attackFrames: 4,
-  attackFps: 5, // frames 0→1→2 land across the 0.5s wind-up so the flash (frame 2) hits ON the strike
-  attackAspect: 272 / 590, // this atlas' cell is much narrower than the walk cell (704/776)
+  attackFps: 5, // timed so the muzzle flash (frame 2) lands ON the strike
+  attackAspect: 272 / 590,
   painTexName: 'SHOTGUNGUY_PAIN',
   painUrl: '/game/enemies/shotgunguy/pain_atlas.webp',
   aspect: 704 / 776,
   worldHeight: 2,
   walkStepRate: 4.5,
-  hitRadius: 0.5, // the wide guard body
+  hitRadius: 0.5,
   hp: 150,
   speed: 0.9,
-  standoff: 2.5, // a shotgunner engages CLOSE (holds just inside blast range)
-  windup: 0.5, // a clear blast telegraph (dodge by backing out of range)
-  cooldownTime: 1.5, // pump between blasts
+  standoff: 2.5,
+  windup: 0.5,
+  cooldownTime: 1.5,
   meleeReach: 1.3,
   meleeDamage: 12,
   shotgun: {
-    range: 3.5, // short — back out of this during the wind-up to dodge
-    damage: 18, // a shotgun bites hard up close
+    range: 3.5,
+    damage: 18,
   },
 };
 
-/** The "Junior Office Drone" — a fragile, nimble THROWER: holds a firing lane and lobs a spinning binder clip
- *  (dodgeable), swats if cornered. Dies fast. Cell 600×717; its attack atlas shares that cell (no per-state
- *  aspect). */
 export const IMP_SPEC: EnemySpec = {
   texName: 'IMP_WALK',
   atlasUrl: '/game/enemies/imp/walk_atlas.webp',
@@ -83,17 +73,17 @@ export const IMP_SPEC: EnemySpec = {
   attackTexName: 'IMP_ATTACK',
   attackUrl: '/game/enemies/imp/attack_atlas.webp',
   attackFrames: 5,
-  attackFps: 10, // 5 frames over the 0.5s wind-up; the clip leaves on release
+  attackFps: 10,
   painTexName: 'IMP_PAIN',
   painUrl: '/game/enemies/imp/pain_atlas.webp',
   aspect: 600 / 717,
   worldHeight: 1.7,
   walkStepRate: 4.5,
-  hitRadius: 0.35, // a slighter body
-  hp: 45, // fragile — ~2 fist hits
-  speed: 1.8, // nimble
-  standoff: 4, // keeps a firing lane
-  windup: 0.5, // telegraphs the throw (dodge by side-stepping the clip)
+  hitRadius: 0.35,
+  hp: 45,
+  speed: 1.8,
+  standoff: 4,
+  windup: 0.5,
   cooldownTime: 1.6,
   meleeReach: 1.2,
   meleeDamage: 8,
@@ -110,9 +100,6 @@ export const IMP_SPEC: EnemySpec = {
   },
 };
 
-/** The "Remote Consultant Husk" — a FAST melee rusher: sprints in and lunges with a clawing swipe (a baked
- *  cyan remote-call shimmer trails the strike), hits harder than a plain Husk but folds about as fast. Walk
- *  cell 444×548; its lunge atlas cell is wider than the walk cell (332×451), so it carries its own aspect. */
 export const LOSTSOUL_SPEC: EnemySpec = {
   texName: 'LOSTSOUL_WALK',
   atlasUrl: '/game/enemies/lostsoul/walk_atlas.webp',
@@ -125,24 +112,23 @@ export const LOSTSOUL_SPEC: EnemySpec = {
   attackTexName: 'LOSTSOUL_ATTACK',
   attackUrl: '/game/enemies/lostsoul/attack_atlas.webp',
   attackFrames: 5,
-  attackFps: 16, // the lunge plays across the 0.3s wind-up, claw extended on release
-  attackAspect: 332 / 451, // the lunge cell is wider + shorter than the upright walk cell (444/548)
+  attackFps: 16,
+  attackAspect: 332 / 451,
   painTexName: 'LOSTSOUL_PAIN',
   painUrl: '/game/enemies/lostsoul/pain_atlas.webp',
   aspect: 444 / 548,
-  worldHeight: 1.85, // a tall figure (a hair over the Husk)
-  walkStepRate: 5.5, // a quick sprint cadence
+  worldHeight: 1.85,
+  walkStepRate: 5.5,
   hitRadius: 0.4,
-  hp: 70, // medium — folds about as fast as a Husk
-  speed: 2.8, // high — closes faster than a Husk (2.2)
-  standoff: 0.7, // melee: right in your face
-  windup: 0.3, // a fast lunge tell (dodge by backing out of reach)
-  cooldownTime: 0.9, // aggressive — short recovery between lunges
-  meleeReach: 1.4, // the lunge claw reaches a touch further than a Husk
-  meleeDamage: 16, // medium-high — bites harder than a Husk (12)
+  hp: 70,
+  speed: 2.8,
+  standoff: 0.7,
+  windup: 0.3,
+  cooldownTime: 0.9,
+  meleeReach: 1.4,
+  meleeDamage: 16,
 };
 
-/** Every enemy kind in play — the loader pulls all their atlases, the spawner places them. */
 export const ENEMY_SPECS: readonly EnemySpec[] = [
   PINKY_SPEC,
   SHOTGUNGUY_SPEC,

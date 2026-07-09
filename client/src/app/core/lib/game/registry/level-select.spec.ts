@@ -9,11 +9,8 @@ import {
 } from './level-select';
 import { WEAPON_IDS, type WeaponId } from '../../../../domain';
 
-/** The two MELEE weapon ids (no ammo pool) — every other {@link WeaponId} is a RANGED unlock. Anchored on
- *  the domain value set so this core spec stays free of the shared weapon runtime. */
 const MELEE_WEAPON_IDS: readonly WeaponId[] = ['fist', 'chainsaw'];
 
-/** A param-less URL (the plain `/bsp` default) — the baseline for the resolveZone placement tests. */
 const NO_PARAMS: LevelParams = {
   levelKey: DEFAULT_LEVEL_KEY,
   spawn: null,
@@ -76,10 +73,8 @@ describe('level registry', () => {
         expect(WEAPON_IDS, `level "${key}": unknown weapon id "${id}"`).toContain(id);
       }
       if (level.enemies.length === 0) {
-        continue; // an enemy-less inspection level owes no armament
+        continue;
       }
-      // The run starts FISTS-ONLY, so a combat level must offer at least one RANGED unlock (a weapon id
-      // outside the melee pair) — melee alone cannot answer its ranged pressure.
       const ranged = (level.weapons ?? []).some(([, , id]) => !MELEE_WEAPON_IDS.includes(id));
 
       expect(
@@ -95,9 +90,9 @@ describe('level registry', () => {
   });
 
   it('owns the M1 ↔ M2 edge with the PASSABLE seam alone — no walk-into exits remain there', () => {
-    expect(M1_LOBBY.exits).toBeUndefined(); // the seamless seam crossing replaced the fade exit
-    expect(M2_OPENSPACE.exits).toBeUndefined(); // onward is M2's own TEMP win exit until M3 exists
-    expect(M2_OPENSPACE.entries?.['from-m1']).toBeDefined(); // named arrivals stay (fade mechanism / dev loads)
+    expect(M1_LOBBY.exits).toBeUndefined();
+    expect(M2_OPENSPACE.exits).toBeUndefined();
+    expect(M2_OPENSPACE.entries?.['from-m1']).toBeDefined();
     expect(M1_LOBBY.entries?.['from-above']).toBeDefined();
   });
 
@@ -113,15 +108,12 @@ describe('level registry', () => {
     const m2Seam = M2_OPENSPACE.map.linedefs.find((l) => l.zonePortal !== undefined);
 
     expect(m1Seam?.zonePortal).toEqual({ zone: 'm2', dx: 0, dy: -100, passable: true });
-    expect(m1Seam?.back).toBeNull(); // one-sided → solid for hitscan (movement crosses via `passable`)
+    expect(m1Seam?.back).toBeNull();
     expect(m2Seam?.zonePortal).toEqual({ zone: 'm1', dx: 0, dy: 100, passable: true });
     expect(m2Seam?.back).toBeNull();
     if (m1Seam === undefined || m2Seam === undefined) {
-      return; // the expects above already failed
+      return;
     }
-    // The two seam lines are COINCIDENT under the translation (the same 4-wide opening in both maps) — the
-    // property that makes the live view read continuous. M2 point + (dx, dy) = M1 point; the endpoint
-    // order reverses because reciprocal seams front opposite sides.
     const at = (level: typeof M1_LOBBY, line: typeof m1Seam): number[][] => [
       [level.map.vertices[line.v1].x, level.map.vertices[line.v1].y],
       [level.map.vertices[line.v2].x, level.map.vertices[line.v2].y],
@@ -210,7 +202,7 @@ describe('parseLevelParams', () => {
   it('forces the CPU renderer only for the literal value cpu (anything else = GPU-when-available)', () => {
     expect(parseLevelParams('?renderer=cpu').renderer).toBe('cpu');
     expect(parseLevelParams('?renderer=gpu').renderer).toBe('gpu');
-    expect(parseLevelParams('?renderer=webgpu').renderer).toBe('gpu'); // junk → the default (GPU + auto fallback)
+    expect(parseLevelParams('?renderer=webgpu').renderer).toBe('gpu');
     expect(parseLevelParams('?renderer').renderer).toBe('gpu');
   });
 
@@ -250,14 +242,12 @@ describe('resolveZone', () => {
     const spawn = { x: 17, y: 108, angle: 4.71 };
     const params: LevelParams = { ...NO_PARAMS, levelKey: 'm2', spawn };
 
-    expect(resolveZone('m2', undefined, params).at).toEqual(spawn); // the URL level itself
-    expect(resolveZone('m1', undefined, params).at).toEqual(M1_LOBBY.spawn); // another zone — untouched
-    expect(resolveZone('m2', 'from-m1', params).at).toEqual(M2_OPENSPACE.entries?.['from-m1']); // entry wins
+    expect(resolveZone('m2', undefined, params).at).toEqual(spawn);
+    expect(resolveZone('m1', undefined, params).at).toEqual(M1_LOBBY.spawn);
+    expect(resolveZone('m2', 'from-m1', params).at).toEqual(M2_OPENSPACE.entries?.['from-m1']);
   });
 
   it('honors the dev spawn on a junk URL level key — both the key AND urlKey fall back to the default', () => {
-    // `levelKey: 'bogus'` is unknown, so BOTH `resolved` (via the requested key) and `urlKey` (via
-    // `params.levelKey`) collapse to the default — they match, so the dev spawn override still lands.
     const spawn = { x: 5, y: 6, angle: 1 };
     const params: LevelParams = { ...NO_PARAMS, levelKey: 'bogus', spawn };
     const zone = resolveZone('bogus', undefined, params);
@@ -271,7 +261,7 @@ describe('resolveZone', () => {
 
     expect(resolveZone('hangar', undefined, params).level.enemies).toEqual([]);
     expect(resolveZone('m1', 'from-above', params).level.enemies).toEqual([]);
-    expect(HANGAR.enemies.length).toBeGreaterThan(0); // registry entry untouched
+    expect(HANGAR.enemies.length).toBeGreaterThan(0);
   });
 
   it('never mutates the registry entries (shallow-adapted copies only)', () => {

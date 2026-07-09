@@ -18,7 +18,6 @@ describe('door tuning constants', () => {
 
 describe('stepDoorOpenness', () => {
   it('opens toward 1 while the player is in range and holds the badge', () => {
-    // dt = 0.1 → advance by DOOR_OPEN_SPEED(2.2) * 0.1 = 0.22 from a shut door
     expect(stepDoorOpenness(0, 0.1, true, true)).toBeCloseTo(0.22, 10);
   });
 
@@ -46,13 +45,12 @@ describe('doorCeilZ', () => {
   });
 
   it('interpolates the ceiling linearly across the openness', () => {
-    expect(doorCeilZ(2, 5, 0.5)).toBeCloseTo(3.5, 10); // 2 + (5-2)*0.5
+    expect(doorCeilZ(2, 5, 0.5)).toBeCloseTo(3.5, 10);
   });
 });
 
 describe('stepSlideOpenness', () => {
   it('opens toward 1 while the player is near', () => {
-    // dt = 0.1 → step = SLIDE_OPEN_SPEED(4) * 0.1 = 0.4 from a shut panel
     expect(stepSlideOpenness(0, 0.1, true)).toBeCloseTo(0.4, 10);
   });
 
@@ -61,7 +59,6 @@ describe('stepSlideOpenness', () => {
   });
 
   it('auto-closes toward 0 when the player is far', () => {
-    // from fully open, dt = 0.1 → retract by 0.4 → 0.6
     expect(stepSlideOpenness(1, 0.1, false)).toBeCloseTo(0.6, 10);
   });
 
