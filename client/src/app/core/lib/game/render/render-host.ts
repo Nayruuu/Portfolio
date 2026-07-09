@@ -10,6 +10,8 @@ import {
 import {
   FRAME_STATS_WINDOW_MS,
   FrameStats,
+  RENDER_PARITY_TOLERANCE,
+  diffFrames,
   initialRenderGovernor,
   stepRenderGovernor,
   type RenderGovernorState,
@@ -61,6 +63,19 @@ export interface RenderHostBootstrap {
   readonly camera: Camera;
   readonly perfState: () => PerfState;
 }
+
+/** GPU↔CPU pixel-parity readout — `available:false` on a platform with no WebGPU (the e2e probe skips). */
+export type RenderParityResult =
+  | { readonly available: false; readonly reason: string }
+  | {
+      readonly available: true;
+      readonly width: number;
+      readonly height: number;
+      readonly tolerance: number;
+      readonly maxChannelDiff: number;
+      readonly mismatchCount: number;
+      readonly pixelCount: number;
+    };
 
 /** The backend readouts flow EVERY frame; `roll` is non-null only ~4×/second. */
 export interface DisplaySnapshot {
@@ -299,6 +314,61 @@ export class RenderHost {
     );
 
     return Promise.resolve();
+  }
+
+  /**
+   * Render one scene through BOTH backends into private scratch buffers and diff them — the running proof that
+   * the WebGPU backend is pixel-faithful to the reference CPU renderer. Spins up its OWN throwaway GPU renderer
+   * (never the live one) so it can't disturb the frame loop, and returns `available:false` where WebGPU is
+   * absent. Dev/e2e only — wired to a localhost `window.__bspRenderParity` hook, never the production path.
+   */
+  public async renderParity(request: RenderRequest): Promise<RenderParityResult> {
+    const gpu = await createGpuRenderer(this.renderConfig);
+
+    if (gpu === null) {
+      return { available: false, reason: 'no WebGPU adapter/device' };
+    }
+
+    const { width, height } = this.renderConfig;
+
+    try {
+      gpu.setTextures(this.textures);
+      const neighbors = request.zoneNeighbors(request.neighborSprites);
+      const cpu = new Uint8ClampedArray(width * height * 4);
+      const gpuBuf = new Uint8ClampedArray(width * height * 4);
+
+      renderFrame(
+        request.map,
+        request.camera,
+        this.renderConfig,
+        this.textures,
+        cpu,
+        new Float32Array(width * height),
+        0,
+        height,
+        request.sprites,
+        request.slides,
+        neighbors,
+      );
+      await gpu.render(
+        request.map,
+        request.camera,
+        gpuBuf,
+        request.sprites,
+        request.slides,
+        neighbors,
+      );
+
+      return {
+        available: true,
+        width,
+        height,
+        tolerance: RENDER_PARITY_TOLERANCE,
+        ...diffFrames(cpu, gpuBuf, RENDER_PARITY_TOLERANCE),
+      };
+    } finally {
+      gpu.dispose();
+    }
   }
 
   /** Record the completed render's cost + join stall, then step the contention governor (resolution is never

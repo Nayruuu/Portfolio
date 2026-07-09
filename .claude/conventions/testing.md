@@ -134,7 +134,8 @@ stricter **100 % guard**, not the global thresholds.
   step-up, hitscan `raycast`, the `renderer` wall/floor/ceiling + sprite passes against the frozen
   `sample-map`, the `frame-commands` GPU command builder, and the procedural `texture`s); the `core/lib/game`
   logic sub-folders (the `weapons` magazine/fire-rate/reload `stepArsenal`, the `game-tuning` balance sheet,
-  `telemetry`'s render governor, the `enemy` AI + `combat` frames + `types`, the `doors` / `zone` seam
+  `telemetry`'s render governor + the `frame-diff` GPU↔CPU parity metric, the `enemy` AI + `combat` frames +
+  `types`, the `doors` / `zone` seam
   kernels, the `levels` + `registry`, the `world` state-owning runtimes, the `sprites` builder, and the
   DOM-light `input` controller + `boot` asset-loader that carry their own specs); the **DOM-light
   presentation** helpers under `core/lib/game/presentation/` — `climb-view`, `gaze`, `climb-frames` + the
@@ -149,10 +150,14 @@ stricter **100 % guard**, not the global thresholds.
   `weapon-view`) still carry running unit specs on their DOM-mockable seams — excluding them only lifts the
   100 % requirement, it never silences those specs.
 
-So the game's *logic* is fully unit-tested. There is **no** dedicated game E2E spec, and the live game
-`<canvas>` is **never** screenshotted (the `home` visual baseline masks the whole `.player`): the host
-adapters are proven by running the engine in a real browser (the Playwright suite boots the same app on the
-real Chromium / WebKit engines; the game surface is eyeballed in-browser), not by a coverage number.
+So the game's *logic* is fully unit-tested. The **one** dedicated game E2E spec — `render-parity.spec.ts` —
+drives a localhost hook that renders one scene through both the WebGPU and the CPU backend and diffs the two
+framebuffers (the running proof the GPU accelerator stays pixel-faithful to the reference renderer); it
+**skips** where the browser exposes no `navigator.gpu`, so it never runs under headless CI and never degrades
+into a CPU-vs-CPU no-op. The live game `<canvas>` is otherwise **never** screenshotted (the `home` visual
+baseline masks the whole `.player`): the host adapters are proven by running the engine in a real browser (the
+Playwright suite boots the same app on the real Chromium / WebKit engines; the game surface is eyeballed
+in-browser), not by a coverage number.
 
 ### Coverage — **`core/` 100 % guard** (`client/scripts/check-core-coverage.mjs`)
 
@@ -214,7 +219,7 @@ Config: `client/playwright.config.ts`. Specs in `client/e2e/*.spec.ts`; baseline
   reuseExistingServer: !CI, timeout: 120_000 }` — auto-starts `ng serve` (no prerender) on the same
   `PW_PORT`-driven port, up to 120 s; CI gets a fresh server, local reuses a running one.
 
-### The 16 specs (behavioral + visual)
+### The 17 specs (behavioral + visual)
 
 Behavioral (target by ARIA role / stable class, FR text, case-insensitive regex where noted):
 
@@ -271,6 +276,11 @@ Behavioral (target by ARIA role / stable class, FR text, case-insensitive regex 
   mobile theme/language dock — opening `.prefs-dock .prefs__lang-toggle` shows a 4-item picker that opens
   **upward** (menu bottom ≤ toggle top, full height on-screen — guards the specificity-tie regression that
   collapsed it downward off-screen); selecting "EN" routes to `/en` and the toggle reads `EN`.
+- `render-parity.spec.ts` — **game / WebGPU-gated** (chromium): navigates to `/bsp`, waits for the localhost
+  `__bspRenderParity` hook, and asserts the WebGPU and CPU backends render one scene within f32 tolerance
+  (`mismatch / pixels < 2 %`, real deltas annotated for calibration). **`test.skip`s** where `navigator.gpu`
+  is absent — which is every headless CI browser, so it captures **no baseline** and is a real assertion only
+  on a WebGPU-capable machine; it never silently compares CPU-to-CPU.
 Visual baselines (captured under **both** projects — `chromium` desktop and `mobile` Pixel 5):
 
 - `visual.spec.ts` — one full-page snapshot per screen, parameterized over

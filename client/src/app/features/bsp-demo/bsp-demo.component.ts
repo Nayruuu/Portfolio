@@ -29,7 +29,12 @@ import { CombatRuntime, type CombatRuntimeHooks } from '../../core/lib/game/worl
 import { PickupRuntime, type PickupRuntimeHooks } from '../../core/lib/game/world/pickup-runtime';
 import { PlayerMotion, type PlayerMotionHooks } from '../../core/lib/game/world/player-motion';
 import type { FxPools } from '../../core/lib/game/world/fx-pools';
-import { RenderHost, type DisplaySnapshot, type RenderRequest } from '../../core/lib/game/render/render-host';
+import {
+  RenderHost,
+  type DisplaySnapshot,
+  type RenderParityResult,
+  type RenderRequest,
+} from '../../core/lib/game/render/render-host';
 import type { ViewState } from '../../core/lib/game/render/view-state';
 import { DoomHud } from '../../core/lib/game/presentation/doom-hud';
 import { impactEffect } from '../../core/lib/game/presentation/effects';
@@ -56,7 +61,10 @@ import {
   stepProjectiles,
   ZONE_FADE,
 } from '../../core/lib';
-import { InputController, type InputControllerHooks } from '../../core/lib/game/input/input-controller';
+import {
+  InputController,
+  type InputControllerHooks,
+} from '../../core/lib/game/input/input-controller';
 
 // native status-bar art dims → the backing store keeps the bar's 5.24:1 aspect
 const HUD_NATIVE_WIDTH = 2117;
@@ -264,6 +272,35 @@ export class BspDemoComponent {
         aiMs: this.combatRuntime.aiMs,
       }),
     });
+    this.exposeParityHook();
+  }
+
+  // localhost-only GPU↔CPU parity probe (e2e/dev), mirroring the __bspPerfRing dev global — never ships to prod
+  private exposeParityHook(): void {
+    if (
+      typeof location === 'undefined' ||
+      (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')
+    ) {
+      return;
+    }
+    (window as unknown as Record<string, unknown>)['__bspRenderParity'] =
+      (): Promise<RenderParityResult> => this.renderHost.renderParity(this.buildParityRequest());
+  }
+
+  // the parity probe's pinned scene: the live geometry with NO sprites/neighbour foes, so both backends
+  // rasterise the exact same walls/floors/glass/portals and any delta is pure backend f32 rounding
+  private buildParityRequest(): RenderRequest {
+    const world = this.zoneRuntime.world;
+
+    return {
+      camera: this.camera,
+      map: world.map,
+      sectors: world.sectors,
+      slides: world.slides,
+      sprites: [],
+      neighborSprites: undefined,
+      zoneNeighbors: (sprites) => this.zoneRuntime.zoneNeighbors(sprites),
+    };
   }
 
   // handlers are stable bound refs — teardown removes the EXACT same functions or listeners leak
@@ -306,6 +343,7 @@ export class BspDemoComponent {
     const input = this.inputController;
 
     this.renderHost.dispose();
+    delete (window as unknown as Record<string, unknown>)['__bspRenderParity'];
     cancelAnimationFrame(this.frameId);
     window.removeEventListener('keydown', input.onDown);
     window.removeEventListener('keyup', input.onUp);
