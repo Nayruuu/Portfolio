@@ -99,29 +99,60 @@ in the individual spec's `configureTestingModule`.
 
 These are enforced by the Vitest runner across the whole project. A run under any threshold fails.
 
-**Excluded from coverage** (`angular.json` `coverageExclude`): the BSP game's browser-only render
-code — `features/bsp-demo/bsp-demo.component.{ts,html}` and the `features/bsp-demo/render/` browser layer
-(`render-pool.ts`, `gpu-renderer.ts`, `load-textures.ts`, `render-host.ts`). These are the `<canvas>` render
-loop + `SharedArrayBuffer` worker pool + WebGPU device/compute plumbing + texture-upload paths
-(`afterNextRender`, `requestAnimationFrame`, `Worker`, `navigator.gpu`, raw `CanvasRenderingContext2D`) with
-no meaningful unit surface or DOM-free seam to test. Every other file rides the global thresholds above —
-including the remaining feature-tier pure units (`features/bsp-demo/world/pickups.ts` + the state-owning
-runtimes, painters, sprite builder, input controller). The game's level content + authoring builders +
-enemy roster now live under `core/` (below) and are held to the stricter **100 % guard**, not the global
-thresholds.
+**Excluded from coverage** (`angular.json` `coverageExclude`): the embedded game engine's **browser /
+canvas host adapters** — the `<canvas>` render loop + `SharedArrayBuffer` worker pool + WebGPU
+device/compute plumbing + texture-upload + composited-HUD paths, which touch `afterNextRender`,
+`requestAnimationFrame`, `Worker`, `navigator.gpu`, and raw `CanvasRenderingContext2D` with no DOM-free
+seam to unit-test. The exact list (14 entries):
 
-**The game's *tested* surface** (the counterpart to that exclusion): everything under `core/` rides the
-**100 % guard** below — `core/lib/bsp-engine/*` (the `camera` projection, the `node-builder` BSP
-compiler, `physics` slide + step-up, hitscan `raycast`, the `renderer` wall/floor/ceiling + sprite
-passes against the frozen `sample-map`, the `frame-commands` GPU command builder, and the procedural
-`texture`s), `core/lib/game/*` (the `arsenal`
-magazine/fire-rate/reload `stepArsenal`, the `game-tuning` balance sheet, the `render-governor`, the enemy
-AI + combat frames, the door/seam kernels, the levels + registry, and the combat `types`), and
-`GameService` (`core/services/game/` — `enter`/`exit`/`running` + pause-resume). The **shared
-presentational helpers** in `shared/game/*` (`doom-hud`, `weapon-view`, `climb-view`, `gaze` + the `weapons` /
-`effects` JSON bridges) each carry a `.spec.ts` on the global thresholds. So the game's logic is fully
-unit-tested; there is **no** game E2E spec, and the live game `<canvas>` is **never** screenshotted (the
-`home` visual baseline masks the whole `.player`).
+- the feature mount — `features/bsp-demo/bsp-demo.component.{ts,html}`;
+- `core/lib/game/render/` — `render-pool.ts`, `render.worker.ts`, `gpu-renderer.ts`, `render-host.ts`,
+  `load-textures.ts` (the worker pool + WebGPU backend + render host + texture decode). The pure
+  `gpu-shader.ts` in the same folder is **not** excluded — it rides the 100 % guard; `view-state.ts` is a
+  type-only interface (no runtime code, so it never appears in the coverage summary at all — neither
+  excluded nor guarded);
+- `core/lib/game/painters/` — `hud-painter.ts`, `weapon-painter.ts`, `overlay-painter.ts`,
+  `world-fx-painter.ts` (the four `<canvas>` painters);
+- `core/lib/game/presentation/` — `doom-hud.ts`, `weapon-view.ts`, `loaded-image.ts` (the composited image
+  HUD, the FPS weapon view, and the `new Image()` loader).
+
+These now live under `core/`, so without the exclusion the `core/` 100 % guard (below) would demand unit
+coverage a `Worker` / GPU device / raw canvas context can't honestly provide. Excluding them keeps the split
+**honest** — the guard never sees their irreducible browser paths, which are proven in a **real browser** (the
+*honest split* below) instead; the DOM-mockable seams several of them expose still carry their own unit specs,
+just off the 100 % threshold. This is the test-side face of the architecture exception that lets `core/lib/game` own browser host
+code (→ `architecture.md` §1). Every other file rides the global thresholds above; the game's pure logic,
+authoring builders, level content, and enemy roster all live under `core/` (below) and are held to the
+stricter **100 % guard**, not the global thresholds.
+
+**The honest split — the game's *tested* surface** (the counterpart to that exclusion). The rule is
+**"pure game logic 100 % / browser + canvas host adapters excluded (real-browser net)"**:
+
+- **Pure game logic → the `core/` 100 % guard.** Everything under `core/lib/bsp-engine`, the logic + DOM-light
+  sub-folders of `core/lib/game`, and `core/services/game` rides the **100 % guard** below —
+  `core/lib/bsp-engine/*` (the `camera` projection, the `node-builder` BSP compiler, `physics` slide +
+  step-up, hitscan `raycast`, the `renderer` wall/floor/ceiling + sprite passes against the frozen
+  `sample-map`, the `frame-commands` GPU command builder, and the procedural `texture`s); the `core/lib/game`
+  logic sub-folders (the `weapons` magazine/fire-rate/reload `stepArsenal`, the `game-tuning` balance sheet,
+  `telemetry`'s render governor, the `enemy` AI + `combat` frames + `types`, the `doors` / `zone` seam
+  kernels, the `levels` + `registry`, the `world` state-owning runtimes, the `sprites` builder, and the
+  DOM-light `input` controller + `boot` asset-loader that carry their own specs); the **DOM-light
+  presentation** helpers under `core/lib/game/presentation/` — `climb-view`, `gaze`, `climb-frames` + the
+  `weapons` / `effects` JSON bridges; and `GameService` (`core/services/game/` — `enter`/`exit`/`running` +
+  pause-resume). Because they all live under `core/`, they are held to **100 %**, not the global thresholds.
+- **Browser / canvas host adapters → `coverageExclude`, real-browser net.** The 14-entry list above (the
+  mount component + `render/`'s worker-pool / WebGPU / host / texture code + the four `painters/` + the
+  `presentation/` `doom-hud` / `weapon-view` / `loaded-image`) is excluded from the coverage summary — so the
+  100 % guard never sees it. Its irreducible `Worker` / GPU device / raw-canvas paths are validated by running
+  in a **real browser**, the only faithful environment. This is a *threshold* exclusion, not a test blackout:
+  six of the fourteen (`render-host`, `load-textures`, `overlay-painter`, `world-fx-painter`, `doom-hud`,
+  `weapon-view`) still carry running unit specs on their DOM-mockable seams — excluding them only lifts the
+  100 % requirement, it never silences those specs.
+
+So the game's *logic* is fully unit-tested. There is **no** dedicated game E2E spec, and the live game
+`<canvas>` is **never** screenshotted (the `home` visual baseline masks the whole `.player`): the host
+adapters are proven by running the engine in a real browser (the Playwright suite boots the same app on the
+real Chromium / WebKit engines; the game surface is eyeballed in-browser), not by a coverage number.
 
 ### Coverage — **`core/` 100 % guard** (`client/scripts/check-core-coverage.mjs`)
 

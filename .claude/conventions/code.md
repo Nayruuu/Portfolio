@@ -85,6 +85,14 @@ and this note updated.
   math) belongs in `core/lib` (pure, 100 %-tested) or a `core/services` service — extracted and
   unit-tested, not inlined. Refactor **test-first**: characterise the behaviour with unit tests on the
   extracted pure unit, then move it; the component shell stays under the Playwright visual net.
+  **One bounded exception** (owned by [`architecture.md`](architecture.md) §1): `core/lib/game` is a
+  self-contained, portable embedded game engine that owns its *own* rendering + browser host code
+  (canvas / WebGPU / `Worker` / DOM-input / `Image`) — so those browser modules live inside the engine at
+  `core/lib/game`, not in the feature (whose `bsp-demo.component` is a bare mount point). They stay honest
+  via the coverage split (pure game logic 100 %-tested; the browser/canvas host adapters `coverageExclude`d
+  and proven in a real browser — see [`testing.md`](testing.md)) and are held off the barrel so SSR
+  prerender never evaluates a `Worker` / WebGPU device. The exception is scoped to `core/lib/game`;
+  everywhere else this rule holds flatly.
 
 ### Comments earn their place — the WHY, never the WHAT
 
@@ -355,6 +363,6 @@ guards stop this from becoming a licence for cryptic code:
 - [ ] displayed text via `i18n.content()` — **no `lang()==='fr' ? … : …` text ternary** (§5)
 - [ ] braces on all blocks; blank line before `return`; blank line after declaration runs
 - [ ] no `enum`; closed unions / `as const`-derived; named constants; explicit non-abbreviated identifiers
-- [ ] functions ≤ 50 lines; one file = one responsibility; UI-less logic in `core/lib` (test-first)
+- [ ] functions ≤ 50 lines; one file = one responsibility; UI-less logic in `core/lib` (test-first) — the one exception is the self-contained `core/lib/game` engine, which owns its browser host code (§1)
 - [ ] comments earn their place — a non-obvious WHY / trap only; no restating JSDoc, no field/const essays (§1)
 - [ ] `make lint` clean

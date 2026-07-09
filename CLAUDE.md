@@ -85,14 +85,20 @@ Full rules — layers, dependency direction, barrels, folder layout — are in
   - `domain/` — types/value-sets (incl. the `LANG` set) + the multilingual `Content` contract; **depends on nothing**.
   - `core/` — UI-less client/infra logic: `api/` (the .NET-API seam), `services/` (signal/SignalStore
     state), `lib/` (pure functions, 100 % tested), `content/` (one `content.<lang>.json` per `Lang` +
-    the shared typed bridge + the generated `article-bodies.ts` over `.md` bodies).
-  - `shared/` — cross-feature presentational components (`icon`, `code-block`, `inline-runs`) + `game`
-    (the shared BSP-game helpers: `doom-hud`, `weapon-view`, `climb-view`, `climb-frames`, `weapons`,
-    `effects`, `gaze`, `loaded-image`).
+    the shared typed bridge + the generated `article-bodies.ts` over `.md` bodies). **One bounded
+    exception to "UI-less"**: `core/lib/game` is the whole self-contained, framework-agnostic embedded
+    game engine — it owns its own rendering + browser host code (canvas / WebGPU / `Worker` / DOM-input /
+    `Image`), kept honest by three guardrails (pure game logic stays 100 %-tested; the browser/canvas
+    host adapters are `coverageExclude`d + held off the barrel; the exception is scoped to
+    `core/lib/game`) — see `architecture.md §1`.
+  - `shared/` — cross-feature presentational components (`icon`, `code-block`, `inline-runs`) **only**.
+    (The former `shared/game` helpers — `doom-hud`, `weapon-view`, `climb-view`, `climb-frames`,
+    `weapons`, `effects`, `gaze`, `loaded-image` — moved into the engine at `core/lib/game/presentation`.)
   - `layout/` — the shell (`nav`, `prefs`, `channel-header`, `tabs-bar`).
   - `features/` — one **lazy-loaded** folder per feature (`home`, `articles`, `series`, `about`,
-    `stack`, `contact`) — plus the hidden `bsp-demo` game (`sd-bsp-demo`, served at `/bsp` and mounted in
-    the player).
+    `stack`, `contact`) — plus the hidden `bsp-demo` game, now just the thin **mount component**
+    `sd-bsp-demo` (`bsp-demo.component.{ts,html,scss}` and nothing else; served at `/bsp` and mounted in
+    the player); the whole game engine lives in `core/lib/game`.
 - **Root composition**: `app.component.*` (shell + `<router-outlet>`), `app.config.ts`
   (`provideZonelessChangeDetection()` + `provideRouter`), `app.routes.ts`, `app.routes.server.ts`.
 - **Routing & i18n**: language is a URL prefix (`/fr`, `/en`, `/es`, `/de`, …), route-driven; one static

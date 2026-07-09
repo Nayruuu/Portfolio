@@ -38,18 +38,18 @@ client/src/app/
 │
 ├── domain/                     ← types + value-sets (dont LANG) + contrat multilingue Content ; ne dépend de rien
 │
-├── core/                       ← logique client/infra, sans UI
+├── core/                       ← logique client/infra, sans UI (une exception bornée : le moteur de jeu core/lib/game)
 │   ├── api/                    ← le seam vers l'API .NET (content-api.service, api.token)
 │   ├── services/               ← state signal / SignalStore (content, game, i18n, player, reviews, search, seo, theme, viewport)
-│   ├── lib/                    ← fonctions pures, testées à 100 % (markdown, tokenize, site, constants…)
+│   ├── lib/                    ← fonctions pures 100 % testées (markdown, tokenize, site…) + bsp-engine/ + game/ (moteur BSP + jeu embarqué OPEN SPACE.EXE : logique 100 % testée, host navigateur en filet e2e)
 │   └── content/                ← un content.<lang>.json par langue + bridge typé partagé + article-bodies.ts généré
 │
-├── shared/                     ← présentationnel transverse (icon, code-block, inline-runs) + game (helpers BSP partagés)
+├── shared/                     ← présentationnel transverse (icon, code-block, inline-runs)
 ├── layout/                     ← le shell (nav, prefs, channel-header, tabs-bar)
 │
 └── features/                   ← un dossier lazy-loaded par feature
     ├── home/                   ← player (+ scènes, mini-player flottant), video-meta, comments, like-bar, up-next
-    ├── bsp-demo/               ← le jeu caché OPEN SPACE.EXE (moteur BSP software maison, monté dans le player + servi sur /bsp)
+    ├── bsp-demo/               ← composant de montage sd-bsp-demo du jeu OPEN SPACE.EXE (moteur dans core/lib/game ; monté dans le player + servi sur /bsp)
     ├── articles/               ← liste filtrable (+ article-detail)
     ├── series/                 ← cards thématiques (+ series-detail)
     └── about/ · stack/ · contact/
