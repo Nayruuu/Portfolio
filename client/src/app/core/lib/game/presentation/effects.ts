@@ -48,13 +48,26 @@ export interface WeaponEffect {
 
 /** The raw `weapon_mapping` entry before normalization: the kit names the melee weapons' hit effect
  *  `hitEffect` and every other weapon's `impact` — `weaponEffects` folds both into `impact`. */
-interface RawWeaponEffect {
+export interface RawWeaponEffect {
   projectile?: string;
   impact?: string;
   hitEffect?: string;
   hitscan?: boolean;
   melee?: boolean;
   aoe?: boolean;
+}
+
+/** Fold one raw kit `weapon_mapping` entry into a normalized {@link WeaponEffect}: the melee kit `hitEffect`
+ *  and the ranged `impact` collapse into a single `impact` (empty when the kit declares neither), and every
+ *  absent flag defaults off. */
+export function normalizeWeaponEffect(raw: RawWeaponEffect): WeaponEffect {
+  return {
+    projectile: raw.projectile ?? null,
+    impact: raw.impact ?? raw.hitEffect ?? '',
+    hitscan: raw.hitscan ?? false,
+    melee: raw.melee ?? false,
+    aoe: raw.aoe ?? false,
+  };
 }
 
 const RAW_WEAPON_MAPPING: Record<string, RawWeaponEffect> = effects.weapon_mapping;
@@ -89,16 +102,7 @@ const IMPACT_EFFECTS: ReadonlyMap<string, ImpactEffect> = new Map(
 );
 
 const WEAPON_EFFECTS: ReadonlyMap<string, WeaponEffect> = new Map(
-  Object.entries(RAW_WEAPON_MAPPING).map(([id, raw]) => [
-    id,
-    {
-      projectile: raw.projectile ?? null,
-      impact: raw.impact ?? raw.hitEffect ?? '',
-      hitscan: raw.hitscan ?? false,
-      melee: raw.melee ?? false,
-      aoe: raw.aoe ?? false,
-    },
-  ]),
+  Object.entries(RAW_WEAPON_MAPPING).map(([id, raw]) => [id, normalizeWeaponEffect(raw)]),
 );
 
 /** The projectile sprite for a kind (`staple` … `bfg`), or `undefined` for an unknown kind. */

@@ -1,4 +1,4 @@
-import type { KeycardColor } from '../../core/lib';
+import type { KeycardColor } from '../types';
 import atlas from './doom-hud-atlas.json';
 import { LoadedImage } from './loaded-image';
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AMMO_MAX, WEAPON_IDS, requireWeapon } from '../../../shared/game/weapons';
+import { AMMO_MAX, WEAPON_IDS, requireWeapon } from '../../../core/lib/game/presentation/weapons';
 import type { ZoneSnapshot, Level } from '../../../core/lib';
 import { ACCUEIL } from '../../../core/lib';
 import {

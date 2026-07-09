@@ -9,7 +9,7 @@ import {
   parseVox,
   type Texture,
 } from '../../../core/lib/bsp-engine';
-import { projectileEffect } from '../../../shared/game/effects';
+import { projectileEffect } from '../../../core/lib/game/presentation/effects';
 import { ENEMY_SPECS } from '../../../core/lib';
 import { PICKUP_TEXTURE_JOBS } from '../world/pickups';
 

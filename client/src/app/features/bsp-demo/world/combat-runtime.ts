@@ -30,10 +30,10 @@ import {
   reloadViewConfig,
   weaponCombat,
   weaponViewConfig,
-} from '../../../shared/game/weapons';
-import { WeaponView } from '../../../shared/game/weapon-view';
-import { ClimbView } from '../../../shared/game/climb-view';
-import { DoomHud } from '../../../shared/game/doom-hud';
+} from '../../../core/lib/game/presentation/weapons';
+import { WeaponView } from '../../../core/lib/game/presentation/weapon-view';
+import { ClimbView } from '../../../core/lib/game/presentation/climb-view';
+import { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
 import { projectileWidth } from '../render/load-textures';
 import type { ViewState } from '../render/view-state';
 import type { FxPools } from './fx-pools';

@@ -5,10 +5,13 @@ import {
   type KeycardColor,
   type ZoneSnapshot,
 } from '../../../core/lib';
-import { AMMO_MAX, WEAPON_IDS, requireWeapon, type WeaponId } from '../../../shared/game/weapons';
+import {
+  AMMO_MAX,
+  WEAPON_IDS,
+  requireWeapon,
+  type WeaponId,
+} from '../../../core/lib/game/presentation/weapons';
 import type { Level } from '../../../core/lib';
-
-// Stays a FEATURE file (not core): it imports shared/game/weapons, and core may not import shared (inward-only).
 
 // 'armor' is shown as MENTAL in the HUD.
 export type VitalKind = 'health' | 'armor';

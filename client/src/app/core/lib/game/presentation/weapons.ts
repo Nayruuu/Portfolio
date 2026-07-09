@@ -1,5 +1,6 @@
-import { AIM_CONE, AMMO_START, MELEE_CONE, MELEE_RANGE, type WeaponCombat } from '../../core/lib';
-import { WEAPON_IDS, type WeaponId } from '../../domain';
+import { AIM_CONE, AMMO_START, MELEE_CONE, MELEE_RANGE } from '../game-tuning';
+import type { WeaponCombat } from '../types';
+import { WEAPON_IDS, type WeaponId } from '../../../../domain';
 import { weaponEffects } from './effects';
 import registry from './weapons.json';
 
@@ -282,13 +283,14 @@ export function reloadViewConfig(weapon: Weapon): ReloadViewConfig {
  *  (melee + the flat-pool kinds). `pellets` (1 = single hitscan, > 1 = a shotgun blast) and `selfKnockback`
  *  (the CO2 recoil, 0 = none) drive the spread + self-recoil engine paths. */
 export function weaponCombat(weapon: Weapon): WeaponCombat {
-  const chains = (weapon.chainTargets ?? 0) > 0;
+  const chainTargets = weapon.chainTargets ?? 0;
+  const chains = chainTargets > 0;
   // The world-effects mapping (`effects.json`) decides whether the weapon LAUNCHES a travelling projectile
   // (and which sprite), the impact effect it plays at every hit, and whether that projectile detonates an
   // AOE splash (`aoe`) or a point impact — so converting a hitscan weapon to a traveller (the staple /
   // nail) is data-only, never a code change here.
   const effects = weaponEffects(weapon.id);
-  const launches = effects?.projectile != null;
+  const projectileKind = effects?.projectile ?? null;
   const aoe = effects?.aoe ?? false;
 
   return {
@@ -316,22 +318,23 @@ export function weaponCombat(weapon: Weapon): WeaponCombat {
     // splash, so the chain replaces it); a splash-less traveller (the staple, the nail) zeroes both and
     // just lands its direct hit + a metal-spark impact. Every other kind stays hitscan / melee (`null`).
     // The BFG's `fireMode: 'charge'` spin-up lives in the shell, not here.
-    projectile: launches
-      ? {
-          speed: weapon.projectileSpeed ?? 0,
-          splashDamage: aoe ? (weapon.splashDamage ?? 0) : 0,
-          splashRadius: aoe ? (weapon.splashRadius ?? 0) : 0,
-          selfDamage: weapon.selfDamage ?? false,
-          chain: chains
-            ? {
-                targets: weapon.chainTargets ?? 0,
-                range: weapon.chainRange ?? 0,
-                falloff: weapon.chainFalloff ?? 1,
-              }
-            : null,
-          kind: effects?.projectile ?? '',
-        }
-      : null,
+    projectile:
+      projectileKind != null
+        ? {
+            speed: weapon.projectileSpeed ?? 0,
+            splashDamage: aoe ? (weapon.splashDamage ?? 0) : 0,
+            splashRadius: aoe ? (weapon.splashRadius ?? 0) : 0,
+            selfDamage: weapon.selfDamage ?? false,
+            chain: chains
+              ? {
+                  targets: chainTargets,
+                  range: weapon.chainRange ?? 0,
+                  falloff: weapon.chainFalloff ?? 1,
+                }
+              : null,
+            kind: projectileKind,
+          }
+        : null,
     // The hit effect played at every landed hit (a projectile detonation, a hitscan ray, or a melee swing).
     impactKind: effects?.impact ?? '',
   };
@@ -389,7 +392,7 @@ export const ARSENAL: readonly Weapon[] = WEAPONS.filter((weapon) => weapon.spri
 
 /** Recover the literal `WeaponType` from a widened JSON `string` via equality — fail loud on an unknown
  *  kind (an authoring error) so a typo never silently degrades to a default. */
-function asWeaponType(value: string): WeaponType {
+export function asWeaponType(value: string): WeaponType {
   const match = WEAPON_TYPES.find((name) => name === value);
 
   if (match === undefined) {
@@ -401,7 +404,7 @@ function asWeaponType(value: string): WeaponType {
 
 /** Recover the literal `RangeName` from a widened JSON `string` via equality — fail loud on an unknown
  *  bucket (an authoring error). */
-function asRangeName(value: string): RangeName {
+export function asRangeName(value: string): RangeName {
   const match = RANGE_NAMES.find((name) => name === value);
 
   if (match === undefined) {
@@ -413,7 +416,7 @@ function asRangeName(value: string): RangeName {
 
 /** Recover the optional literal `FireMode` from a widened JSON `string` via equality — `undefined`
  *  (absent) stays `undefined` (the default `semi`), and an unknown mode fails loud (an authoring error). */
-function asFireMode(value: string | undefined): FireMode | undefined {
+export function asFireMode(value: string | undefined): FireMode | undefined {
   if (value === undefined) {
     return undefined;
   }

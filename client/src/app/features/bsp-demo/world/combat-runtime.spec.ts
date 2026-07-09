@@ -11,8 +11,8 @@ import {
   type Impact,
   type Projectile,
 } from '../../../core/lib';
-import { DoomHud } from '../../../shared/game/doom-hud';
-import { ARSENAL, ammoTypeMax } from '../../../shared/game/weapons';
+import { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
+import { ARSENAL, ammoTypeMax } from '../../../core/lib/game/presentation/weapons';
 import type { WarmZone } from './zone-world';
 import { CombatRuntime, type CombatRuntimeHooks } from './combat-runtime';
 

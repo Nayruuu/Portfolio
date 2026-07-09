@@ -1,6 +1,6 @@
 import type { Camera } from '../../../core/lib/bsp-engine';
-import type { WeaponView } from '../../../shared/game/weapon-view';
-import type { ClimbView } from '../../../shared/game/climb-view';
+import type { WeaponView } from '../../../core/lib/game/presentation/weapon-view';
+import type { ClimbView } from '../../../core/lib/game/presentation/climb-view';
 
 const CLIMB_LEDGE_DEPTH = 0.3; // arm's-reach depth the ledge top is projected at, to pin the grip line
 const CLIMB_LEDGE_MIN = 0.22; // hold the grip line within this band (fractions of screen height)

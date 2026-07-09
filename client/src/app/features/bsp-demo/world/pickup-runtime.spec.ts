@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Camera } from '../../../core/lib/bsp-engine';
-import { DoomHud } from '../../../shared/game/doom-hud';
-import { ARSENAL } from '../../../shared/game/weapons';
+import { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
+import { ARSENAL } from '../../../core/lib/game/presentation/weapons';
 import { EXIT_RADIUS, PICKUP_FX_DURATION } from '../../../core/lib';
 import {
   AMMO_BOX_SPECS,

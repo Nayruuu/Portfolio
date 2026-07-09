@@ -92,7 +92,10 @@
               "**/features/bsp-demo/render/render-pool.ts",
               "**/features/bsp-demo/render/gpu-renderer.ts",
               "**/features/bsp-demo/render/render-host.ts",
-              "**/features/bsp-demo/render/load-textures.ts"
+              "**/features/bsp-demo/render/load-textures.ts",
+              "**/core/lib/game/presentation/doom-hud.ts",
+              "**/core/lib/game/presentation/weapon-view.ts",
+              "**/core/lib/game/presentation/loaded-image.ts"
             ],
             "coverageThresholds": {
               "statements": 85,

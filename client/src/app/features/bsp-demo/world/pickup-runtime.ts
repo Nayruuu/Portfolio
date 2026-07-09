@@ -12,8 +12,8 @@ import {
   type KeycardColor,
 } from '../../../core/lib';
 import { weaponAmmoDose, type WeaponPickupSpec } from './pickups';
-import { ARSENAL, ammoTypeMax } from '../../../shared/game/weapons';
-import type { DoomHud } from '../../../shared/game/doom-hud';
+import { ARSENAL, ammoTypeMax } from '../../../core/lib/game/presentation/weapons';
+import type { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
 import type { Door, SlidingDoor, WarmZone, ZoneExit } from './zone-world';
 
 // true = ammo boxes spin but are never collected (art-inspection mode).

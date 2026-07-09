@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { impactEffect, projectileEffect, weaponEffects } from './effects';
+import { impactEffect, normalizeWeaponEffect, projectileEffect, weaponEffects } from './effects';
 
 describe('effects bridge', () => {
   it('maps a projectile kind to its served sprite + source dimensions', () => {
@@ -48,5 +48,24 @@ describe('effects bridge', () => {
     expect(weaponEffects('rocket')?.aoe).toBe(true); // an AOE projectile
     expect(weaponEffects('shotgun')?.hitscan).toBe(true); // a hitscan spread
     expect(weaponEffects('nope')).toBeUndefined(); // an unmapped weapon
+  });
+
+  it('normalizes a raw mapping entry, folding hitEffect → impact and defaulting every absent field', () => {
+    // A melee-style entry: only `hitEffect` present → folds into `impact`, flags default off.
+    expect(normalizeWeaponEffect({ hitEffect: 'impact_metal', melee: true })).toEqual({
+      projectile: null,
+      impact: 'impact_metal',
+      hitscan: false,
+      melee: true,
+      aoe: false,
+    });
+    // An entirely empty entry: neither `impact` nor `hitEffect` → the empty-string fallback, all flags off.
+    expect(normalizeWeaponEffect({})).toEqual({
+      projectile: null,
+      impact: '',
+      hitscan: false,
+      melee: false,
+      aoe: false,
+    });
   });
 });

@@ -8,13 +8,35 @@ import {
   WEAPONS,
   WEAPON_IDS,
   WEAPON_VIEW_CONFIG,
+  ammoTypeMax,
+  asFireMode,
+  asRangeName,
+  asWeaponType,
   requireWeapon,
   weaponById,
   weaponCombat,
   weaponViewConfig,
   reloadViewConfig,
+  type Weapon,
 } from './weapons';
-import { AIM_CONE, MELEE_CONE, MELEE_RANGE } from '../../core/lib';
+import { AIM_CONE, MELEE_CONE, MELEE_RANGE } from '../game-tuning';
+
+/** A bare weapon carrying only the required registry fields — every optional left absent so a test can
+ *  assert the `weaponCombat` / `weaponViewConfig` defaults the frozen JSON never exercises on its own. */
+function syntheticWeapon(overrides: Partial<Weapon> = {}): Weapon {
+  return {
+    slot: 9,
+    id: 'synthetic',
+    name: 'Synthetic',
+    type: 'hitscan',
+    damage: 10,
+    range: 'medium',
+    ammoType: null,
+    sprite_fps: '/game/weapons/synthetic/fps.webp',
+    icon: '/game/weapons/synthetic/icon.webp',
+    ...overrides,
+  };
+}
 
 describe('weapons registry', () => {
   it('keeps the WEAPON_IDS value set and the JSON registry in lockstep (order included)', () => {
@@ -468,5 +490,79 @@ describe('weapons — world-effects mapping', () => {
     expect(impactOf('rocket')).toBe('explosion');
     expect(impactOf('plasma')).toBe('impact_plasma');
     expect(impactOf('bfg')).toBe('explosion_bfg');
+  });
+});
+
+describe('weapons — JSON literal narrowing (the typed bridge)', () => {
+  it('recovers the literal weapon type, failing loud on an unknown kind', () => {
+    expect(asWeaponType('hitscan')).toBe('hitscan');
+    expect(() => asWeaponType('railgun')).toThrowError(/unknown weapon type "railgun"/);
+  });
+
+  it('recovers the literal range bucket, failing loud on an unknown bucket', () => {
+    expect(asRangeName('medium')).toBe('medium');
+    expect(() => asRangeName('galactic')).toThrowError(/unknown range "galactic"/);
+  });
+
+  it('recovers the optional fire mode: absent stays undefined, a known mode narrows, an unknown fails loud', () => {
+    expect(asFireMode(undefined)).toBeUndefined(); // absent → the implicit `semi`
+    expect(asFireMode('auto')).toBe('auto');
+    expect(() => asFireMode('burst')).toThrowError(/unknown fireMode "burst"/);
+  });
+});
+
+describe('weapons — derivation defaults the frozen registry never exercises alone', () => {
+  it('defaults every optional view-config field when a weapon declares none', () => {
+    const config = weaponViewConfig(syntheticWeapon()); // no anim, no view_* overrides
+
+    expect(config.frameCount).toBe(WEAPON_VIEW_CONFIG.frameCount); // no `anim` → the shared layout
+    expect(config.heightRatio).toBeCloseTo(WEAPON_VIEW_CONFIG.heightRatio, 5); // view_scale ?? 1
+    expect(config.baseOffset).toBe(0); // view_offset ?? 0
+    expect(config.swingTravel).toBe(0); // swing_travel ?? 0
+    expect(config.anchorX).toBe(0.5); // view_anchor_x ?? 0.5
+  });
+
+  it('defaults fireCooldown to 0 for a weapon that declares no fireRate_s', () => {
+    expect(weaponCombat(syntheticWeapon({ fireRate_s: undefined })).fireCooldown).toBe(0);
+  });
+
+  it('leaves an unmapped weapon hitscan with no projectile and an empty impact kind', () => {
+    const combat = weaponCombat(syntheticWeapon({ id: 'unmapped_kind' })); // no effects-mapping entry
+
+    expect(combat.projectile).toBeNull(); // effects?.projectile ?? null → null → no launch
+    expect(combat.impactKind).toBe(''); // effects?.impact ?? '' → the empty fallback
+  });
+
+  it('defaults a launcher’s projectile speed to 0 when it declares none', () => {
+    const combat = weaponCombat(syntheticWeapon({ id: 'pistol', projectileSpeed: undefined }));
+
+    expect(combat.projectile?.speed).toBe(0); // launches (staple) but projectileSpeed absent → 0
+  });
+
+  it('defaults an AOE launcher’s splash to 0 when it declares none', () => {
+    const combat = weaponCombat(
+      syntheticWeapon({ id: 'rocket', splashDamage: undefined, splashRadius: undefined }),
+    );
+
+    expect(combat.projectile?.splashDamage).toBe(0);
+    expect(combat.projectile?.splashRadius).toBe(0);
+  });
+
+  it('defaults a chain launcher’s hop range to 0 and falloff to 1 when it declares neither', () => {
+    const combat = weaponCombat(
+      syntheticWeapon({
+        id: 'plasma',
+        chainTargets: 3,
+        chainRange: undefined,
+        chainFalloff: undefined,
+      }),
+    );
+
+    expect(combat.projectile?.chain).toEqual({ targets: 3, range: 0, falloff: 1 });
+  });
+
+  it('caps an ammo type at its declared max, and 0 for an unknown type', () => {
+    expect(ammoTypeMax('bullets')).toBeGreaterThan(0); // a declared ammo type → its `ammo_types` cap
+    expect(ammoTypeMax('unobtainium')).toBe(0); // an unknown type → the 0 fallback
   });
 });

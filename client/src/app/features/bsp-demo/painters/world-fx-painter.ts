@@ -1,6 +1,6 @@
 import { ARC_DURATION, type Arc, type Impact, type Projectile } from '../../../core/lib';
-import { impactEffect, projectileEffect } from '../../../shared/game/effects';
-import type { WeaponView } from '../../../shared/game/weapon-view';
+import { impactEffect, projectileEffect } from '../../../core/lib/game/presentation/effects';
+import type { WeaponView } from '../../../core/lib/game/presentation/weapon-view';
 import type { ViewState } from '../render/view-state';
 
 const PROJECTILE_SCREEN_SCALE = 0.42; // on-screen height = this × effects size, relative to a same-distance wall
