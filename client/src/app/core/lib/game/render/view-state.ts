@@ -1,4 +1,4 @@
-import type { Camera } from '../../../core/lib/bsp-engine';
+import type { Camera } from '../../bsp-engine';
 import type { RenderConfig } from './render-host';
 
 /** Both fields are STABLE object references (camera turned/placed in place, config switched in place on a

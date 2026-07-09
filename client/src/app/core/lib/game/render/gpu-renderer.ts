@@ -12,7 +12,7 @@ import {
   type Sprite,
   type Texture,
   type ZoneNeighbor,
-} from '../../../core/lib/bsp-engine';
+} from '../../bsp-engine';
 import { GPU_WGSL } from './gpu-shader';
 
 /**

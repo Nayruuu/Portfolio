@@ -1,13 +1,7 @@
-import { clampPitch } from '../../../core/lib/bsp-engine';
-import {
-  movementDelta,
-  MOUSE_SENS,
-  PITCH_DOWN_MAX,
-  PITCH_UP_MAX,
-  RESTART_DELAY,
-  type MovementDelta,
-} from '../../../core/lib';
-import type { MutableCamera } from '../../../core/lib/game/world/zone-runtime';
+import { clampPitch } from '../../bsp-engine';
+import { movementDelta, type MovementDelta } from '../controls';
+import { MOUSE_SENS, PITCH_DOWN_MAX, PITCH_UP_MAX, RESTART_DELAY } from '../game-tuning';
+import type { MutableCamera } from '../world/zone-runtime';
 
 const CONTROLS = new Set([
   'w',

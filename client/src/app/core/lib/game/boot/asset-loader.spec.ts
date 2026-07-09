@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Texture } from '../../../core/lib/bsp-engine';
+import type { Texture } from '../../bsp-engine';
 import type { AtlasJob } from '../render/load-textures';
 import { AssetLoader, type AssetDecoders, type AssetLoaderHooks } from './asset-loader';
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Camera, MapSource } from '../../../core/lib/bsp-engine';
+import type { Camera, MapSource } from '../../bsp-engine';
 import { RenderHost, type PerfState } from './render-host';
 
 const CAMERA: Camera = { x: 1, y: 2, angle: 0.5, z: 1.4, pitch: 0.25 };

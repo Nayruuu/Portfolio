@@ -1,7 +1,7 @@
-import { DoomHud } from '../../../core/lib/game/presentation/doom-hud';
-import { gazeForTurn, smoothTurnRate } from '../../../core/lib/game/presentation/gaze';
-import { ARSENAL } from '../../../core/lib/game/presentation/weapons';
-import type { WeaponView } from '../../../core/lib/game/presentation/weapon-view';
+import { DoomHud } from '../presentation/doom-hud';
+import { gazeForTurn, smoothTurnRate } from '../presentation/gaze';
+import { ARSENAL } from '../presentation/weapons';
+import type { WeaponView } from '../presentation/weapon-view';
 
 /** Every field is the component's LIVE value/instance (references — never copied) so the bar stays in sync. */
 export interface HudFrameInputs {

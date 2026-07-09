@@ -8,8 +8,9 @@ import {
   metalTexture,
   parseVox,
   type Texture,
-} from '../../../core/lib/bsp-engine';
-import { ENEMY_SPECS, PICKUP_TEXTURE_JOBS } from '../../../core/lib';
+} from '../../bsp-engine';
+import { ENEMY_SPECS } from '../enemy';
+import { PICKUP_TEXTURE_JOBS } from '../world/pickups';
 
 function plantPlaceholder(): Texture {
   const size = 64;

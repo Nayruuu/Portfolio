@@ -3,7 +3,7 @@ import {
   HURT_FX_DURATION,
   PICKUP_FX_DURATION,
   SHOT_FX_DURATION,
-} from '../../../core/lib';
+} from '../game-tuning';
 
 export function drawCrosshair(ctx: CanvasRenderingContext2D, shotFx: number): void {
   const cx = ctx.canvas.width / 2;

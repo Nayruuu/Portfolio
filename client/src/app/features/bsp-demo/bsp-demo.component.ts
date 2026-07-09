@@ -18,7 +18,7 @@ import {
   settleWithin,
   type LevelParams,
 } from '../../core/lib';
-import { AssetLoader, type AssetLoaderHooks } from './boot/asset-loader';
+import { AssetLoader, type AssetLoaderHooks } from '../../core/lib/game/boot/asset-loader';
 import type { WarmZone } from '../../core/lib/game/world/zone-world';
 import {
   ZoneRuntime,
@@ -29,14 +29,14 @@ import { CombatRuntime, type CombatRuntimeHooks } from '../../core/lib/game/worl
 import { PickupRuntime, type PickupRuntimeHooks } from '../../core/lib/game/world/pickup-runtime';
 import { PlayerMotion, type PlayerMotionHooks } from '../../core/lib/game/world/player-motion';
 import type { FxPools } from '../../core/lib/game/world/fx-pools';
-import { RenderHost, type DisplaySnapshot, type RenderRequest } from './render/render-host';
-import type { ViewState } from './render/view-state';
+import { RenderHost, type DisplaySnapshot, type RenderRequest } from '../../core/lib/game/render/render-host';
+import type { ViewState } from '../../core/lib/game/render/view-state';
 import { DoomHud } from '../../core/lib/game/presentation/doom-hud';
 import { impactEffect } from '../../core/lib/game/presentation/effects';
 import { IconComponent } from '../../shared/icon/icon.component';
-import { WorldFxPainter } from './painters/world-fx-painter';
-import { HudPainter } from './painters/hud-painter';
-import { WeaponPainter } from './painters/weapon-painter';
+import { WorldFxPainter } from '../../core/lib/game/painters/world-fx-painter';
+import { HudPainter } from '../../core/lib/game/painters/hud-painter';
+import { WeaponPainter } from '../../core/lib/game/painters/weapon-painter';
 import { buildLiveSprites, buildWarmSprites } from '../../core/lib/game/sprites/sprite-builder';
 import {
   drawChargeFx,
@@ -47,7 +47,7 @@ import {
   drawPickupFx,
   drawWinScreen,
   drawZoneFade,
-} from './painters/overlay-painter';
+} from '../../core/lib/game/painters/overlay-painter';
 import {
   ARC_DURATION,
   RESTART_DELAY,
@@ -56,7 +56,7 @@ import {
   stepProjectiles,
   ZONE_FADE,
 } from '../../core/lib';
-import { InputController, type InputControllerHooks } from './input/input-controller';
+import { InputController, type InputControllerHooks } from '../../core/lib/game/input/input-controller';
 
 // native status-bar art dims → the backing store keeps the bar's 5.24:1 aspect
 const HUD_NATIVE_WIDTH = 2117;

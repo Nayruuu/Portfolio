@@ -6,14 +6,14 @@ import {
   type Sprite,
   type Texture,
   type ZoneNeighbor,
-} from '../../../core/lib/bsp-engine';
+} from '../../bsp-engine';
 import {
   FRAME_STATS_WINDOW_MS,
   FrameStats,
   initialRenderGovernor,
   stepRenderGovernor,
   type RenderGovernorState,
-} from '../../../core/lib';
+} from '../telemetry';
 import { createGpuRenderer, type GpuRenderer } from './gpu-renderer';
 import { createRenderPool, type RenderPool, type SectorHeights } from './render-pool';
 import { proceduralTextures } from './load-textures';

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MutableCamera } from '../../../core/lib/game/world/zone-runtime';
-import { RESTART_DELAY } from '../../../core/lib';
+import type { MutableCamera } from '../world/zone-runtime';
+import { RESTART_DELAY } from '../game-tuning';
 import { InputController, type InputCombat, type InputControllerHooks } from './input-controller';
 
 interface CombatSpy extends InputCombat {
@@ -310,6 +310,16 @@ describe('InputController — mouse buttons', () => {
     expect(ctrl.preventDefault).toHaveBeenCalledOnce();
   });
 
+  it('ignores a non-primary, non-secondary button (e.g. middle-click) when locked', () => {
+    const { controller, canvas, combat } = makeController();
+
+    setPointerLock(canvas);
+    controller.onMousedown(mouseEvent({ button: 1 }));
+
+    expect(combat.beginFire).not.toHaveBeenCalled();
+    expect(combat.reload).not.toHaveBeenCalled();
+  });
+
   it('ignores mouse-down when not pointer-locked', () => {
     const { controller, combat } = makeController();
 
@@ -353,6 +363,18 @@ describe('InputController — wheel weapon cycle', () => {
 
     controller.onWheel(wheelEvent(-5));
     expect(combat.cycleWeapon).toHaveBeenCalledWith(-1);
+  });
+
+  it('still cycles but skips preventDefault on a non-cancelable wheel event', () => {
+    const { controller, canvas, combat } = makeController();
+
+    setPointerLock(canvas);
+    const event = wheelEvent(5, false);
+
+    controller.onWheel(event);
+
+    expect(combat.cycleWeapon).toHaveBeenCalledWith(1);
+    expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
   it('does not cycle on a zero-delta wheel event', () => {
@@ -405,6 +427,18 @@ describe('InputController — click: restart vs pointer-lock', () => {
 
     expect(canvas.requestPointerLock).toHaveBeenCalledOnce();
     expect(hooks.restart).not.toHaveBeenCalled();
+  });
+
+  it('swallows a rejected pointer-lock request (browser re-lock rate-limit)', async () => {
+    const { controller, canvas } = makeController();
+
+    (canvas as unknown as { requestPointerLock: () => Promise<void> }).requestPointerLock = vi
+      .fn()
+      .mockRejectedValue(new DOMException('rate limited', 'SecurityError'));
+
+    expect(() => controller.onClick()).not.toThrow();
+    await Promise.resolve();
+    expect(canvas.requestPointerLock).toHaveBeenCalledOnce();
   });
 
   it('restarts on the game-over screen only after the settle delay', () => {

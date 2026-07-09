@@ -8,7 +8,7 @@ import {
   type Sprite,
   type Texture,
   type ZoneNeighbor,
-} from '../../../core/lib/bsp-engine';
+} from '../../bsp-engine';
 import { proceduralTextures } from './load-textures';
 
 // Owns one horizontal BAND, painted into the SHARED framebuffer + z-buffer (a SharedArrayBuffer viewed

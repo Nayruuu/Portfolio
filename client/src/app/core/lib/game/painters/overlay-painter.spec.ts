@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HURT_FX_DURATION, PICKUP_FX_DURATION } from '../../../core/lib';
+import { HURT_FX_DURATION, PICKUP_FX_DURATION } from '../game-tuning';
 import {
   drawChargeFx,
   drawGameOver,

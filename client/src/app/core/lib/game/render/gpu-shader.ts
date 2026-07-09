@@ -13,7 +13,7 @@ import {
   SPRITE_VOXEL,
   VOXEL_MAX_STEPS,
   VOXEL_SHADE,
-} from '../../../core/lib/bsp-engine';
+} from '../../bsp-engine';
 
 // little-endian RGBA word for the framebuffer
 function packRgb(c: readonly [number, number, number]): number {

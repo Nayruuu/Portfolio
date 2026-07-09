@@ -1,4 +1,4 @@
-import type { Texture } from '../../../core/lib/bsp-engine';
+import type { Texture } from '../../bsp-engine';
 import {
   buildAtlasJobs,
   loadAtlasTexture,
