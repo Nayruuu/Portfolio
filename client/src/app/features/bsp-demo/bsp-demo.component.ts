@@ -12,7 +12,12 @@ import {
 } from '@angular/core';
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import { type Camera, type Sprite } from '../../core/lib/bsp-engine';
-import { parseLevelParams, type LevelParams } from '../../core/lib';
+import {
+  parseLevelParams,
+  RENDER_SETTLE_TIMEOUT_MS,
+  settleWithin,
+  type LevelParams,
+} from '../../core/lib';
 import { AssetLoader, type AssetLoaderHooks } from './boot/asset-loader';
 import type { WarmZone } from './world/zone-world';
 import { ZoneRuntime, EYE_HEIGHT, type ZoneRuntimeHooks } from './world/zone-runtime';
@@ -331,19 +336,27 @@ export class BspDemoComponent {
     this.renderHost.flushPending(); // queued geometry re-points + resolution — no render in flight
     const renderStart = performance.now();
 
-    void this.renderHost.renderInto(this.buildRenderRequest()).then(() => {
+    // Watchdog the render: iOS can kill a worker so its join never settles. On a real settle → blit + measure
+    // as always; on the timeout → the render never finished, so DON'T blit — just clear the latch so the next
+    // frame retries (a dead pool is dropped to the main thread by then). renderBusy ALWAYS clears: it can
+    // never latch true and freeze the screen.
+    const render = this.renderHost.renderInto(this.buildRenderRequest());
+
+    void settleWithin(render, RENDER_SETTLE_TIMEOUT_MS).then(({ settled }) => {
       if (this.renderHost.disposed) {
         return;
       }
-      context.putImageData(this.renderHost.frame, 0, 0);
-      const blitNow = performance.now();
-      const drawDt = this.lastBlit === 0 ? dt : Math.min(0.05, (blitNow - this.lastBlit) / 1000);
+      if (settled) {
+        context.putImageData(this.renderHost.frame, 0, 0);
+        const blitNow = performance.now();
+        const drawDt = this.lastBlit === 0 ? dt : Math.min(0.05, (blitNow - this.lastBlit) / 1000);
 
-      this.lastBlit = blitNow;
-      this.paintOverlays(context, drawDt);
-      this.renderHost.afterRender(renderStart);
-      this.threads.set(this.renderHost.activeThreads);
-      this.renderBusy = false; // release AFTER the actuations — the next kick sees a settled pool
+        this.lastBlit = blitNow;
+        this.paintOverlays(context, drawDt);
+        this.renderHost.afterRender(renderStart);
+        this.threads.set(this.renderHost.activeThreads);
+      }
+      this.renderBusy = false; // ALWAYS release — never latch true, even on a timed-out render
     });
   }
 

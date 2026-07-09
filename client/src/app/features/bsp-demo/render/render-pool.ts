@@ -23,6 +23,9 @@ export interface JoinStats {
 export interface RenderPool {
   readonly threads: number;
   readonly active: number; // workers currently rendering (≤ threads — the governor's worker rung)
+  // True once a worker has crashed (iOS kills them under memory pressure / on backgrounding). The join can
+  // no longer complete, so RenderHost drops the pool and falls through to the main-thread renderer.
+  readonly dead: boolean;
   readonly stats: JoinStats;
   readonly frame: Uint8ClampedArray; // SAB-backed view of the CURRENT resolution; re-read after each render()
   render(
@@ -117,11 +120,24 @@ export function createRenderPool(
   configure(config);
 
   let pending: (() => void) | null = null;
+  let dead = false;
   let done = 0;
   let joined = active; // the worker set the IN-FLIGHT frame was posted to (render captures it)
   let renderStart = 0;
   const doneMs = new Float64Array(workerCount); // per-worker band completion, relative to the post
   let stats: JoinStats = { computeMs: 0, joinMs: 0, stallMs: 0, slowest: 0 };
+
+  // A crashed worker breaks the join for good: flag the pool dead and settle the in-flight frame (if any) so
+  // its render() promise resolves instead of hanging.
+  const markDead = (): void => {
+    dead = true;
+    if (pending !== null) {
+      const resolve = pending;
+
+      pending = null;
+      resolve();
+    }
+  };
 
   // The frame JOIN: resolves once every band of the in-flight frame has landed; the per-band timestamps
   // become the frame's `JoinStats`.
@@ -149,12 +165,21 @@ export function createRenderPool(
         resolve();
       }
     };
+    // iOS reclaims workers under memory pressure / on backgrounding. A killed worker never posts its `done`,
+    // so the join above would hang forever and the caller's render() promise would never settle. Mark the
+    // pool dead (RenderHost drops it → main-thread fallback) and resolve any in-flight frame immediately so
+    // the join can't latch. `onmessageerror` covers an undecodable message (a structured-clone failure).
+    worker.onerror = markDead;
+    worker.onmessageerror = markDead;
   });
 
   return {
     threads: workers.length,
     get active(): number {
       return active;
+    },
+    get dead(): boolean {
+      return dead;
     },
     get stats(): JoinStats {
       return stats;

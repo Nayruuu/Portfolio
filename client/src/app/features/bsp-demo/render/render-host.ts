@@ -259,6 +259,11 @@ export class RenderHost {
 
   /** Render one frame via the active backend — GPU compute, else the worker pool, else the main thread. */
   public renderInto(request: RenderRequest): Promise<void> {
+    // A crashed pool (iOS killed a worker) can never join again: drop it here so this frame — and every one
+    // after — renders on the main-thread fallback below instead of awaiting a join that never lands.
+    if (this.pool !== null && this.pool.dead) {
+      this.dropPool();
+    }
     // Capture the pool + framebuffer: a resolution rebuild only swaps them between frames, so the pair stays
     // consistent for this render (and the locals keep the non-null narrowing in the callback).
     const pool = this.pool;
@@ -367,6 +372,13 @@ export class RenderHost {
     this.pool = null;
     this.gpu?.dispose();
     this.gpu = null;
+  }
+
+  /** Terminate a crashed pool and drop it + its governor: the main-thread renderer has no join to stall. */
+  private dropPool(): void {
+    this.pool?.dispose();
+    this.pool = null;
+    this.governor = null;
   }
 
   /** Async init; until it lands — and on ANY failure — the CPU path keeps rendering (no user-visible error). */
