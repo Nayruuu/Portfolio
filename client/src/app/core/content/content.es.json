@@ -186,6 +186,18 @@
   ],
   "articles": [
     {
+      "slug": "moteur-doom-software-webgpu",
+      "tag": "ANGULAR",
+      "title": "Un motor estilo DOOM en el navegador, con tres backends",
+      "reads": "1,4k lecturas",
+      "ago": "hace 2 días",
+      "readTime": "11 min",
+      "accentColor": "#a2261c",
+      "symbol": "▓",
+      "date": "2026-07-07",
+      "description": "Un software renderer BSP estilo DOOM, sin WebGL: tres backends intercambiables (CPU, workers, WebGPU) y una prueba que demuestra que renderizan el mismo píxel."
+    },
+    {
       "slug": "etrangler-le-monolithe-dotnet",
       "tag": ".NET",
       "title": "Estrangular un monolito .NET 8 sin romper nada",

@@ -30,7 +30,7 @@ const BATCH = 40; // strings per content call
 const RETRIES = 2;
 
 const LANG_NAMES = {
-  es: 'Spanish', de: 'German', it: 'Italian', pt: 'Portuguese',
+  en: 'English', es: 'Spanish', de: 'German', it: 'Italian', pt: 'Portuguese',
   nl: 'Dutch', ja: 'Japanese', zh: 'Simplified Chinese', ko: 'Korean',
 };
 
@@ -77,16 +77,17 @@ function extractArray(reply) {
   return JSON.parse(body);
 }
 
-/** Extract the Markdown body: a trailing fenced block if wrapped, else from the first heading on. */
+/**
+ * Extract the Markdown body. The model is told to emit the body ONLY, so we keep it verbatim — merely
+ * unwrapping an outer ```` ```markdown ```` fence if it wrapped the whole document. We must NOT slice from
+ * the first heading: these articles open with an intro paragraph *before* any `##`, and slicing silently
+ * dropped it (the bug that left every non-FR body missing its opening lines).
+ */
 function extractMarkdown(reply) {
-  const fence = reply.match(/```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/);
+  const trimmed = reply.trim();
+  const fenced = trimmed.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/);
 
-  if (fence) {
-    return fence[1];
-  }
-  const start = reply.search(/^(---|#{1,3} |> )/m);
-
-  return start >= 0 ? reply.slice(start) : reply;
+  return (fenced ? fenced[1] : trimmed).trim();
 }
 
 /** Collect translatable string leaves as `{ ref, key }` setters, skipping the denylist. */
