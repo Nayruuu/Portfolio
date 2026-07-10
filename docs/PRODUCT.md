@@ -831,8 +831,8 @@ All three are simple `tab-pane` tabs (`sd-*`) rendering a `<section class="tabvi
   under both themes** via the dedicated `--code-*` tokens (never re-declared in light — §3.1): 3
   traffic-light dots + an uppercase language label (`csharp→C#`, `typescript→TypeScript`, `yaml→YAML`,
   `dart→Dart`, `bash→Bash`) + a **copy** button (copies to the clipboard, label flips to `✓ copied`
-  for **1400ms**, both labels from content). Mobile-first body lines (`12px` / `line-height 1.75` base
-  → `13px` / `1.9` from `md`): each line is a **flex row** of a right-aligned line number (`__no`,
+  for **1400ms**, both labels from content). Mobile-first body lines (`11.5px` / `line-height 1.7` base
+  → `12px` / `1.8` from `md`): each line is a **flex row** of a right-aligned line number (`__no`,
   `min-width 22px` → `28px` from `md`, `position: sticky` so it stays pinned as the code scrolls) and a
   `.code-block__code` span of syntax-highlighted tokens. That span is `white-space: pre`, so a long line
   keeps its indentation and **scrolls horizontally inside the block** — a visible thin scrollbar advertises
