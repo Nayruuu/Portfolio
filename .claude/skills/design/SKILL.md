@@ -57,14 +57,27 @@ pixel-identity).
 | `--r-xl` | `18px` | radii |
 | `--sh-1` | `0 1px 2px rgb(0 0 0 / 40%)` | shadows |
 | `--sh-2` | `0 6px 24px rgb(0 0 0 / 50%)` | shadows |
+| `--code-bg` | `#131316` | code (always dark) |
+| `--code-head` | `#1a1a1e` | code (always dark) |
+| `--code-border` | `#2a2a30` | code (always dark) |
+| `--code-text` | `#f1f1ef` | code (always dark) |
+| `--code-dim` | `#a4a4a8` | code (always dark) |
+| `--code-mute` | `#45454a` | code (always dark) |
+| `--code-comment` | `#6a6a70` | code (always dark) |
+| `--code-kw` | `oklch(78% 0.16 22deg)` | code (always dark) |
+| `--code-str` | `oklch(82% 0.13 145deg)` | code (always dark) |
+| `--code-name` | `oklch(78% 0.14 250deg)` | code (always dark) |
+| `--code-attr` | `oklch(78% 0.14 280deg)` | code (always dark) |
 
 Keep the comment lines (`/* surfaces */`, `/* warm red, our own */`, …) and the blank line between
-groups; they're stylistic but match source.
+groups; they're stylistic but match source. The **`--code-*`** group is declared **only** here in `:root`
+(never in `_theme-light.scss`) so the code panel stays dark under both themes — see the light note below.
 
 ## `[data-theme='light']` overrides — `styles/_theme-light.scss`
 
 The re-declared values (see design.md §1, §8 for the mechanism). Tokens NOT listed below (radii, fonts,
-layout, the warm-status `--ok/--warn/--info`) **do not flip** — light inherits the `:root` value.
+layout, the warm-status `--ok/--warn/--info`, and the always-dark `--code-*` code-panel group) **do not
+flip** — light inherits the `:root` value.
 
 | Token | Light value |
 |---|---|
@@ -124,7 +137,7 @@ that you reproduced the whole file, not a fragment). Nineteen are in the cascade
 | `_overlays.scss` | `.reveal`, `.reveal.is-in`, `.egg` (+ `.egg b`), `.konami` (+ `.konami b`; keyboard-only → hidden on phones, `block` at `bp.from(md)`). | `eggIn` |
 | `_scenes.scss` | `.scene`, `.scene--on`, `.scene--fit` (mobile scale-to-fit on all five scene roots — `760px`/`16/9` reference box scaled by `tan(atan2(var(--scene-fit), 1px))` where `@property --scene-fit` (registered `<length>`) carries `calc(100cqw / 760)` — the registration forces the `cqw` to a concrete length *before* `atan2`, sidestepping a WebKit/iOS bug; fully reset at `bp.from(md)`; PRODUCT.md §4.1; re-asserted (grouped, same math) by `.player.is-fullscreen .scene--fit` (upscaling into the letterboxed stage) **and** `.mini-player .scene--fit` (downscaling into the floating mini-player frame)), and the **base** `.scene-intro*` / `.scene-projects*` / `.scene-timeline*` / `.scene-outro*` classes (the largest partial — reconstruct from the scene mockups + PRODUCT.md anatomy). | — |
 | `_scene-rich.scss` | grouped `…-rich__cmd` + `…-rich__sub span` hoist (below). | — |
-| `_code-block.scss` | `.code-block*` + the `.k/.s/.c/.n/.a` syntax classes (**theme-invariant raw values** — the code panel never flips, so it uses literal `oklch()`/hex, not `var(--…)`; the deliberate §1 exception). `.code-block__body` has `overflow-x:auto; max-width:100%` (no page widen on mobile). | — |
+| `_code-block.scss` | `.code-block*` + the `.k/.s/.c/.n/.a` syntax classes → the always-dark **`--code-*`** tokens (the code panel never flips; the §1 **theme-invariant single-declaration** group — declared once in `:root`, not re-declared in `_theme-light`, PRODUCT.md §3.1). Mobile-first (`bp.from(md)` bumps font/padding); a long line keeps its indentation and **scrolls horizontally** in `.code-block__code` (`white-space: pre`), the `position: sticky` line-number gutter pinned + a visible thin scrollbar — never wraps, never widens the page. | — |
 | `_dots.scss` | grouped traffic-light dots hoist (below). | — |
 | `_likebar.scss` | `.likebar`, `.likebar button` (+ `:hover`/`.is-on`), `.likebar__divider`. | — |
 | `_comment.scss` | `.comment*` (avatar, head, name, tags, body, actions). | — |

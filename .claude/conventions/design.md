@@ -25,7 +25,11 @@ box-shadow: var(--sh-2);   box-shadow: 0 6px 24px rgb(0 0 0 / 50%);
 ```
 
 A token's **value** is written in **exactly two** places: `_tokens.scss` (`:root`, dark = default) and
-`_theme-light.scss` (`[data-theme='light']`, the re-declaration). Everywhere else is `var(--…)`.
+`_theme-light.scss` (`[data-theme='light']`, the re-declaration). Everywhere else is `var(--…)`. A
+**theme-invariant** token — the same under both themes (`--ok`/`--warn`/`--info`, the fonts/radii, and the
+always-dark **`--code-*`** code-panel group) — is declared **once** in `:root` and deliberately *not*
+re-declared in `_theme-light.scss`, inheriting that single value (`docs/PRODUCT.md §3.1` marks these
+`(inherited)`).
 
 **Narrow, sanctioned exceptions** (a raw value is allowed only when it is genuinely not a token):
 - The token **definitions** themselves (`_tokens.scss`, `_theme-light.scss`).

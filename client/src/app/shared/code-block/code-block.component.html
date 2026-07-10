@@ -12,9 +12,11 @@
     @for (line of lines(); track $index) {
       <div class="code-block__line">
         <span class="code-block__no">{{ line.lineNumber }}</span>
-        @for (token of line.tokens; track $index) {
-          <span [class]="token.kind">{{ token.text }}</span>
-        }
+        <span class="code-block__code">
+          @for (token of line.tokens; track $index) {
+            <span [class]="token.kind">{{ token.text }}</span>
+          }
+        </span>
       </div>
     }
   </div>

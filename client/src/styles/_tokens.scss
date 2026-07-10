@@ -42,6 +42,20 @@
 	/* shadows */
 	--sh-1: 0 1px 2px rgb(0 0 0 / 40%);
 	--sh-2: 0 6px 24px rgb(0 0 0 / 50%);
+
+	/* code block — always dark (never re-declared in the light theme): the syntax palette is
+	   tuned for a dark surface, so the panel stays dark under both themes */
+	--code-bg: #131316;
+	--code-head: #1a1a1e;
+	--code-border: #2a2a30;
+	--code-text: #f1f1ef;
+	--code-dim: #a4a4a8;
+	--code-mute: #45454a;
+	--code-comment: #6a6a70;
+	--code-kw: oklch(78% 0.16 22deg);
+	--code-str: oklch(82% 0.13 145deg);
+	--code-name: oklch(78% 0.14 250deg);
+	--code-attr: oklch(78% 0.14 280deg);
 }
 
 @include bp.from(md) {

@@ -1,10 +1,12 @@
+@use 'breakpoints' as bp;
+
 .code-block {
-	background: #131316;
-	border: 1px solid #2a2a30;
+	background: var(--code-bg);
+	border: 1px solid var(--code-border);
 	border-radius: var(--r-md);
 	margin: 22px 0;
 	overflow: hidden;
-	color: #f1f1ef;
+	color: var(--code-text);
 	font-family: var(--f-mono);
 }
 
@@ -12,11 +14,11 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 8px 12px;
-	background: #1a1a1e;
-	border-bottom: 1px solid #2a2a30;
+	padding: 7px 12px;
+	background: var(--code-head);
+	border-bottom: 1px solid var(--code-border);
 	font-size: 11px;
-	color: #a4a4a8;
+	color: var(--code-dim);
 }
 
 .code-block__lang {
@@ -29,64 +31,103 @@
 .code-block__copy {
 	margin-left: auto;
 	background: transparent;
-	border: 1px solid #2a2a30;
-	color: #a4a4a8;
+	border: 1px solid var(--code-border);
+	color: var(--code-dim);
 	font-family: var(--f-mono);
 	font-size: 10.5px;
 	padding: 3px 8px;
-	border-radius: 4px;
+	border-radius: var(--r-sm);
 	cursor: pointer;
 	transition: all 0.15s;
 }
 
 .code-block__copy:hover {
-	color: #f1f1ef;
-	border-color: #45454a;
+	color: var(--code-text);
+	border-color: var(--code-mute);
 }
 
 .code-block__body {
-	padding: 14px 18px;
+	padding: 14px;
 	margin: 0;
-	font-size: 12.5px;
-	line-height: 1.6;
-	color: #a4a4a8;
-	// Long lines scroll inside the block instead of widening the page (protects
-	// article-detail bodies at the 360px floor); the cap holds even inside flex/grid.
+	font-size: 12px;
+	line-height: 1.75;
+	color: var(--code-dim);
+	// A long line keeps its indentation and scrolls horizontally INSIDE the block — it never wraps (which
+	// mangles code + misaligns the gutter) nor widens the page. A visible thin scrollbar advertises the scroll.
 	max-width: 100%;
 	overflow-x: auto;
-	background: #131316;
+	background: var(--code-bg);
+	scrollbar-width: thin;
+	scrollbar-color: var(--code-mute) transparent;
+}
+
+.code-block__body::-webkit-scrollbar {
+	height: 8px;
+}
+
+.code-block__body::-webkit-scrollbar-thumb {
+	border-radius: var(--r-sm);
+	background: var(--code-mute);
 }
 
 .code-block__line {
-	display: block;
+	display: flex;
+	// size to the widest content so short lines still fill the width and the body scrolls to the longest
+	width: max-content;
+	min-width: 100%;
 }
 
 .code-block__no {
-	display: inline-block;
-	min-width: 28px;
-	padding-right: 14px;
-	color: #45454a;
+	// sticky so the line number stays pinned while the code scrolls under it (its bg hides the passing code)
+	position: sticky;
+	left: 0;
+	flex: none;
+	min-width: 22px;
+	padding-right: 12px;
+	background: var(--code-bg);
+	color: var(--code-mute);
 	text-align: right;
 	user-select: none;
 }
 
+.code-block__code {
+	white-space: pre;
+}
+
 .code-block .k {
-	color: oklch(78% 0.16 22deg);
+	color: var(--code-kw);
 }
 
 .code-block .s {
-	color: oklch(82% 0.13 145deg);
+	color: var(--code-str);
 }
 
 .code-block .c {
-	color: #6a6a70;
+	color: var(--code-comment);
 	font-style: italic;
 }
 
 .code-block .n {
-	color: oklch(78% 0.14 250deg);
+	color: var(--code-name);
 }
 
 .code-block .a {
-	color: oklch(78% 0.14 280deg);
+	color: var(--code-attr);
+}
+
+@include bp.from(md) {
+	.code-block {
+		margin: 30px 0;
+	}
+
+	.code-block__body {
+		padding: 20px;
+		font-size: 13px;
+		line-height: 1.9;
+	}
+
+	.code-block__no {
+		min-width: 28px;
+		padding-right: 14px;
+	}
 }

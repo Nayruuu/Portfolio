@@ -203,6 +203,22 @@ native prerenderer → empty `<router-outlet>`). Adding a language is a one-line
 | `--info` | `oklch(72% 0.13 230deg)` | (inherited) |
 | `--sh-1` | `0 1px 2px rgb(0 0 0 / 40%)` | `0 1px 2px rgb(20 18 12 / 6%)` |
 | `--sh-2` | `0 6px 24px rgb(0 0 0 / 50%)` | `0 8px 28px rgb(20 18 12 / 8%)` |
+| `--code-bg` | `#131316` | (inherited) |
+| `--code-head` | `#1a1a1e` | (inherited) |
+| `--code-border` | `#2a2a30` | (inherited) |
+| `--code-text` | `#f1f1ef` | (inherited) |
+| `--code-dim` | `#a4a4a8` | (inherited) |
+| `--code-mute` | `#45454a` | (inherited) |
+| `--code-comment` | `#6a6a70` | (inherited) |
+| `--code-kw` | `oklch(78% 0.16 22deg)` | (inherited) |
+| `--code-str` | `oklch(82% 0.13 145deg)` | (inherited) |
+| `--code-name` | `oklch(78% 0.14 250deg)` | (inherited) |
+| `--code-attr` | `oklch(78% 0.14 280deg)` | (inherited) |
+
+The **`--code-*`** group is deliberately **never** re-declared in `_theme-light.scss`, so the code panel
+stays **dark under both themes** — its syntax palette (`--code-kw/str/name/attr/comment`) is tuned for a
+dark surface. `code-block` uses `--code-*` for **every colour** — never the theme-flipping
+`--surface`/`--text`/… (only the theme-invariant `--r-*` / `--f-mono` besides).
 
 ### 3.2 Non-color tokens (theme-invariant)
 
@@ -811,15 +827,17 @@ All three are simple `tab-pane` tabs (`sd-*`) rendering a `<section class="tabvi
 
 ## 8. Shared: code-block, inline-runs, icon
 
-- **`sd-code-block`** (a code string + a language) = a **macOS-window panel**, **hardcoded dark
-  chrome in both themes** (`#131316` body, `#1a1a1e` head, `#2a2a30` borders, `#a4a4a8` text): 3
+- **`sd-code-block`** (a code string + a language) = a **macOS-window panel**, **always-dark chrome
+  under both themes** via the dedicated `--code-*` tokens (never re-declared in light — §3.1): 3
   traffic-light dots + an uppercase language label (`csharp→C#`, `typescript→TypeScript`, `yaml→YAML`,
   `dart→Dart`, `bash→Bash`) + a **copy** button (copies to the clipboard, label flips to `✓ copied`
-  for **1400ms**, both labels from content). Body lines (`12.5px`, `line-height:1.6`): each line is
-  shown with a right-aligned, 2-space-padded line number (`__no`, `min-width:28px`) and
-  syntax-highlighted token spans. Token colors (`_code-block.scss`): `.k` `oklch(78% .16 22deg)`
-  (red), `.s` `oklch(82% .13 145deg)` (green), `.c` `#6a6a70` italic, `.n` `oklch(78% .14 250deg)`
-  (blue), `.a` `oklch(78% .14 280deg)` (purple).
+  for **1400ms**, both labels from content). Mobile-first body lines (`12px` / `line-height 1.75` base
+  → `13px` / `1.9` from `md`): each line is a **flex row** of a right-aligned line number (`__no`,
+  `min-width 22px` → `28px` from `md`, `position: sticky` so it stays pinned as the code scrolls) and a
+  `.code-block__code` span of syntax-highlighted tokens. That span is `white-space: pre`, so a long line
+  keeps its indentation and **scrolls horizontally inside the block** — a visible thin scrollbar advertises
+  it — never wrapping, never widening the page. Syntax colors are the `--code-kw` / `--code-str` /
+  `--code-comment` / `--code-name` / `--code-attr` tokens (§3.1).
 - **Code highlighting**: a shared, line-based, per-language highlighter (csharp / typescript / yaml /
   dart / bash, each with its own hand-curated keyword set; an unknown language falls back to csharp)
   classifies each fragment as a comment, string, number, keyword, decorator, or plain identifier — the
