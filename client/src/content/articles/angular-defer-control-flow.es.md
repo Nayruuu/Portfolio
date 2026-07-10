@@ -1,3 +1,5 @@
+El nuevo control flow de Angular no se limita a reemplazar `*ngIf` y `*ngFor` por una sintaxis más bonita. Combinado con `@defer`, cambia lo que acaba en el bundle inicial: al arrancar solo se envía el JavaScript realmente necesario para el primer renderizado, y el resto llega bajo demanda.
+
 ## @if, @for, @switch
 
 La sintaxis `@` está integrada en el compilador: sin importación de directivas, y un `track` **obligatorio** en `@for` que obliga a pensar en la identidad de los elementos. Es ese `track` el que evita recrear todo en el DOM en cada cambio de lista.

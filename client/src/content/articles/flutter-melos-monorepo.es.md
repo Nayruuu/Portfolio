@@ -1,3 +1,9 @@
+Un producto Flutter serio nunca es un solo package: está la app móvil, un design system, un
+cliente API, quizá un módulo de funcionalidad por equipo. Mantenerlos en repos separados
+convierte cada cambio transversal en un vals de `pub publish` y de bumps de versión. **Melos**
+gestiona este monorepo Dart/Flutter: un repo, varios packages, comandos que se ejecutan por
+todas partes de una sola vez.
+
 ## Dividir en packages
 
 Los packages se organizan bajo una carpeta (habitualmente `packages/`) y se declaran en la raíz.

@@ -1,3 +1,9 @@
+No todo el estado de una app cabe en un `signal()` perdido en el fondo de un componente. En
+cuanto un estado se comparte, se deriva y se muta desde varios lugares, se quiere una frontera
+clara: selectores de solo lectura, métodos para hacerlo evolucionar. **NgRx SignalStore**
+(`@ngrx/signals`) ofrece exactamente eso, sin el boilerplate de las actions/reducers del NgRx
+clásico.
+
 ## Anatomía de un signalStore
 
 Un store se compone de **features** encadenadas. `withState` declara el estado inicial,

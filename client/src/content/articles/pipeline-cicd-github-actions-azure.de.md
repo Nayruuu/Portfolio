@@ -1,3 +1,7 @@
+Von Hand zu deployen heißt, freitagabends mit einem mulmigen Gefühl im Magen zu deployen. Eine
+**CI/CD**-Pipeline auf GitHub Actions verwandelt jeden `git push` in ein getestetes Build und
+anschließend in ein reproduzierbares Deployment nach Azure — ohne jemals ein Portal anzufassen.
+
 ## Ein deklarativer Workflow
 
 Alles lebt in `.github/workflows/`. Ein Workflow wird durch ein Ereignis ausgelöst (`push`,

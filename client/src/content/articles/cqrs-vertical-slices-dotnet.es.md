@@ -1,3 +1,8 @@
+En cuanto alguien pronuncia **CQRS**, muchos equipos sacan la artillería pesada: event
+sourcing, un bus de mensajes, dos bases de datos. Sin embargo, CQRS es ante todo una idea
+modesta — **separar las lecturas de las escrituras** — que se puede aplicar sin ninguna
+parafernalia, organizando el código por **vertical slices**.
+
 ## Dividir por funcionalidad, no por capa
 
 La arquitectura en capas fragmenta una funcionalidad en cinco carpetas: `Controllers`,

@@ -1,3 +1,5 @@
+Eine Flutter-App, die wächst, wirft am Ende immer dieselbe Frage auf: Wo lebt der Zustand, und wie testet man ihn, ohne ein Widget zu starten? `setState` vermischt Logik und UI in derselben Klasse; `InheritedWidget` propagiert die Daten gut, sagt aber nichts über ihre Erstellung oder ihren Austausch im Test. **Riverpod** beantwortet beides: ein Dependency-Injection-Container, der reaktive Werte erzeugt, unabhängig vom Widget-Baum.
+
 ## Providers und Notifiers
 
 Ein `Provider` stellt einen Wert bereit; ein `Notifier` stellt einen **veränderlichen** Wert zusammen mit der Logik bereit, die ihn weiterentwickelt. Mit Code-Generierung (`riverpod_generator`) annotiert man eine Klasse, und `build()` liefert den Anfangszustand:

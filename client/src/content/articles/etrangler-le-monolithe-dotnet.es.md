@@ -1,3 +1,5 @@
+Rara vez se hereda un **greenfield**. Lo más frecuente es un monolito .NET que lleva ocho años en producción y que nadie se atreve a tocar. El patrón **Strangler Fig** permite reemplazarlo **pieza por pieza**, sin big-bang y sin ventana de corte.
+
 ## El principio
 
 Se coloca una fachada delante del monolito y luego se **redirige** una ruta a la vez hacia un nuevo servicio. Mientras una funcionalidad no haya sido reescrita, sigue pasando por el código antiguo. El día en que la última ruta cambia, el monolito está muerto — estrangulado.

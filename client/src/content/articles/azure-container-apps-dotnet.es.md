@@ -1,3 +1,5 @@
+Aprovisionar un clúster de Kubernetes para alojar una sola API es matar moscas a cañonazos. **Azure Container Apps** ofrece el serverless en contenedores: se sube una imagen y la plataforma gestiona la orquestación, el scaling — hasta **cero** — y el enrutamiento, todo sin escribir jamás un manifiesto de Kubernetes.
+
 ## Desplegar una imagen con un solo comando
 
 Container Apps se apoya en un **environment** (la frontera de red y de logs compartida por varias apps) y luego en apps individuales. La CLI `az containerapp up` hace todo el trabajo de bootstrap en el primer despliegue:

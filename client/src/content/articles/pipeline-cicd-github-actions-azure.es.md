@@ -1,5 +1,3 @@
----
-
 Desplegar manualmente es desplegar un viernes por la noche con el estómago encogido. Un pipeline
 **CI/CD** en GitHub Actions transforma cada `git push` en una build testeada y luego en un
 despliegue reproducible hacia Azure — sin tocar jamás un portal.

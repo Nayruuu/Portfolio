@@ -1,3 +1,7 @@
+**Minimal APIs** haben einen schlechten Ruf: Man hält sie für reine Wegwerf-Demos.
+Tatsächlich liefern sie mit etwas Disziplin eine .NET 8-API, die lesbarer und testbarer
+ist als ein klassischer Controller — sofern man nicht alles in `Program.cs` stopft.
+
 ## Strukturierung mit Route Groups
 
 Die Anfängerfalle besteht darin, dreißig `app.MapGet`-Aufrufe in `Program.cs` zu stapeln. Die

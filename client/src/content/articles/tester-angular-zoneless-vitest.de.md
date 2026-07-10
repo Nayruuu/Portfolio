@@ -1,3 +1,5 @@
+Eine zoneless Angular-App hat kein `zone.js` mehr, um zu wissen, wann die Ansicht stabil ist — und das ist gut so für die Tests. Schluss mit esoterischem `fakeAsync`/`tick`: man wartet explizit darauf, dass das Rendering sich stabilisiert. So testet man eine zoneless-Komponente mit **Vitest**.
+
 ## Vitest konfigurieren
 
 Ab Angular 21 startet der Builder `@angular/build:unit-test` **Vitest** ohne separate Konfiguration: alles lebt in `angular.json`. Die Test-Provider-Datei aktiviert den zoneless-Modus ein für allemal:

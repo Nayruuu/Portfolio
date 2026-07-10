@@ -1,3 +1,8 @@
+Incluir el SDK de .NET y `node_modules` en la imagen que desplegamos en producción es enviar
+800 MB de herramientas que nunca se usarán en la ejecución. El **build multi-stage** separa lo
+que compila de lo que se ejecuta: obtenemos una imagen final diminuta, que contiene solo lo
+estrictamente necesario para el runtime.
+
 ## El principio: compilar y descartar
 
 Un `Dockerfile` multi-stage declara varios `FROM`. Cada `FROM` abre un stage aislado; solo

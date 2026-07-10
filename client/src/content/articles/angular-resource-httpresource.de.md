@@ -1,3 +1,5 @@
+Das Laden asynchroner Daten bedeutete lange manuelles `subscribe()`, händisches State-Management (`loading`, `error`, `data`) und Speicherlecks, wenn man ein `unsubscribe` vergaß. Seit Angular 21 kapseln `resource()` und `httpResource()` all das in einer reaktiven Primitive, die auf **Signals** aufbaut.
+
 ## Das resource()-Modell
 
 Ein `resource()` verknüpft eine reaktive **Anfrage** mit einem asynchronen **Loader**. Wenn ein in `params` gelesenes Signal sich ändert, startet Angular den Loader automatisch neu und bricht die laufende Anfrage über ein `AbortSignal` ab. Das Ergebnis ist ein Signal-Objekt: `value()`, `error()`, `status()` sowie `isLoading()`.

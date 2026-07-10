@@ -1,3 +1,5 @@
+Un historial Git limpio no es coquetería: es lo que hace que una revisión sea legible y un `git bisect` eficaz. El rebase interactivo (`git rebase -i`) es la herramienta para reescribir una rama antes de publicarla — fusionar, renombrar, reordenar, eliminar commits. Aquí tienes cómo manejarlo sin quemarte.
+
 ## Abrir el todo
 
 `git rebase -i` toma una **base**: todos los commits que vienen después de ella se vuelven editables. Generalmente se apunta a los N últimos commits de la rama actual.

@@ -1,3 +1,8 @@
+Entre microservicios, el JSON sobre HTTP/1.1 paga caro su comodidad: serialización verbosa,
+sin contrato fuerte, una conexión por llamada. **gRPC** responde a ese contexto preciso —
+binario compacto sobre HTTP/2, un contrato compartido y código generado en ambos lados. En
+.NET, la integración es de primera clase.
+
 ## El contrato .proto, fuente única de verdad
 
 Todo parte de un archivo `.proto`: describe los mensajes y el servicio, con independencia del

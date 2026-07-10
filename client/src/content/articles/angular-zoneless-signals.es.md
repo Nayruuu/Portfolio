@@ -1,3 +1,8 @@
+Durante años, Angular se apoyó en **zone.js** para saber cuándo volver a lanzar la
+detección de cambios: un monkey patch de todas las API asíncronas del navegador. Funciona,
+pero es una caja negra costosa. Desde Angular 21, se puede prescindir de él por completo con
+`provideZonelessChangeDetection()` y dejar que los **signals** dirijan la reactividad.
+
 ## Por qué deshacerse de zone.js
 
 zone.js intercepta `setTimeout`, las promesas, los eventos del DOM y desencadena un ciclo de

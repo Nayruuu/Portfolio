@@ -1,3 +1,5 @@
+Un secreto en un `appsettings.json` es un secreto en Git, y por tanto un secreto comprometido. La respuesta idiomática en Azure: **Key Vault** para almacenar los secretos, **Managed Identity** para acceder a ellos sin la más mínima contraseña. Al final, su configuración ya no contiene ninguna cadena sensible.
+
 ## El muro de autenticación… que desaparece
 
 El problema clásico: para leer un secreto en Key Vault, la API debe autenticarse — pero ¿dónde guardar el identificador que sirve para leer los identificadores? La **Managed Identity** rompe este círculo. Azure asigna una identidad a su recurso (Container App, App Service, VM); la plataforma inyecta y rota los tokens. No existe ninguna clave en el código.

@@ -1,3 +1,5 @@
+Eine saubere Git-Historie ist keine Spielerei: Sie macht eine Review lesbar und ein `git bisect` effektiv. Der interaktive Rebase (`git rebase -i`) ist das Werkzeug, um einen Branch vor dem Pushen umzuschreiben — Commits zusammenführen, umbenennen, umsortieren, entfernen. So handhabt man ihn, ohne sich zu verbrennen.
+
 ## Das Todo öffnen
 
 `git rebase -i` nimmt eine **Basis**: Alle Commits, die danach kommen, werden editierbar. In der Regel zielt man auf die letzten N Commits des aktuellen Branches.
