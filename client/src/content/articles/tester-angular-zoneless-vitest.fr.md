@@ -25,6 +25,7 @@ import { describe, expect, it } from 'vitest';
 
 it('rend le total', async () => {
   const fixture = TestBed.createComponent(CartComponent);
+
   fixture.componentRef.setInput('items', [{ price: 10, quantity: 2 }]);
   await fixture.whenStable();
   expect(fixture.nativeElement.textContent).toContain('20');

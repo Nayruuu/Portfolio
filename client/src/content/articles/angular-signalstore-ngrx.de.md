@@ -10,9 +10,7 @@ export const CartStore = signalStore(
   { providedIn: 'root' },
   withState<{ items: CartItem[] }>({ items: [] }),
   withComputed(({ items }) => ({
-    total: computed(() =>
-      items().reduce((sum, item) => sum + item.price * item.quantity, 0),
-    ),
+    total: computed(() => items().reduce((sum, item) => sum + item.price * item.quantity, 0)),
     count: computed(() => items().length),
   })),
   withMethods((store) => ({
