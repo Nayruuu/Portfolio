@@ -7,6 +7,7 @@ import {
   M2_OPENSPACE,
   M3_HR,
   M4_MEETINGS,
+  M5_CAFETERIA,
   SHOWROOM,
 } from '../levels';
 import { EXIT_RADIUS } from '../game-tuning';
@@ -37,6 +38,7 @@ describe('level registry', () => {
       m2: M2_OPENSPACE,
       m3: M3_HR,
       m4: M4_MEETINGS,
+      m5: M5_CAFETERIA,
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
@@ -97,11 +99,12 @@ describe('level registry', () => {
     }
   });
 
-  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4', () => {
+  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5', () => {
     expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
     expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
     expect(M3_HR.weapons?.map(([, , id]) => id)).toEqual(['chaingun']);
     expect(M4_MEETINGS.weapons?.map(([, , id]) => id)).toEqual(['rocket']);
+    expect(M5_CAFETERIA.weapons?.map(([, , id]) => id)).toEqual(['plasma']);
   });
 
   it('gates M4 behind the DIRECTOR badge found on the floor itself (red), yellow demoted to thematic dressing', () => {
@@ -133,8 +136,7 @@ describe('level registry', () => {
 
   it('wires M3 ⇄ M4 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
     expect(M3_HR.exits).toContainEqual({ x: 55, y: 22, to: 'm4', entry: 'from-m3' });
-    expect(M4_MEETINGS.exits).toEqual([{ x: 94.5, y: 57, to: 'm3', entry: 'from-m4' }]);
-    expect(M4_MEETINGS.exit).toBeDefined(); // the TEMP win marker (→ M5 when it ships)
+    expect(M4_MEETINGS.exits).toContainEqual({ x: 94.5, y: 57, to: 'm3', entry: 'from-m4' });
     for (const level of [M3_HR, M4_MEETINGS]) {
       for (const exit of level.exits ?? []) {
         for (const entry of Object.values(level.entries ?? {})) {
@@ -142,6 +144,28 @@ describe('level registry', () => {
         }
       }
     }
+  });
+
+  it('wires M4 ⇄ M5 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
+    expect(M4_MEETINGS.exits).toContainEqual({ x: 92, y: 17.5, to: 'm5', entry: 'from-m4' });
+    expect(M5_CAFETERIA.exits).toEqual([{ x: 118.5, y: 39, to: 'm4', entry: 'from-m5' }]);
+    expect(M4_MEETINGS.exit).toBeUndefined(); // onward is the real m5 graph edge now
+    expect(M5_CAFETERIA.exit).toBeDefined(); // the TEMP win marker (→ M6 when it ships)
+    for (const level of [M4_MEETINGS, M5_CAFETERIA]) {
+      for (const exit of level.exits ?? []) {
+        for (const entry of Object.values(level.entries ?? {})) {
+          expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
+        }
+      }
+    }
+  });
+
+  it('keeps M5 badge-free: no keycard objective, its one yellow door is thematic dressing on held clearance', () => {
+    expect(M5_CAFETERIA.keycards).toEqual([]);
+    expect(M5_CAFETERIA.doors.filter((d) => d.requiresCard === 'yellow')).toHaveLength(1);
+    expect(
+      M5_CAFETERIA.doors.some((d) => d.requiresCard === 'red' || d.requiresCard === 'blue'),
+    ).toBe(false);
   });
 
   it('keeps the M9 seam a stub: M3 ships no exit to the not-yet-registered archives', () => {

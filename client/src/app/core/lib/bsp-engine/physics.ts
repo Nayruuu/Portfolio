@@ -222,6 +222,30 @@ export function movePlayer(
 
 // Returns the floor height to auto-mantle up to when the spot `reach` ahead is a too-tall-but-climbable
 // ledge (rise > stepMax, ≤ climbMax, with headroom); null otherwise. A one-sided wall within reach is a
+// Does the segment cross a categorically uncrossable two-sided line (fence / glass)?
+function barrierCrossed(map: CompiledMap, ax: number, ay: number, bx: number, by: number): boolean {
+  const cross = (ox: number, oy: number, px: number, py: number, qx: number, qy: number): number =>
+    (px - ox) * (qy - oy) - (py - oy) * (qx - ox);
+
+  for (const line of map.source.linedefs) {
+    if (line.back === null || (line.fence !== true && line.glass !== true)) {
+      continue;
+    }
+    const v1 = map.source.vertices[line.v1];
+    const v2 = map.source.vertices[line.v2];
+    const d1 = cross(ax, ay, bx, by, v1.x, v1.y);
+    const d2 = cross(ax, ay, bx, by, v2.x, v2.y);
+    const d3 = cross(v1.x, v1.y, v2.x, v2.y, ax, ay);
+    const d4 = cross(v1.x, v1.y, v2.x, v2.y, bx, by);
+
+    if (d1 * d2 < 0 && d3 * d4 < 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // true wall, never a ledge.
 export function climbTarget(
   map: CompiledMap,
@@ -237,6 +261,12 @@ export function climbTarget(
 ): number | null {
   if (castRay(map, px, py, dx, dy, reach) !== null) {
     return null; // a solid one-sided wall — not a ledge
+  }
+  // castRay skips ALL two-sided lines, and every pre-M5 fence was safe only by height (≥2.8 > CLIMB_MAX):
+  // a fence/glass line inside the mantle window must still refuse the vault — "renders open, never
+  // crossable". Shut sliders are exempt: they auto-open at player proximity before a mantle can matter.
+  if (barrierCrossed(map, px, py, px + dx * reach, py + dy * reach)) {
+    return null;
   }
   const ahead =
     map.source.sectors[locateSubSector(map.root, px + dx * reach, py + dy * reach).sector];

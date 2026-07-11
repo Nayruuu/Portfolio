@@ -529,10 +529,12 @@ export const M4_MEETINGS: Level = {
   entries: {
     main: { x: 86, y: 57, angle: Math.PI },
     'from-m3': { x: 86, y: 57, angle: Math.PI },
+    'from-m5': { x: 88.8, y: 14, angle: Math.PI },
   },
-  exits: [{ x: 94.5, y: 57, to: 'm3', entry: 'from-m4' }],
-  // onward is the TEMP win exit at the post-arena service landing (→ M5 when it ships)
-  exit: [90.5, 16],
+  exits: [
+    { x: 94.5, y: 57, to: 'm3', entry: 'from-m4' },
+    { x: 92, y: 17.5, to: 'm5', entry: 'from-m4' },
+  ],
   doors: [
     { sector: built.gateSector, triggerX: 55, triggerY: 42, requiresCard: 'red' },
     { sector: built.everestDoorSector, triggerX: 96, triggerY: 12.5, requiresCard: 'yellow' },

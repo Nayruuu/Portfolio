@@ -261,6 +261,12 @@ const targets = [
     y: d.triggerY,
     tol: DOOR_TOLERANCE,
   })),
+  ...(LEVEL.weapons ?? []).map(([x, y, id]) => ({
+    label: `weapon(${id}) @ ${x},${y}`,
+    x,
+    y,
+    tol: TOLERANCE,
+  })),
   ...goals.map((g) => ({ label: g.label, x: g.x, y: g.y, tol: TOLERANCE })),
 ];
 const misses = targets.map((t) => ({ ...t, dist: distTo(t.x, t.y) })).filter((t) => t.dist > t.tol);
