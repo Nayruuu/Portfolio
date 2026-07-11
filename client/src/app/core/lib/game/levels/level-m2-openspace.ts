@@ -394,10 +394,11 @@ export const M2_OPENSPACE: Level = {
   entries: {
     main: { x: 26, y: 118, angle: Math.PI * 1.5 },
     'from-m1': { x: 26, y: 128, angle: Math.PI * 1.5 },
+    'from-m3': { x: 7.5, y: 119, angle: 0 }, // 3.5 units from the exit pad — clear of EXIT_RADIUS re-trigger
   },
-  // no graph exits yet: onward is the TEMP win exit on the stairwell landing (→ M3 when it ships); the M1
-  // edge is the passable live seam in the stub — walking through the window IS the crossing.
-  exit: [4, 119],
+  // onward = the walk-into graph edge down the gated stairwell; the M1 edge stays the passable live seam
+  // in the stub — walking through the window IS the crossing.
+  exits: [{ x: 4, y: 119, to: 'm3', entry: 'from-m2' }],
   doors: [
     { sector: built.gateSector, triggerX: 13, triggerY: 119, requiresCard: 'blue' },
     { sector: built.secretSector, triggerX: 89, triggerY: 43, requiresCard: null },

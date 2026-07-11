@@ -278,16 +278,23 @@ datacenter — a Spider-Mastermind homage built of server racks + ethernet, the 
 |----|----------|-------------------------|-----------|------|
 | M1 | Lobby / Accueil (**BUILT** — `level-m1-lobby.ts`, the premium reference) | `LOBBY`+`WOOD` / `CEIL_LUX` / `LOBBY_FLOOR` | — | arrival, things are wrong, first minions |
 | M2 | Open-space (cubicles) (**BUILT** — `level-m2-openspace.ts`, live M1 ⇄ M2 seam) | `CUBICLE` / `CONCRETE` / `CARPET` | employee (blue) | the cubicle farm, find the badge |
-| M3 | RH / Human Resources | `CUBICLE`+`SCREEN` / `TECHNICAL` / `CARPET` | employee (blue) | HR floor — holds the **secret exit → M9** |
-| M4 | Meeting rooms | `SCREEN` / `TECHNICAL` / `CARPET` | manager (yellow) | meeting hell — **MID-BOSS: Middle-Manager** |
-| M5 | Cafétéria / kitchen | `KITCHEN`+`DAMAGED` / `CONCRETE` / `TILE` | manager (yellow) | grimy breather |
-| M6 | Direction / C-suite | `EXEC`+`GLASS`+`PILLAR` / `TECHNICAL` / `MARBLE` | director (red) | glass exec offices, elite foes |
-| M7 | Server room | `RACKS`+`METAL` / `TECHNICAL` / `GRATING` | director (red) | approach the core |
+| M3 | RH / Human Resources | `CUBICLE`+`SCREEN` / `TECHNICAL` / `CARPET` | **manager (yellow) — introduced here** | HR floor — holds the **secret exit → M9** |
+| M4 | Meeting rooms | `SCREEN` / `TECHNICAL` / `CARPET` | **director (red) — introduced here** | meeting hell — **MID-BOSS: Middle-Manager** |
+| M5 | Cafétéria / kitchen | `KITCHEN`+`DAMAGED` / `CONCRETE` / `TILE` | thematic (yellow clearance, opens) | grimy breather |
+| M6 | Direction / C-suite | `EXEC`+`GLASS`+`PILLAR` / `TECHNICAL` / `MARBLE` | thematic (red clearance, opens) | glass exec offices, elite foes |
+| M7 | Server room | `RACKS`+`METAL` / `TECHNICAL` / `GRATING` | thematic (red clearance, opens) | approach the core |
 | M8 | Datacenter / AI core | `RACKS`+`DAMAGED` / `NEON` / `GRATING` | — | **BOSS: the Overseer's spider** |
 | M9 | Archives (SECRET) | `DAMAGED` / `CEIL_DAMAGED` / `SLAB` | — | hidden derelict (reached from M3) |
 
 Every palette key above EXISTS + is wired. Badge/locked doors use `DOOR_RED / DOOR_BLUE / DOOR_YELLOW`
-matching the badge colour. Every level ends at an `exit` (→ next floor); M8 ends on the boss arena. Keep each
+matching the badge colour.
+
+**BADGE ECONOMY (structural rule, decided 2026-07-12):** badges PERSIST across floors (the navigable-building
+doctrine) and only 3 colours exist — so a gate only *gates* when it requires a colour the player does not
+hold yet. Each colour is therefore an OBJECTIVE exactly once: **blue → M2, yellow → M3, red → M4.** From M5
+on, badge doors are THEMATIC (they open on already-held clearance and read as world-building); those floors'
+objectives must come from something else (arena locks, boss beats, secrets, routing). Never author a floor
+whose central objective is a badge colour the player already carries. Every level ends at an `exit` (→ next floor); M8 ends on the boss arena. Keep each
 floor's identity DISTINCT (its own wall+ceiling+floor palette + light mood). The "Badge door" column is the
 floor's DEFAULT gate tier — you may add a second inner badge/door for a side vault if it fits the layout.
 

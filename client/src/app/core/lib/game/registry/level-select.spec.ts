@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE, SHOWROOM } from '../levels';
+import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE, M3_HR, SHOWROOM } from '../levels';
+import { EXIT_RADIUS } from '../game-tuning';
 import {
   DEFAULT_LEVEL_KEY,
   LEVELS,
@@ -25,6 +26,7 @@ describe('level registry', () => {
     expect(LEVELS).toEqual({
       m1: M1_LOBBY,
       m2: M2_OPENSPACE,
+      m3: M3_HR,
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
@@ -85,16 +87,35 @@ describe('level registry', () => {
     }
   });
 
-  it('stages the episode progression: the pistol + the chainsaw bonus in M1, the shotgun on M2’s print-room approach', () => {
+  it('stages the episode progression: pistol + chainsaw in M1, the shotgun in M2, the chaingun on M3’s dais', () => {
     expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
     expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
+    expect(M3_HR.weapons?.map(([, , id]) => id)).toEqual(['chaingun']);
   });
 
-  it('owns the M1 ↔ M2 edge with the PASSABLE seam alone — no walk-into exits remain there', () => {
+  it('owns the M1 ↔ M2 edge with the PASSABLE seam alone — M2’s only walk-into exit leads onward to M3', () => {
     expect(M1_LOBBY.exits).toBeUndefined();
-    expect(M2_OPENSPACE.exits).toBeUndefined();
+    expect(M2_OPENSPACE.exits?.map((e) => e.to)).toEqual(['m3']);
     expect(M2_OPENSPACE.entries?.['from-m1']).toBeDefined();
     expect(M1_LOBBY.entries?.['from-above']).toBeDefined();
+  });
+
+  it('wires M2 ⇄ M3 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
+    expect(M2_OPENSPACE.exits).toEqual([{ x: 4, y: 119, to: 'm3', entry: 'from-m2' }]);
+    expect(M3_HR.exits).toEqual([{ x: 122.5, y: 17, to: 'm2', entry: 'from-m3' }]);
+    // an arrival inside its own zone's exit pad would bounce straight back — keep a clear margin
+    for (const level of [M2_OPENSPACE, M3_HR]) {
+      for (const exit of level.exits ?? []) {
+        for (const entry of Object.values(level.entries ?? {})) {
+          expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
+        }
+      }
+    }
+  });
+
+  it('keeps the M9 seam a stub: M3 ships no exit to the not-yet-registered archives', () => {
+    expect(M3_HR.exits?.some((e) => e.to === 'm9')).toBe(false);
+    expect(M3_HR.exit).toBeDefined(); // the TEMP win marker (→ M4 when it ships)
   });
 
   it('keeps the hangar self-contained since M2 took the seam slot (no seam, no graph edges, own exit)', () => {

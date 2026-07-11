@@ -5,4 +5,5 @@ export * from './level-demo';
 export * from './level-hangar';
 export * from './level-m1-lobby';
 export * from './level-m2-openspace';
+export * from './level-m3-hr';
 export * from './level-showroom';

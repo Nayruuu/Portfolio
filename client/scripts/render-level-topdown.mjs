@@ -3,7 +3,7 @@
 // the walkable space with the REAL movement physics (`movePlayer`) to assert every badge / door trigger /
 // exit is reachable from the spawn.
 //   Usage: node render-level-topdown.mjs [name] [--strict]
-//   `name` (default `m1-lobby`) picks src/app/features/bsp-demo/level-<name>.ts → docs/levels/<name>-map.png.
+//   `name` (default `m1-lobby`) picks src/app/core/lib/game/levels/level-<name>.ts → docs/levels/<name>-map.png.
 //   Reachability failures WARN by default; `--strict` turns them into exit(1) (the CI-able mode).
 import { build } from 'esbuild';
 import sharp from 'sharp';
@@ -16,7 +16,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2).filter((a) => a !== '--strict');
 const STRICT = process.argv.includes('--strict');
 const NAME = args[0] ?? 'm1-lobby';
-const SRC = resolve(HERE, `../src/app/features/bsp-demo/level-${NAME}.ts`);
+const SRC = resolve(HERE, `../src/app/core/lib/game/levels/level-${NAME}.ts`);
 const OUT_PNG = resolve(HERE, `../../docs/levels/${NAME}-map.png`);
 const TMP = resolve(HERE, '.level-bundle.mjs');
 const TMP_ENTRY = resolve(HERE, '.level-entry.ts');
