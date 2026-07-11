@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMY_SPECS, IMP_SPEC, LOSTSOUL_SPEC, PINKY_SPEC, SHOTGUNGUY_SPEC } from './enemy-specs';
+import {
+  ENEMY_SPECS,
+  IMP_SPEC,
+  KNIGHT_SPEC,
+  LOSTSOUL_SPEC,
+  PINKY_SPEC,
+  SHOTGUNGUY_SPEC,
+} from './enemy-specs';
 
 describe('ENEMY_SPECS roster', () => {
   it('references every per-enemy spec const, in authoring order', () => {
-    expect(ENEMY_SPECS).toEqual([PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC]);
+    expect(ENEMY_SPECS).toEqual([
+      PINKY_SPEC,
+      SHOTGUNGUY_SPEC,
+      IMP_SPEC,
+      LOSTSOUL_SPEC,
+      KNIGHT_SPEC,
+    ]);
   });
 
   it('exposes the exact walk-atlas key set', () => {
@@ -12,6 +25,7 @@ describe('ENEMY_SPECS roster', () => {
       'SHOTGUNGUY_WALK',
       'IMP_WALK',
       'LOSTSOUL_WALK',
+      'KNIGHT_WALK',
     ]);
   });
 
@@ -20,6 +34,8 @@ describe('ENEMY_SPECS roster', () => {
     expect(SHOTGUNGUY_SPEC.thrower).toBeUndefined();
     expect(IMP_SPEC.thrower).toBeDefined();
     expect(IMP_SPEC.shotgun).toBeUndefined();
+    expect(KNIGHT_SPEC.thrower).toBeDefined();
+    expect(KNIGHT_SPEC.shotgun).toBeUndefined();
     expect(PINKY_SPEC.shotgun).toBeUndefined();
     expect(PINKY_SPEC.thrower).toBeUndefined();
     expect(LOSTSOUL_SPEC.shotgun).toBeUndefined();

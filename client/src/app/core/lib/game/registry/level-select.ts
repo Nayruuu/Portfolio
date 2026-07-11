@@ -1,5 +1,5 @@
 import type { Level } from '../level';
-import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE } from '../levels';
+import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE, SHOWROOM } from '../levels';
 
 // Zone registry + dev-time URL overrides (?level ?spawn=x,y,angle[rad] ?noenemies ?perflog ?nogov
 // ?renderer=cpu). Parsing/resolution are PURE and junk-tolerant — a bad URL never crashes the game.
@@ -10,6 +10,7 @@ export const LEVELS: Readonly<Record<string, Level>> = {
   accueil: ACCUEIL,
   hangar: HANGAR,
   demo: DEMO_LEVEL,
+  showroom: SHOWROOM,
 };
 
 export const DEFAULT_LEVEL_KEY = 'm1';

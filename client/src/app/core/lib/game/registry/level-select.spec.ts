@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE } from '../levels';
+import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE, SHOWROOM } from '../levels';
 import {
   DEFAULT_LEVEL_KEY,
   LEVELS,
@@ -28,6 +28,7 @@ describe('level registry', () => {
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
+      showroom: SHOWROOM,
     });
     expect(DEFAULT_LEVEL_KEY).toBe('m1');
     expect(LEVELS[DEFAULT_LEVEL_KEY]).toBe(M1_LOBBY);

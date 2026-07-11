@@ -1,4 +1,4 @@
-import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC } from '../enemy';
+import { PINKY_SPEC, SHOTGUNGUY_SPEC, IMP_SPEC, LOSTSOUL_SPEC, KNIGHT_SPEC } from '../enemy';
 import { RoomBuilder } from '../../bsp-engine';
 import type { MapSource } from '../../bsp-engine';
 import type { Level } from '../level';
@@ -370,6 +370,8 @@ export const M2_OPENSPACE: Level = {
     { spec: LOSTSOUL_SPEC, x: 40, y: 56 },
     { spec: PINKY_SPEC, x: 17, y: 108 },
     { spec: PINKY_SPEC, x: 20, y: 110 },
+    { spec: KNIGHT_SPEC, x: 48, y: 58 },
+    { spec: KNIGHT_SPEC, x: 107, y: 96 },
   ],
   health: [
     [68, 51, 'small'],
