@@ -25,7 +25,7 @@
   "copy": "copiar",
   "copyDone": "✓ copiado",
   "gameOver": "GAME OVER",
-  "gameControls": "[WASD] Mover · [Ratón] Apuntar · [Clic] Disparar · [R / Clic der.] Recargar · [1–8 / Rueda] Arma · [E] Usar",
+  "gameControls": "[WASD] Mover · [Ratón] Apuntar · [Clic] Disparar · [R / Clic der.] Recargar · [1–8 / Rueda] Arma · [F] Pantalla completa",
   "aria": {
     "play": "Reproducir",
     "pause": "Pausar",
@@ -37,12 +37,6 @@
     "dropPhoto": "Suelta tu foto aquí",
     "gameStart": "Iniciar el juego",
     "gameExit": "Salir del juego",
-    "gameMute": "Silenciar la música",
-    "gameUnmute": "Activar la música",
-    "gameFire": "Disparar",
-    "gameUse": "Usar",
-    "gameSwitch": "Cambiar de arma",
-    "gameReload": "Recargar",
     "pip": "Minirreproductor"
   },
   "bio": "Desarrollador full-stack .NET / Angular con perfil DevOps en Azure Cloud. También cómodo con Flutter + Firebase. Construyo productos, los despliego, los monitorizo.",

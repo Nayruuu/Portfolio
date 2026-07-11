@@ -566,7 +566,8 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   bay, and the **keycard** slots.
 
   Controls: desktop uses **WASD/ZQSD + arrows** to move/strafe with **pointer-lock mouse-look**, **click**
-  to fire, **1–8 / wheel** to switch weapons, **R / right-click** to reload, and **E** to use/activate; the
+  to fire, **1–8 / wheel** to switch weapons, **R / right-click** to reload, and **F** to toggle
+  fullscreen (doors are proximity-automatic — there is no use key); the
   game's movement + wheel are `preventDefault`ed so they never scroll the page, and inside the player an
   in-canvas **controls recap** (from the `gameControls` string, split on ` · `) is shown. On a
   coarse-pointer device the game becomes a **fixed full-viewport overlay** (`.player:has(sd-bsp-demo)`)

@@ -10,10 +10,4 @@ export interface Aria {
   dropPhoto: string;
   gameStart: string;
   gameExit: string;
-  gameMute: string;
-  gameUnmute: string;
-  gameFire: string;
-  gameUse: string;
-  gameSwitch: string;
-  gameReload: string;
 }

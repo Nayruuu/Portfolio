@@ -25,7 +25,7 @@
   "copy": "copy",
   "copyDone": "✓ copied",
   "gameOver": "GAME OVER",
-  "gameControls": "[WASD] Move · [Mouse] Look · [Click] Fire · [R / Right-click] Reload · [1–8 / Wheel] Weapon · [E] Use",
+  "gameControls": "[WASD] Move · [Mouse] Look · [Click] Fire · [R / Right-click] Reload · [1–8 / Wheel] Weapon · [F] Fullscreen",
   "aria": {
     "play": "Play",
     "pause": "Pause",
@@ -37,12 +37,6 @@
     "dropPhoto": "Drop your photo here",
     "gameStart": "Start the game",
     "gameExit": "Exit the game",
-    "gameMute": "Mute the music",
-    "gameUnmute": "Unmute the music",
-    "gameFire": "Fire",
-    "gameUse": "Use",
-    "gameSwitch": "Switch weapon",
-    "gameReload": "Reload",
     "pip": "Mini player"
   },
   "bio": "Full-stack .NET / Angular dev with a DevOps streak on Azure Cloud. Also fluent in Flutter + Firebase. I build products, ship them, and keep them healthy.",
