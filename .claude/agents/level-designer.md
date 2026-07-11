@@ -278,8 +278,8 @@ datacenter — a Spider-Mastermind homage built of server racks + ethernet, the 
 |----|----------|-------------------------|-----------|------|
 | M1 | Lobby / Accueil (**BUILT** — `level-m1-lobby.ts`, the premium reference) | `LOBBY`+`WOOD` / `CEIL_LUX` / `LOBBY_FLOOR` | — | arrival, things are wrong, first minions |
 | M2 | Open-space (cubicles) (**BUILT** — `level-m2-openspace.ts`, live M1 ⇄ M2 seam) | `CUBICLE` / `CONCRETE` / `CARPET` | employee (blue) | the cubicle farm, find the badge |
-| M3 | RH / Human Resources | `CUBICLE`+`SCREEN` / `TECHNICAL` / `CARPET` | **manager (yellow) — introduced here** | HR floor — holds the **secret exit → M9** |
-| M4 | Meeting rooms | `SCREEN` / `TECHNICAL` / `CARPET` | **director (red) — introduced here** | meeting hell — **MID-BOSS: Middle-Manager** |
+| M3 | RH / Human Resources (**BUILT** — `level-m3-hr.ts`, M2 ⇄ M3 graph airlock) | `CUBICLE`+`SCREEN` / `TECHNICAL` / `CARPET` | **manager (yellow) — introduced here** | HR floor — holds the **secret exit → M9** |
+| M4 | Meeting rooms (**BUILT** — `level-m4-meetings.ts`, M3 ⇄ M4 graph airlock, boss slot empty) | `SCREEN` / `TECHNICAL` / `CARPET` | **director (red) — introduced here** | meeting hell — **MID-BOSS: Middle-Manager** |
 | M5 | Cafétéria / kitchen | `KITCHEN`+`DAMAGED` / `CONCRETE` / `TILE` | thematic (yellow clearance, opens) | grimy breather |
 | M6 | Direction / C-suite | `EXEC`+`GLASS`+`PILLAR` / `TECHNICAL` / `MARBLE` | thematic (red clearance, opens) | glass exec offices, elite foes |
 | M7 | Server room | `RACKS`+`METAL` / `TECHNICAL` / `GRATING` | thematic (red clearance, opens) | approach the core |
@@ -289,7 +289,7 @@ datacenter — a Spider-Mastermind homage built of server racks + ethernet, the 
 Every palette key above EXISTS + is wired. Badge/locked doors use `DOOR_RED / DOOR_BLUE / DOOR_YELLOW`
 matching the badge colour.
 
-**BADGE ECONOMY (structural rule, decided 2026-07-12):** badges PERSIST across floors (the navigable-building
+**BADGE ECONOMY (structural rule, decided 2026-07-11):** badges PERSIST across floors (the navigable-building
 doctrine) and only 3 colours exist — so a gate only *gates* when it requires a colour the player does not
 hold yet. Each colour is therefore an OBJECTIVE exactly once: **blue → M2, yellow → M3, red → M4.** From M5
 on, badge doors are THEMATIC (they open on already-held clearance and read as world-building); those floors'

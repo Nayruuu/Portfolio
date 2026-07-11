@@ -141,6 +141,7 @@ for (const e of LEVEL.enemies) {
 for (const h of LEVEL.health) parts.push(dot(h[0], h[1], 4.5, '#ff6ea8', '+', '#fff'));
 for (const a of LEVEL.armor) parts.push(dot(a[0], a[1], 4.5, '#4d7cff', 'A', '#fff'));
 for (const a of LEVEL.ammo) parts.push(dot(a[0], a[1], 4, '#e8d44d', 'a'));
+for (const w of LEVEL.weapons ?? []) parts.push(dot(w[0], w[1], 5.5, '#c2f04c', 'G')); // G(un) — W is the whiteboard prop
 for (const k of LEVEL.keycards) parts.push(dot(k[0], k[1], 5, k[2], 'K', '#fff'));
 for (const d of LEVEL.doors) parts.push(dot(d.triggerX, d.triggerY, 5, '#ff9b21', 'D', '#fff'));
 // Goals: the legacy exit (X) and/or the open-building graph exits (Z → a sibling zone).
@@ -175,6 +176,7 @@ const rows = [
   ['#ff6ea8', 'health (+)'],
   ['#4d7cff', 'armor (A)'],
   ['#e8d44d', 'ammo (a)'],
+  ['#c2f04c', 'weapon pickup (W)'],
   ['#b5651d', 'barrel (b)'],
   ['#2e8b57', 'prop plant (P)'],
   ['#7a5cd6', 'decor (m/T/W/c/o)'],

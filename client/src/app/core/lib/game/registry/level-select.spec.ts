@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { ACCUEIL, DEMO_LEVEL, HANGAR, M1_LOBBY, M2_OPENSPACE, M3_HR, SHOWROOM } from '../levels';
+import {
+  ACCUEIL,
+  DEMO_LEVEL,
+  HANGAR,
+  M1_LOBBY,
+  M2_OPENSPACE,
+  M3_HR,
+  M4_MEETINGS,
+  SHOWROOM,
+} from '../levels';
 import { EXIT_RADIUS } from '../game-tuning';
 import {
   DEFAULT_LEVEL_KEY,
@@ -27,6 +36,7 @@ describe('level registry', () => {
       m1: M1_LOBBY,
       m2: M2_OPENSPACE,
       m3: M3_HR,
+      m4: M4_MEETINGS,
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
@@ -87,10 +97,18 @@ describe('level registry', () => {
     }
   });
 
-  it('stages the episode progression: pistol + chainsaw in M1, the shotgun in M2, the chaingun on M3’s dais', () => {
+  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4', () => {
     expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
     expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
     expect(M3_HR.weapons?.map(([, , id]) => id)).toEqual(['chaingun']);
+    expect(M4_MEETINGS.weapons?.map(([, , id]) => id)).toEqual(['rocket']);
+  });
+
+  it('gates M4 behind the DIRECTOR badge found on the floor itself (red), yellow demoted to thematic dressing', () => {
+    expect(M4_MEETINGS.keycards.map(([, , color]) => color)).toEqual(['red']);
+    expect(M4_MEETINGS.doors.filter((d) => d.requiresCard === 'red')).toHaveLength(1);
+    // the Everest door opens on M3's yellow badge — a "manager doors no longer stop you" beat
+    expect(M4_MEETINGS.doors.some((d) => d.requiresCard === 'yellow')).toBe(true);
   });
 
   it('owns the M1 ↔ M2 edge with the PASSABLE seam alone — M2’s only walk-into exit leads onward to M3', () => {
@@ -102,7 +120,7 @@ describe('level registry', () => {
 
   it('wires M2 ⇄ M3 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
     expect(M2_OPENSPACE.exits).toEqual([{ x: 4, y: 119, to: 'm3', entry: 'from-m2' }]);
-    expect(M3_HR.exits).toEqual([{ x: 122.5, y: 17, to: 'm2', entry: 'from-m3' }]);
+    expect(M3_HR.exits).toContainEqual({ x: 122.5, y: 17, to: 'm2', entry: 'from-m3' });
     // an arrival inside its own zone's exit pad would bounce straight back — keep a clear margin
     for (const level of [M2_OPENSPACE, M3_HR]) {
       for (const exit of level.exits ?? []) {
@@ -113,9 +131,22 @@ describe('level registry', () => {
     }
   });
 
+  it('wires M3 ⇄ M4 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
+    expect(M3_HR.exits).toContainEqual({ x: 55, y: 22, to: 'm4', entry: 'from-m3' });
+    expect(M4_MEETINGS.exits).toEqual([{ x: 94.5, y: 57, to: 'm3', entry: 'from-m4' }]);
+    expect(M4_MEETINGS.exit).toBeDefined(); // the TEMP win marker (→ M5 when it ships)
+    for (const level of [M3_HR, M4_MEETINGS]) {
+      for (const exit of level.exits ?? []) {
+        for (const entry of Object.values(level.entries ?? {})) {
+          expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
+        }
+      }
+    }
+  });
+
   it('keeps the M9 seam a stub: M3 ships no exit to the not-yet-registered archives', () => {
     expect(M3_HR.exits?.some((e) => e.to === 'm9')).toBe(false);
-    expect(M3_HR.exit).toBeDefined(); // the TEMP win marker (→ M4 when it ships)
+    expect(M3_HR.exit).toBeUndefined(); // onward is the real m4 graph edge now
   });
 
   it('keeps the hangar self-contained since M2 took the seam slot (no seam, no graph edges, own exit)', () => {

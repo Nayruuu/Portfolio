@@ -483,10 +483,12 @@ export const M3_HR: Level = {
   entries: {
     main: { x: 114, y: 17, angle: Math.PI },
     'from-m2': { x: 114, y: 17, angle: Math.PI },
+    'from-m4': { x: 58.5, y: 21, angle: 0 }, // on the landing, clear of the m4 exit's re-trigger radius
   },
-  exits: [{ x: 122.5, y: 17, to: 'm2', entry: 'from-m3' }],
-  // onward is the TEMP win exit at the gated stairwell landing (→ M4 when it ships)
-  exit: [55, 22],
+  exits: [
+    { x: 122.5, y: 17, to: 'm2', entry: 'from-m3' },
+    { x: 55, y: 22, to: 'm4', entry: 'from-m3' },
+  ],
   doors: [
     { sector: built.gateSector, triggerX: 73, triggerY: 22, requiresCard: 'yellow' },
     { sector: built.archDoorSector, triggerX: 30.5, triggerY: 65, requiresCard: null },
