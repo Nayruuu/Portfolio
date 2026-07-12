@@ -124,7 +124,7 @@ function buildMap(): { map: MapSource; closetDoorSector: number } {
     ceilTex: 'TECHNICAL',
   });
 
-  b.connect(ENORTH, SSTEP[0], { tex: 'METAL' });
+  b.connect(ENORTH, SSTEP[0], { at: [54, 34, 58, 34], tex: 'METAL' }); // `at` or the stair's west flank opens too
   b.connect(CAT, SSTEP[2], { tex: 'METAL' });
   b.connect(ENORTH, CAT, { kind: 'fence', tex: 'METAL' });
   b.connect(ESOUTH, CAT, { at: [40, 56, 42, 58], tex: 'METAL' }); // the broken end — onto the rubble mound
@@ -133,7 +133,9 @@ function buildMap(): { map: MapSource; closetDoorSector: number } {
 
   // S2 "Overlook cache": mound 1.3 above the maze, cache 1.2 above the mound — 3.5 clears the 2.4
   // direct-mantle ceiling from the floor, so the chain (or the catwalk end) is the only way up.
-  const MOUND = b.island(ESOUTH, poly([39.7, 56.3, 41.9, 58.5, 40.8, 59.6, 38.6, 57.4]), {
+  // Both rings are inset ≥0.5 from their host's boundary: an island edge that lands ON its host's
+  // edge is swallowed by the BSP (the sector compiles with zero subsectors — a floor that isn't there).
+  const MOUND = b.island(ESOUTH, poly([39.5, 56.5, 41.7, 58.7, 40.1, 60.3, 37.9, 58.1]), {
     floorZ: 2.3,
     ceilZ: 4.6,
     floorTex: 'STEP',
@@ -142,7 +144,7 @@ function buildMap(): { map: MapSource; closetDoorSector: number } {
     wallTex: 'DAMAGED',
   });
 
-  b.island(MOUND, poly([40, 57.2, 41.3, 58.5, 40.5, 59.3, 39.2, 58]), {
+  b.island(MOUND, poly([39.5, 57.21, 40.99, 58.7, 40.1, 59.59, 38.61, 58.1]), {
     floorZ: 3.5,
     ceilZ: 4.6,
     floorTex: 'STEP',
@@ -324,7 +326,7 @@ export const M9_ARCHIVES: Level = {
     [33, 20], // staples
     [11.5, 53], // nails — the E5 bait in the dead-end alcove
     [62.5, 46.5], // canisters
-    [40.25, 58.25], // cells — S2 cache
+    [39.8, 58.4], // cells — S2 cache, on the 3.5 platform
     [26, 92.5], // batteries
     [34, 92.5], // server-cell
   ],

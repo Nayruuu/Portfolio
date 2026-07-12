@@ -285,6 +285,27 @@ const entombed = placements
   .filter((p) => p.dist > TOLERANCE);
 misses.push(...entombed.map((p) => ({ ...p, label: `placement ${p.label}` })));
 
+// Orphan-sector audit: an island edge that lands exactly ON its host's boundary edge is swallowed
+// by the BSP — the sector compiles with ZERO subsectors, so its floor does not exist (the renderer
+// still draws its risers, and the flood still walks the footprint at the HOST's height, which is
+// why a 2D reachability check cannot see it). M9's secret platform shipped this way.
+const owned = new Set(compiled.subsectors.map((s) => s.sector));
+const declared = new Set();
+
+for (const line of map.linedefs) {
+  if (line.front) declared.add(line.front.sector);
+  if (line.back) declared.add(line.back.sector);
+}
+for (const sector of declared) {
+  if (!owned.has(sector)) {
+    misses.push({
+      label: `sector ${sector} is an ORPHAN — zero subsectors in the compiled BSP (an island edge coincident with its host's boundary?); its floor does not exist in play`,
+      dist: Infinity,
+      tol: 0,
+    });
+  }
+}
+
 // Door audit: a trigger must sit INSIDE its own door sector. A shut door is a solid block, so a
 // trigger placed beyond it is only reachable from one side — the door opens one-way and seals
 // whoever stands on the far side (M3 shipped three of these; the return from M9 landed in one).
