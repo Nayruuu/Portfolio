@@ -586,10 +586,13 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   boss slot awaits the Middle-Manager), **`level-m5-cafeteria`** (the grimy kitchen breather),
   **`level-m6-direction`** (the C-suite — rank as altitude, the CEO tier behind the thematic red door),
   **`level-m7-serveurs`** (the server room — the glass core shaft descent, and the BFG earned across the
-  generator-hall climax), and the earlier **worked-example levels** —
+  generator-hall climax), **`level-m8-datacenter`** (the AI core — the glass-ringed orbit around the boss
+  rotunda, an empty slot awaiting the Overseer's spider, and the episode's WIN exit up the epilogue
+  stairs), and the earlier **worked-example levels** —
   `level-accueil` (a hand-authored reception→climax techbase), **`level-hangar`** (a large original
-  techbase showcasing a spiral staircase + verticality) and the engine-showcase `demo-map`.
-  Planned: the episode's finale floors (**M8 Datacenter** boss arena, **M9 Archives** secret), the **two
+  techbase showcasing a spiral staircase + verticality), the engine-showcase `demo-map`, and the
+  URL-only `level-showroom` prop gallery (the permanent art bench — every prop/pickup/weapon, zero enemies).
+  Planned: the secret floor (**M9 Archives**, off M3's stub), the **two
   bosses**, **audio** (music + SFX), and the **menu / intertitle screens**. The per-level canon (the 9-floor table,
   palettes, badges, beats AND each level's built/planned status) lives in the `level-designer` agent —
   this doc doesn't duplicate it.

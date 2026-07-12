@@ -10,6 +10,7 @@ import {
   M5_CAFETERIA,
   M6_DIRECTION,
   M7_SERVEURS,
+  M8_DATACENTER,
   SHOWROOM,
 } from '../levels';
 import { EXIT_RADIUS } from '../game-tuning';
@@ -43,6 +44,7 @@ describe('level registry', () => {
       m5: M5_CAFETERIA,
       m6: M6_DIRECTION,
       m7: M7_SERVEURS,
+      m8: M8_DATACENTER,
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
@@ -85,8 +87,10 @@ describe('level registry', () => {
   });
 
   it('arms the fists-only start: every level with enemies places a RANGED weapon pickup (valid placements everywhere)', () => {
-    // approved arsenal-pause floors: campaign arrivals carry the full M1-M5 arsenal, the floor seeds none
-    const ARSENAL_PAUSE_KEYS = ['m6'];
+    // approved arsenal-pause floors: EVERY arrival carries the accumulated arsenal — graph airlocks
+    // by ownership travel, death respawns by resetPlayer(keepArsenal) — so the floor seeds none
+    // (m6 = the pause, m8 = complete since the M7 BFG)
+    const ARSENAL_PAUSE_KEYS = ['m6', 'm8'];
 
     for (const [key, level] of Object.entries(LEVELS)) {
       for (const [x, y, id] of level.weapons ?? []) {
@@ -106,7 +110,7 @@ describe('level registry', () => {
     }
   });
 
-  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5, the BFG in M7 — M6 ships none (the arsenal pause)', () => {
+  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5, the BFG in M7 — M6 ships none (the arsenal pause), M8 none (arsenal complete)', () => {
     expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
     expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
     expect(M3_HR.weapons?.map(([, , id]) => id)).toEqual(['chaingun']);
@@ -114,6 +118,7 @@ describe('level registry', () => {
     expect(M5_CAFETERIA.weapons?.map(([, , id]) => id)).toEqual(['plasma']);
     expect(M6_DIRECTION.weapons).toBeUndefined();
     expect(M7_SERVEURS.weapons?.map(([, , id]) => id)).toEqual(['bfg']);
+    expect(M8_DATACENTER.weapons).toEqual([]);
   });
 
   it('gates M4 behind the DIRECTOR badge found on the floor itself (red), yellow demoted to thematic dressing', () => {
@@ -185,9 +190,8 @@ describe('level registry', () => {
   it('wires M6 ⇄ M7 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
     expect(M6_DIRECTION.exits).toHaveLength(2);
     expect(M6_DIRECTION.exits).toContainEqual({ x: 11, y: 42, to: 'm7', entry: 'from-m6' });
-    expect(M7_SERVEURS.exits).toEqual([{ x: 110.8, y: 21, to: 'm6', entry: 'from-m7' }]);
+    expect(M7_SERVEURS.exits).toContainEqual({ x: 110.8, y: 21, to: 'm6', entry: 'from-m7' });
     expect(M6_DIRECTION.exit).toBeUndefined(); // onward is the real m7 graph edge now
-    expect(M7_SERVEURS.exit).toBeDefined(); // the TEMP win marker (→ M8 when it ships)
     for (const level of [M6_DIRECTION, M7_SERVEURS]) {
       for (const exit of level.exits ?? []) {
         for (const entry of Object.values(level.entries ?? {})) {
@@ -195,6 +199,39 @@ describe('level registry', () => {
         }
       }
     }
+  });
+
+  it('wires M7 ⇄ M8 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
+    expect(M7_SERVEURS.exits).toHaveLength(2);
+    expect(M7_SERVEURS.exits).toContainEqual({ x: 69, y: 105.8, to: 'm8', entry: 'from-m7' });
+    expect(M8_DATACENTER.exits).toEqual([{ x: 56, y: 5, to: 'm7', entry: 'from-m8' }]);
+    expect(M7_SERVEURS.exit).toBeUndefined(); // onward is the real m8 graph edge now
+    for (const level of [M7_SERVEURS, M8_DATACENTER]) {
+      for (const exit of level.exits ?? []) {
+        for (const entry of Object.values(level.entries ?? {})) {
+          expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
+        }
+      }
+    }
+  });
+
+  it('ends the episode in M8: the only campaign floor carrying the WIN exit, badge-free, arsenal complete', () => {
+    for (const level of [
+      M1_LOBBY,
+      M2_OPENSPACE,
+      M3_HR,
+      M4_MEETINGS,
+      M5_CAFETERIA,
+      M6_DIRECTION,
+      M7_SERVEURS,
+    ]) {
+      expect(level.exit).toBeUndefined();
+    }
+    expect(M8_DATACENTER.exit).toEqual([77, 81]);
+    expect(M8_DATACENTER.keycards).toEqual([]);
+    // one unmarked secret door only — no badge gate of any colour
+    expect(M8_DATACENTER.doors).toHaveLength(1);
+    expect(M8_DATACENTER.doors.every((d) => d.requiresCard === null)).toBe(true);
   });
 
   it('keeps M5 badge-free: no keycard objective, its one yellow door is thematic dressing on held clearance', () => {

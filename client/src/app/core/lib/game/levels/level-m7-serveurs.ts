@@ -335,7 +335,8 @@ function buildMap(): {
   });
 
   b.connect(SEUIL, RDOOR, { tex: 'DOOR_RED' });
-  const SAS = b.room(rect(64, 100.5, 74, 104), {
+  // Deep enough that the m8 exit trigger and the from-m8 arrival pad sit clear of each other.
+  const SAS = b.room(rect(64, 100.5, 74, 107), {
     floorZ: -2.8,
     ceilZ: 1.2,
     floorTex: 'GRATING',
@@ -457,10 +458,12 @@ export const M7_SERVEURS: Level = {
   entries: {
     main: { x: 105, y: 21, angle: Math.PI },
     'from-m6': { x: 105, y: 21, angle: Math.PI },
+    'from-m8': { x: 69, y: 101.8, angle: Math.PI * 1.5 },
   },
-  exits: [{ x: 110.8, y: 21, to: 'm6', entry: 'from-m7' }],
-  // onward is the TEMP win exit in the sas beyond the blast door (→ M8 when it ships)
-  exit: [69, 102.5],
+  exits: [
+    { x: 110.8, y: 21, to: 'm6', entry: 'from-m7' },
+    { x: 69, y: 105.8, to: 'm8', entry: 'from-m7' },
+  ],
   doors: [
     { sector: built.redDoorSector, triggerX: 69, triggerY: 99.25, requiresCard: 'red' },
     { sector: built.s1DoorSector, triggerX: 99, triggerY: 41.6, requiresCard: null },

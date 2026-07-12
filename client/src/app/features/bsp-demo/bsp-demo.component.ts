@@ -606,10 +606,14 @@ export class BspDemoComponent {
   }
 
   private resetGame(): void {
-    const freshRun = this.combatRuntime.won; // a completed run restarts clean; death keeps earned badges (see PickupRuntime.reset)
-    this.combatRuntime.resetPlayer();
+    // Death keeps run-level progression (badges + arsenal — see PickupRuntime.reset / resetPlayer)
+    // and respawns on the current floor; a won run restarts clean at the session's entry level.
+    const freshRun = this.combatRuntime.won;
+    const target = freshRun ? this.params.levelKey : this.zoneRuntime.currentKey;
+
+    this.combatRuntime.resetPlayer(!freshRun);
     this.zoneRuntime.cancelTransition();
     this.pickupRuntime.reset(freshRun);
-    this.zoneRuntime.loadZone(this.zoneRuntime.currentKey, undefined, true); // fresh=true → resets the building + respawns everything
+    this.zoneRuntime.loadZone(target, undefined, true); // fresh=true → resets the building + respawns everything
   }
 }

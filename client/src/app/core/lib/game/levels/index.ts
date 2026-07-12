@@ -10,4 +10,5 @@ export * from './level-m4-meetings';
 export * from './level-m5-cafeteria';
 export * from './level-m6-direction';
 export * from './level-m7-serveurs';
+export * from './level-m8-datacenter';
 export * from './level-showroom';

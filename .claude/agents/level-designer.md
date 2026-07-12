@@ -287,7 +287,7 @@ datacenter — a Spider-Mastermind homage built of server racks + ethernet, the 
 | M5 | Cafétéria / kitchen (**BUILT** — `level-m5-cafeteria.ts`, M4 ⇄ M5 graph airlock) | `KITCHEN`+`DAMAGED` / `CONCRETE` / `TILE` | thematic (yellow clearance, opens) | grimy breather |
 | M6 | Direction / C-suite (**BUILT** — `level-m6-direction.ts`, M5 ⇄ M6 graph airlock) | `EXEC`+`GLASS`+`PILLAR` / `TECHNICAL` / `MARBLE` | thematic (red clearance, opens) | glass exec offices, elite foes |
 | M7 | Server room (**BUILT** — `level-m7-serveurs.ts`, M6 ⇄ M7 graph airlock, ships the BFG) | `RACKS`+`METAL` / `TECHNICAL` / `GRATING` | thematic (red clearance, opens) | approach the core |
-| M8 | Datacenter / AI core | `RACKS`+`DAMAGED` / `NEON` / `GRATING` | — | **BOSS: the Overseer's spider** — cells economy: the BFG arrives from M7 with only ~2 power boxes; the contract caps M8 at ONE `server_cell` box, so the plan must budget around it (or explicitly propose a contract change) |
+| M8 | Datacenter / AI core (**BUILT** — `level-m8-datacenter.ts`, M7 ⇄ M8 graph airlock, carries the episode WIN `exit`, boss slot empty) | `RACKS`+`DAMAGED` / `NEON` / `GRATING` | — | **BOSS: the Overseer's spider** — the arena's two placeholder waves (~1150 HP) return their budget to the boss when it ships; cells economy: ONE `server_cell` box, ON the dais |
 | M9 | Archives (SECRET) | `DAMAGED` / `CEIL_DAMAGED` / `SLAB` | — | hidden derelict (reached from M3) |
 
 Every palette key above EXISTS + is wired. Badge/locked doors use `DOOR_RED / DOOR_BLUE / DOOR_YELLOW`
@@ -298,7 +298,9 @@ doctrine) and only 3 colours exist — so a gate only *gates* when it requires a
 hold yet. Each colour is therefore an OBJECTIVE exactly once: **blue → M2, yellow → M3, red → M4.** From M5
 on, badge doors are THEMATIC (they open on already-held clearance and read as world-building); those floors'
 objectives must come from something else (arena locks, boss beats, secrets, routing). Never author a floor
-whose central objective is a badge colour the player already carries. Every level ends at an `exit` (→ next floor); M8 ends on the boss arena. Keep each
+whose central objective is a badge colour the player already carries. Campaign floors chain by
+reciprocal graph `exits` edges (airlocks); **M8 alone carries the WIN `exit`** — the episode ends at
+La Sortie behind the arena. Keep each
 floor's identity DISTINCT (its own wall+ceiling+floor palette + light mood). The "Badge door" column is the
 floor's DEFAULT gate tier — you may add a second inner badge/door for a side vault if it fits the layout.
 

@@ -619,7 +619,7 @@ describe('CombatRuntime — the new-game reset', () => {
     cr.addArmor(50);
     cr.win();
 
-    cr.resetPlayer();
+    cr.resetPlayer(false);
 
     expect(cr.hp).toBe(100);
     expect(cr.armor).toBe(0);
@@ -628,6 +628,30 @@ describe('CombatRuntime — the new-game reset', () => {
     expect(cr.weaponIndex).toBe(0);
     expect(cr.owns('chaingun')).toBe(false);
     expect(cr.owns('fist')).toBe(true);
+    expect(cr.mag[CHAINGUN]).toBe(80);
+    expect(cr.reserveOf('bullets')).toBe(Math.min(ammoTypeMax('bullets'), 50));
+  });
+
+  it('keeps the earned arsenal (and the equipped weapon) on a death respawn', () => {
+    // Weapon ownership is run-level progression like badges: stripping it on death would fists-start
+    // the player onto floors that seed no weapon (the M6/M8 arsenal pauses).
+    const { cr } = setup();
+
+    cr.seedReserves();
+    cr.grantWeapon('chaingun');
+    cr.selectWeapon(CHAINGUN);
+    cr.beginFire();
+    cr.stepWeapon(0.02, false);
+    cr.hurtPlayer(999);
+
+    expect(cr.dead).toBe(true);
+
+    cr.resetPlayer(true);
+
+    expect(cr.hp).toBe(100);
+    expect(cr.dead).toBe(false);
+    expect(cr.owns('chaingun')).toBe(true);
+    expect(cr.weaponIndex).toBe(CHAINGUN);
     expect(cr.mag[CHAINGUN]).toBe(80);
     expect(cr.reserveOf('bullets')).toBe(Math.min(ammoTypeMax('bullets'), 50));
   });

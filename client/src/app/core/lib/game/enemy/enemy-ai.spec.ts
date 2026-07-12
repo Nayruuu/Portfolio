@@ -43,8 +43,23 @@ const WALLED_SOURCE: MapSource = {
   linedefs: [...OPEN_SOURCE.linedefs, wall(4, 5)],
 };
 
+const glassLine = (v1: number, v2: number): LineDef => ({
+  v1,
+  v2,
+  front: side,
+  back: { ...side },
+  glass: true,
+});
+
+const GLASSED_SOURCE: MapSource = {
+  ...OPEN_SOURCE,
+  vertices: [...OPEN_SOURCE.vertices, { x: 25, y: 15 }, { x: 25, y: 45 }],
+  linedefs: [...OPEN_SOURCE.linedefs, glassLine(4, 5)],
+};
+
 const OPEN = buildBsp(OPEN_SOURCE);
 const WALLED = buildBsp(WALLED_SOURCE);
+const GLASSED = buildBsp(GLASSED_SOURCE);
 
 const PLAYER_X = 30;
 const PLAYER_Y = 30;
@@ -158,6 +173,17 @@ describe('stepEnemies — chase / hold / retreat by the standoff band', () => {
     expect(e.walkDist).toBeGreaterThan(0);
   });
 
+  it('stays idle behind a glass pane — combat sight is glass-blocked', () => {
+    const e = makeEnemy(MELEE, { x: 20, y: 30 });
+    const frame = makeFrame([e], { map: GLASSED });
+
+    stepEnemies(frame, 0.1);
+
+    expect(e.x).toBe(20);
+    expect(e.walkDist).toBe(0);
+    expect(e.windup).toBe(0);
+  });
+
   it('a shotgunner beyond its gun range closes in rather than firing', () => {
     const e = makeEnemy(SHOTGUNNER, { x: 5, y: 30, cooldown: 0 });
     const frame = makeFrame([e]);
@@ -199,6 +225,24 @@ describe('stepEnemies — the attack gate + release', () => {
     expect(e.windup).toBe(0);
     expect(frame.hurtSpy).toHaveBeenCalledWith(MELEE.meleeDamage);
     expect(e.cooldown).toBeCloseTo(MELEE.cooldownTime, 5);
+  });
+
+  it('a melee release dies on a glass pane between the fangs and the player', () => {
+    const e = makeEnemy(MELEE, { x: 24.4, y: 30, windup: 0.1 });
+    const frame = makeFrame([e], { map: GLASSED, px: 25.4 });
+
+    stepEnemies(frame, 0.1);
+
+    expect(frame.hurtSpy).not.toHaveBeenCalled();
+  });
+
+  it('a thrower release holds fire behind a glass pane (the lob would die on it)', () => {
+    const e = makeEnemy(THROWER, { x: 20, y: 30, windup: 0.1 });
+    const frame = makeFrame([e], { map: GLASSED });
+
+    stepEnemies(frame, 0.1);
+
+    expect(frame.shots).toHaveLength(0);
   });
 
   it('releases a shotgun blast for a shotgunner', () => {
@@ -297,6 +341,15 @@ describe('fireShotgun', () => {
   it('does nothing when a wall blocks the blast', () => {
     const e = makeEnemy(SHOTGUNNER, { x: 20, y: 30 });
     const frame = makeFrame([e], { map: WALLED });
+
+    fireShotgun(frame, e, 1, 0, 8);
+
+    expect(frame.hurtSpy).not.toHaveBeenCalled();
+  });
+
+  it('does nothing through a glass pane', () => {
+    const e = makeEnemy(SHOTGUNNER, { x: 20, y: 30 });
+    const frame = makeFrame([e], { map: GLASSED });
 
     fireShotgun(frame, e, 1, 0, 8);
 

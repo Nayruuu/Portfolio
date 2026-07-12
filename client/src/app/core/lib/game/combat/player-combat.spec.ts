@@ -33,7 +33,17 @@ const OPEN_SOURCE: MapSource = {
   ],
   linedefs: [wall(0, 1), wall(1, 2), wall(2, 3), wall(3, 0)],
 };
+const GLASSED_SOURCE: MapSource = {
+  ...OPEN_SOURCE,
+  vertices: [...OPEN_SOURCE.vertices, { x: 35, y: 15 }, { x: 35, y: 45 }],
+  linedefs: [
+    ...OPEN_SOURCE.linedefs,
+    { v1: 4, v2: 5, front: side, back: { ...side }, glass: true },
+  ],
+};
+
 const OPEN = buildBsp(OPEN_SOURCE);
+const GLASSED = buildBsp(GLASSED_SOURCE);
 
 const PLAYER_X = 30;
 const PLAYER_Y = 30;
@@ -225,6 +235,17 @@ describe('resolveHitscan', () => {
     expect(near.alive).toBe(false);
     expect(far.alive).toBe(true);
     expect(bag.impactSpy).toHaveBeenCalledWith('impact_metal', 40, 30, 1);
+  });
+
+  it('stops at a glass pane — the target behind is unhittable, the impact sparks on the pane', () => {
+    const enemy = makeEnemy(40, 30);
+    const bag = makeBag({ enemies: [enemy], map: GLASSED });
+
+    const hit = resolveHitscan(bag, 1, 0, 0, 40, 'impact_metal', 25);
+
+    expect(hit).toBe(false);
+    expect(bag.hurtSpy).not.toHaveBeenCalled();
+    expect(bag.impactSpy).toHaveBeenCalledWith('impact_metal', 35, 30, EYE_Z);
   });
 
   it('routes damage to a hit enemy through the hurt callback', () => {

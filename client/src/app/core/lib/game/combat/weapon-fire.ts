@@ -70,7 +70,8 @@ export function resolveHitscan(
   damage: number,
 ): boolean {
   const vSlope = frame.vSlope;
-  const wall = castRay(frame.map, frame.cameraX, frame.cameraY, dx, dy, range);
+  // blockGlass: bullets die on panes like projectiles do — glass is inert to combat both ways
+  const wall = castRay(frame.map, frame.cameraX, frame.cameraY, dx, dy, range, true);
   const reach = wall === null ? range : wall.dist;
   // muzzle grace lets a steep shot off a raised platform clear its own lip
   const ground = castFloorCeil(

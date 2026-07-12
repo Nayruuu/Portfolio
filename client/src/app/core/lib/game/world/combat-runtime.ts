@@ -412,7 +412,9 @@ export class CombatRuntime {
     this.stressAiMs = performance.now() - t0;
   }
 
-  public resetPlayer(): void {
+  // keepArsenal=true is the death respawn: weapon ownership is run-level progression (the badges'
+  // twin) — stripping it would fists-start the player onto floors that seed no weapon (M6/M8 pauses).
+  public resetPlayer(keepArsenal: boolean): void {
     this.isDead = false;
     this.deadTimer = 0;
     this.hasWon = false;
@@ -420,15 +422,17 @@ export class CombatRuntime {
     this.health = PLAYER_MAX_HEALTH;
     this.armorValue = 0;
     this.hurt = 0;
-    this.owned.clear();
-    for (const id of STARTING_WEAPON_IDS) {
-      this.owned.add(id);
+    if (!keepArsenal) {
+      this.owned.clear();
+      for (const id of STARTING_WEAPON_IDS) {
+        this.owned.add(id);
+      }
+      this.activeWeapon = 0;
     }
-    this.activeWeapon = 0;
     this.view = new WeaponView(
-      ARSENAL[0],
-      weaponViewConfig(ARSENAL[0]),
-      reloadViewConfig(ARSENAL[0]),
+      ARSENAL[this.activeWeapon],
+      weaponViewConfig(ARSENAL[this.activeWeapon]),
+      reloadViewConfig(ARSENAL[this.activeWeapon]),
     );
     this.refillMag();
     this.seedReserves();

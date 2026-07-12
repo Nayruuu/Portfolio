@@ -36,7 +36,9 @@ function stepEnemy(frame: CombatFrame, e: CombatEnemy, dt: number): void {
 
     return;
   }
-  if (castRay(frame.map, e.x, e.y, nx, ny, dist) !== null) {
+  // blockGlass: combat sight stops at panes — glass shows the world but wakes no one (glassed
+  // ambushes stay cold until a real opening; the M8 orbit's waves must not pre-aggro on the walk)
+  if (castRay(frame.map, e.x, e.y, nx, ny, dist, true) !== null) {
     return;
   }
   const canMelee = s.meleeReach > 0 && dist <= s.meleeReach;
@@ -64,11 +66,18 @@ function releaseAttack(
 
   e.windup = Math.max(0, e.windup - dt);
   if (e.windup === 0) {
-    if (s.meleeReach > 0 && dist <= s.meleeReach) {
+    if (
+      s.meleeReach > 0 &&
+      dist <= s.meleeReach &&
+      castRay(frame.map, e.x, e.y, nx, ny, dist, true) === null
+    ) {
       frame.hurt(s.meleeDamage);
     } else if (s.shotgun !== undefined) {
       fireShotgun(frame, e, nx, ny, dist);
-    } else if (s.thrower !== undefined && castRay(frame.map, e.x, e.y, nx, ny, dist) === null) {
+    } else if (
+      s.thrower !== undefined &&
+      castRay(frame.map, e.x, e.y, nx, ny, dist, true) === null
+    ) {
       throwProjectile(frame, e, nx, ny);
     }
     e.cooldown = s.cooldownTime;
@@ -115,7 +124,7 @@ export function fireShotgun(
   if (
     gun !== undefined &&
     dist <= gun.range &&
-    castRay(frame.map, e.x, e.y, nx, ny, dist) === null
+    castRay(frame.map, e.x, e.y, nx, ny, dist, true) === null
   ) {
     frame.hurt(gun.damage);
   }
