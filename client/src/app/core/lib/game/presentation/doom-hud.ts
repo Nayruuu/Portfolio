@@ -147,7 +147,7 @@ export class DoomHud {
     this.heldCards.add(color);
   }
 
-  /** Drop every held keycard (called on a level swap / respawn, where keys reset per floor). */
+  /** Drop every held keycard (fresh-run reset only — badges persist across floors and death). */
   public clearCards(): void {
     this.heldCards.clear();
   }

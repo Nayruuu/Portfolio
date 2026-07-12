@@ -583,11 +583,14 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   through the M2 ⇄ M3 graph airlock — filing hall, sunken interview pit, mezzanine offices, the yellow
   badge on the DRH desk, two secrets incl. the condemned-archives stub for M9), **`level-m4-meetings`**
   (meeting hell — glass war rooms, a tiered amphi, the red DIRECTOR badge, and the boardroom arena whose
-  boss slot awaits the Middle-Manager), and the earlier **worked-example levels** —
+  boss slot awaits the Middle-Manager), **`level-m5-cafeteria`** (the grimy kitchen breather),
+  **`level-m6-direction`** (the C-suite — rank as altitude, the CEO tier behind the thematic red door),
+  **`level-m7-serveurs`** (the server room — the glass core shaft descent, and the BFG earned across the
+  generator-hall climax), and the earlier **worked-example levels** —
   `level-accueil` (a hand-authored reception→climax techbase), **`level-hangar`** (a large original
   techbase showcasing a spiral staircase + verticality) and the engine-showcase `demo-map`.
-  Planned: the rest of the **9-level episode** (M5 Cafétéria → … → M9 Archives), plus the **two bosses**,
-  **audio** (music + SFX), and the **menu / intertitle screens**. The per-level canon (the 9-floor table,
+  Planned: the episode's finale floors (**M8 Datacenter** boss arena, **M9 Archives** secret), the **two
+  bosses**, **audio** (music + SFX), and the **menu / intertitle screens**. The per-level canon (the 9-floor table,
   palettes, badges, beats AND each level's built/planned status) lives in the `level-designer` agent —
   this doc doesn't duplicate it.
 

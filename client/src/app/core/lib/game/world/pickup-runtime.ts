@@ -140,10 +140,14 @@ export class PickupRuntime {
     }
   }
 
-  public reset(): void {
-    this.badges.clear();
+  // clearBadges=false is the death respawn: colours gate exactly once, so stripping a spent badge
+  // can seal the player behind its own door with no way to re-earn it (M6 CEO pocket ⇄ M7 red door).
+  public reset(clearBadges: boolean): void {
+    if (clearBadges) {
+      this.badges.clear();
+      this.hooks.hud.clearCards();
+    }
     this.hintClock = 0;
-    this.hooks.hud.clearCards();
     this.flash = 0;
   }
 

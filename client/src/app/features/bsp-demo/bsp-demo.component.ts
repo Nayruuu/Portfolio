@@ -606,9 +606,10 @@ export class BspDemoComponent {
   }
 
   private resetGame(): void {
+    const freshRun = this.combatRuntime.won; // a completed run restarts clean; death keeps earned badges (see PickupRuntime.reset)
     this.combatRuntime.resetPlayer();
     this.zoneRuntime.cancelTransition();
-    this.pickupRuntime.reset();
+    this.pickupRuntime.reset(freshRun);
     this.zoneRuntime.loadZone(this.zoneRuntime.currentKey, undefined, true); // fresh=true → resets the building + respawns everything
   }
 }

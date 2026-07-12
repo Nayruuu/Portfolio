@@ -405,7 +405,7 @@ describe('PickupRuntime — feedback timers + reset', () => {
     expect(pr.pickupFx).toBe(0);
   });
 
-  it('clears the badge set, the HUD card bay, and both timers on reset', () => {
+  it('clears the badge set, the HUD card bay, and both timers on a fresh-run reset', () => {
     const { pr, hud, world } = setup({
       keycards: [keycard(0, 0, 'blue')],
       doors: [door(0, 0, 'blue')],
@@ -415,7 +415,7 @@ describe('PickupRuntime — feedback timers + reset', () => {
     pr.stepObjective(0.1);
     expect(pr.pickupFx).toBeGreaterThan(0);
 
-    pr.reset();
+    pr.reset(true);
 
     expect(clearCards).toHaveBeenCalledTimes(1);
     expect(pr.pickupFx).toBe(0);
@@ -423,5 +423,26 @@ describe('PickupRuntime — feedback timers + reset', () => {
 
     pr.stepDoors(0.1);
     expect(world.doors[0].openness).toBe(0);
+  });
+
+  it('keeps earned badges (and their HUD cards) on a death respawn', () => {
+    // Badges gate exactly once: a respawned player stripped of a spent colour can be sealed behind
+    // its door with no way to re-earn it (the M6 CEO pocket ⇄ M7 red-door softlock).
+    const { pr, hud, world } = setup({
+      keycards: [keycard(0, 0, 'blue')],
+      doors: [door(0, 0, 'blue')],
+    });
+    const clearCards = vi.spyOn(hud, 'clearCards');
+
+    pr.stepObjective(0.1);
+
+    pr.reset(false);
+
+    expect(clearCards).not.toHaveBeenCalled();
+    expect(pr.pickupFx).toBe(0);
+    expect(pr.hint).toBe(0);
+
+    pr.stepDoors(0.1);
+    expect(world.doors[0].openness).toBeGreaterThan(0);
   });
 });

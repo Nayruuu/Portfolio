@@ -552,10 +552,12 @@ export const M6_DIRECTION: Level = {
   entries: {
     main: { x: 116, y: 58, angle: Math.PI },
     'from-m5': { x: 116, y: 58, angle: Math.PI },
+    'from-m7': { x: 7.5, y: 40, angle: -Math.PI / 2 }, // faces the stairs — facing the exit pad re-triggers the return
   },
-  exits: [{ x: 122.3, y: 58, to: 'm5', entry: 'from-m6' }],
-  // onward is the TEMP win exit at the private stair landing (→ M7 when it ships)
-  exit: [11, 42],
+  exits: [
+    { x: 122.3, y: 58, to: 'm5', entry: 'from-m6' },
+    { x: 11, y: 42, to: 'm7', entry: 'from-m6' },
+  ],
   doors: [
     { sector: built.redDoorSector, triggerX: 26.75, triggerY: 17, requiresCard: 'red' },
     { sector: built.s1DoorSector, triggerX: 3.25, triggerY: 72, requiresCard: null },

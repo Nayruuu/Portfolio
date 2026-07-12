@@ -9,6 +9,7 @@ import {
   M4_MEETINGS,
   M5_CAFETERIA,
   M6_DIRECTION,
+  M7_SERVEURS,
   SHOWROOM,
 } from '../levels';
 import { EXIT_RADIUS } from '../game-tuning';
@@ -41,6 +42,7 @@ describe('level registry', () => {
       m4: M4_MEETINGS,
       m5: M5_CAFETERIA,
       m6: M6_DIRECTION,
+      m7: M7_SERVEURS,
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
@@ -104,13 +106,14 @@ describe('level registry', () => {
     }
   });
 
-  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5 — M6 ships none (the arsenal pause before the finale)', () => {
+  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5, the BFG in M7 — M6 ships none (the arsenal pause)', () => {
     expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
     expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
     expect(M3_HR.weapons?.map(([, , id]) => id)).toEqual(['chaingun']);
     expect(M4_MEETINGS.weapons?.map(([, , id]) => id)).toEqual(['rocket']);
     expect(M5_CAFETERIA.weapons?.map(([, , id]) => id)).toEqual(['plasma']);
     expect(M6_DIRECTION.weapons).toBeUndefined();
+    expect(M7_SERVEURS.weapons?.map(([, , id]) => id)).toEqual(['bfg']);
   });
 
   it('gates M4 behind the DIRECTOR badge found on the floor itself (red), yellow demoted to thematic dressing', () => {
@@ -168,10 +171,24 @@ describe('level registry', () => {
 
   it('wires M5 ⇄ M6 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
     expect(M5_CAFETERIA.exits).toContainEqual({ x: 60, y: 58, to: 'm6', entry: 'from-m5' });
-    expect(M6_DIRECTION.exits).toEqual([{ x: 122.3, y: 58, to: 'm5', entry: 'from-m6' }]);
+    expect(M6_DIRECTION.exits).toContainEqual({ x: 122.3, y: 58, to: 'm5', entry: 'from-m6' });
     expect(M5_CAFETERIA.exit).toBeUndefined(); // onward is the real m6 graph edge now
-    expect(M6_DIRECTION.exit).toBeDefined(); // the TEMP win marker (→ M7 when it ships)
     for (const level of [M5_CAFETERIA, M6_DIRECTION]) {
+      for (const exit of level.exits ?? []) {
+        for (const entry of Object.values(level.entries ?? {})) {
+          expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
+        }
+      }
+    }
+  });
+
+  it('wires M6 ⇄ M7 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
+    expect(M6_DIRECTION.exits).toHaveLength(2);
+    expect(M6_DIRECTION.exits).toContainEqual({ x: 11, y: 42, to: 'm7', entry: 'from-m6' });
+    expect(M7_SERVEURS.exits).toEqual([{ x: 110.8, y: 21, to: 'm6', entry: 'from-m7' }]);
+    expect(M6_DIRECTION.exit).toBeUndefined(); // onward is the real m7 graph edge now
+    expect(M7_SERVEURS.exit).toBeDefined(); // the TEMP win marker (→ M8 when it ships)
+    for (const level of [M6_DIRECTION, M7_SERVEURS]) {
       for (const exit of level.exits ?? []) {
         for (const entry of Object.values(level.entries ?? {})) {
           expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
@@ -193,6 +210,14 @@ describe('level registry', () => {
     expect(M6_DIRECTION.doors.filter((d) => d.requiresCard === 'red')).toHaveLength(1);
     expect(
       M6_DIRECTION.doors.some((d) => d.requiresCard === 'blue' || d.requiresCard === 'yellow'),
+    ).toBe(false);
+  });
+
+  it('keeps M7 badge-free: no keycard objective, its one red door is the thematic M8 blast door', () => {
+    expect(M7_SERVEURS.keycards).toEqual([]);
+    expect(M7_SERVEURS.doors.filter((d) => d.requiresCard === 'red')).toHaveLength(1);
+    expect(
+      M7_SERVEURS.doors.some((d) => d.requiresCard === 'blue' || d.requiresCard === 'yellow'),
     ).toBe(false);
   });
 

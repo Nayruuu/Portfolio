@@ -270,11 +270,25 @@ const targets = [
   ...goals.map((g) => ({ label: g.label, x: g.x, y: g.y, tol: TOLERANCE })),
 ];
 const misses = targets.map((t) => ({ ...t, dist: distTo(t.x, t.y) })).filter((t) => t.dist > t.tol);
+
+// Placement audit: every authored entity must stand in walkable space. A coordinate inside a
+// hole/dead space is never flooded — an entombed spawn is invisible, unkillable, uncollectable,
+// and fails SILENTLY in-game, so it must fail HERE.
+const placements = [
+  ...LEVEL.enemies.map((e, i) => ({ label: `enemy[${i}] @ ${e.x},${e.y}`, x: e.x, y: e.y })),
+  ...LEVEL.ammo.map(([x, y], i) => ({ label: `ammo[${i}] @ ${x},${y}`, x, y })),
+  ...LEVEL.health.map(([x, y], i) => ({ label: `health[${i}] @ ${x},${y}`, x, y })),
+  ...LEVEL.armor.map(([x, y], i) => ({ label: `armor[${i}] @ ${x},${y}`, x, y })),
+];
+const entombed = placements
+  .map((p) => ({ ...p, dist: distTo(p.x, p.y) }))
+  .filter((p) => p.dist > TOLERANCE);
+misses.push(...entombed.map((p) => ({ ...p, label: `placement ${p.label}` })));
 const ms = Math.round(performance.now() - t0);
 
 if (misses.length === 0) {
   console.log(
-    `✓ reachability: spawn → badges/doors/exit (${targets.length} targets, ${visited.size} cells flooded, ${ms}ms)`,
+    `✓ reachability: spawn → badges/doors/exit (${targets.length} targets, ${placements.length} placements, ${visited.size} cells flooded, ${ms}ms)`,
   );
 } else {
   for (const m of misses) {

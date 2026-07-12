@@ -161,10 +161,14 @@ Place as `{ spec: <SPEC>, x, y }` in the `enemies` array. Their COMBAT NUMBERS d
 - `SHOTGUNGUY_SPEC` — "Security Guard": tanky CLOSE-range hitscan (hp 150, spd 0.9, **range 3.5**, dmg 18) —
   denies rooms / doorways / the badge at arm's length. **NEVER on ledges or long sightlines** (he can't reach
   you there — a slow shuffling target, not a threat).
-- `IMP_SPEC` — "Junior Office Drone": fragile lane-holder (hp 45, projectile range 12, dodgeable) — the ONLY
-  ledge / long-sightline unit in the roster.
+- `IMP_SPEC` — "Junior Office Drone": fragile lane-holder (hp 45, projectile range 12, dodgeable) — the CHEAP
+  ledge / long-sightline unit; spend it in numbers.
 - `LOSTSOUL_SPEC` — "Remote Consultant Husk": FAST lunger (hp 70, spd 2.8, dmg 16, ~0.9s recovery) — ambush
   closer; pair with an IMP lane to force dodging-while-retreating.
+- `KNIGHT_SPEC` — "Middle Manager" (the rank-and-file unit — NOT the M4 mid-boss, its future baron variant):
+  the elite anchor (hp 120, spd 1.3, standoff 4.5, TPS-report projectile
+  dmg 14 / **range 11**, melee 10) — set-piece guard, arena pressure, the EXPENSIVE long-sightline unit where
+  the IMP is the cheap one. Elite floors (M6+) lean on him; never as filler.
 
 The two bosses (Middle-Manager M4, the Overseer's spider M8) are NOT in the roster yet — for those floors,
 place the normal roster and leave a clear arena where the boss will go (note it in your report).
@@ -278,12 +282,12 @@ datacenter — a Spider-Mastermind homage built of server racks + ethernet, the 
 |----|----------|-------------------------|-----------|------|
 | M1 | Lobby / Accueil (**BUILT** — `level-m1-lobby.ts`, the premium reference) | `LOBBY`+`WOOD` / `CEIL_LUX` / `LOBBY_FLOOR` | — | arrival, things are wrong, first minions |
 | M2 | Open-space (cubicles) (**BUILT** — `level-m2-openspace.ts`, live M1 ⇄ M2 seam) | `CUBICLE` / `CONCRETE` / `CARPET` | employee (blue) | the cubicle farm, find the badge |
-| M3 | RH / Human Resources (**BUILT** — `level-m3-hr.ts`, M2 ⇄ M3 graph airlock) | `CUBICLE`+`SCREEN` / `TECHNICAL` / `CARPET` | **manager (yellow) — introduced here** | HR floor — holds the **secret exit → M9** |
+| M3 | RH / Human Resources (**BUILT** — `level-m3-hr.ts`, M2 ⇄ M3 graph airlock) | `CUBICLE`+`SCREEN` / `TECHNICAL` / `CARPET` | **manager (yellow) — introduced here** | HR floor — holds the **secret exit → M9** (stub in code, wired when M9 ships) |
 | M4 | Meeting rooms (**BUILT** — `level-m4-meetings.ts`, M3 ⇄ M4 graph airlock, boss slot empty) | `SCREEN` / `TECHNICAL` / `CARPET` | **director (red) — introduced here** | meeting hell — **MID-BOSS: Middle-Manager** |
-| M5 | Cafétéria / kitchen | `KITCHEN`+`DAMAGED` / `CONCRETE` / `TILE` | thematic (yellow clearance, opens) | grimy breather |
-| M6 | Direction / C-suite | `EXEC`+`GLASS`+`PILLAR` / `TECHNICAL` / `MARBLE` | thematic (red clearance, opens) | glass exec offices, elite foes |
-| M7 | Server room | `RACKS`+`METAL` / `TECHNICAL` / `GRATING` | thematic (red clearance, opens) | approach the core |
-| M8 | Datacenter / AI core | `RACKS`+`DAMAGED` / `NEON` / `GRATING` | — | **BOSS: the Overseer's spider** |
+| M5 | Cafétéria / kitchen (**BUILT** — `level-m5-cafeteria.ts`, M4 ⇄ M5 graph airlock) | `KITCHEN`+`DAMAGED` / `CONCRETE` / `TILE` | thematic (yellow clearance, opens) | grimy breather |
+| M6 | Direction / C-suite (**BUILT** — `level-m6-direction.ts`, M5 ⇄ M6 graph airlock) | `EXEC`+`GLASS`+`PILLAR` / `TECHNICAL` / `MARBLE` | thematic (red clearance, opens) | glass exec offices, elite foes |
+| M7 | Server room (**BUILT** — `level-m7-serveurs.ts`, M6 ⇄ M7 graph airlock, ships the BFG) | `RACKS`+`METAL` / `TECHNICAL` / `GRATING` | thematic (red clearance, opens) | approach the core |
+| M8 | Datacenter / AI core | `RACKS`+`DAMAGED` / `NEON` / `GRATING` | — | **BOSS: the Overseer's spider** — cells economy: the BFG arrives from M7 with only ~2 power boxes; the contract caps M8 at ONE `server_cell` box, so the plan must budget around it (or explicitly propose a contract change) |
 | M9 | Archives (SECRET) | `DAMAGED` / `CEIL_DAMAGED` / `SLAB` | — | hidden derelict (reached from M3) |
 
 Every palette key above EXISTS + is wired. Badge/locked doors use `DOOR_RED / DOOR_BLUE / DOOR_YELLOW`
@@ -300,8 +304,8 @@ floor's DEFAULT gate tier — you may add a second inner badge/door for a side v
 
 **Difficulty curve across the episode**: M1 sparse, husks-first (built: 7 foes) → M2-M3 growing packs + the
 first LOSTSOULs → M4 pressure peak into the mid-boss arena → M5 a deliberate lull (few but mean, grimy) →
-M6-M7 the hardest mixes (LOSTSOUL pairs + IMP lanes + SHOTGUNGUY chokes — "elite" = composition + tighter
-placement, not new specs) → M8 arena waves around the boss slot → M9 scarce but vicious. Enemy TOTAL grows
+M6-M7 the hardest mixes (KNIGHT anchors + LOSTSOUL pairs + IMP lanes + SHOTGUNGUY chokes — "elite" =
+composition + tighter placement) → M8 arena waves around the boss slot → M9 scarce but vicious. Enemy TOTAL grows
 floor-over-floor; ammo generosity shrinks.
 
 ## Phase 1 — the PLAN (deliver this FIRST; do NOT write any level code or `.ts` files)
