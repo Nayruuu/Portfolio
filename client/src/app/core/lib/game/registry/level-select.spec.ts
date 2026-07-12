@@ -11,6 +11,7 @@ import {
   M6_DIRECTION,
   M7_SERVEURS,
   M8_DATACENTER,
+  M9_ARCHIVES,
   SHOWROOM,
 } from '../levels';
 import { EXIT_RADIUS } from '../game-tuning';
@@ -45,6 +46,7 @@ describe('level registry', () => {
       m6: M6_DIRECTION,
       m7: M7_SERVEURS,
       m8: M8_DATACENTER,
+      m9: M9_ARCHIVES,
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
@@ -110,7 +112,7 @@ describe('level registry', () => {
     }
   });
 
-  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5, the BFG in M7 — M6 ships none (the arsenal pause), M8 none (arsenal complete)', () => {
+  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5, the BFG in M7 — M6 ships none (the arsenal pause), M8 none (arsenal complete), and the SECRET M9 pays the detour with an early plasma (the PX-1 prototype)', () => {
     expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
     expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
     expect(M3_HR.weapons?.map(([, , id]) => id)).toEqual(['chaingun']);
@@ -119,6 +121,9 @@ describe('level registry', () => {
     expect(M6_DIRECTION.weapons).toBeUndefined();
     expect(M7_SERVEURS.weapons?.map(([, , id]) => id)).toEqual(['bfg']);
     expect(M8_DATACENTER.weapons).toEqual([]);
+    // the secret floor hangs off M3, so its plasma can land two floors before M5's copy — that IS
+    // the reward (a repeat pickup degrades to an ammo top-up for whoever already holds it)
+    expect(M9_ARCHIVES.weapons?.map(([, , id]) => id)).toEqual(['plasma']);
   });
 
   it('gates M4 behind the DIRECTOR badge found on the floor itself (red), yellow demoted to thematic dressing', () => {
@@ -224,6 +229,7 @@ describe('level registry', () => {
       M5_CAFETERIA,
       M6_DIRECTION,
       M7_SERVEURS,
+      M9_ARCHIVES,
     ]) {
       expect(level.exit).toBeUndefined();
     }
@@ -258,9 +264,25 @@ describe('level registry', () => {
     ).toBe(false);
   });
 
-  it('keeps the M9 seam a stub: M3 ships no exit to the not-yet-registered archives', () => {
-    expect(M3_HR.exits?.some((e) => e.to === 'm9')).toBe(false);
+  it('wires M3 ⇄ M9 as reciprocal graph edges: the freight lift behind the archives secret', () => {
+    expect(M3_HR.exits).toHaveLength(3);
+    expect(M3_HR.exits).toContainEqual({ x: 15.5, y: 77, to: 'm9', entry: 'from-m3' });
+    expect(M9_ARCHIVES.exits).toEqual([{ x: 26, y: 5.2, to: 'm3', entry: 'from-m9' }]);
+    expect(M3_HR.entries?.['from-m9']).toBeDefined();
+    expect(M9_ARCHIVES.entries?.['from-m3']).toBeDefined();
     expect(M3_HR.exit).toBeUndefined(); // onward is the real m4 graph edge now
+    for (const level of [M3_HR, M9_ARCHIVES]) {
+      for (const exit of level.exits ?? []) {
+        for (const entry of Object.values(level.entries ?? {})) {
+          expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
+        }
+      }
+    }
+  });
+
+  it('keeps M9 badge-free: the secret floor gates by geometry and light, never by clearance', () => {
+    expect(M9_ARCHIVES.keycards).toEqual([]);
+    expect(M9_ARCHIVES.doors.every((d) => d.requiresCard === null)).toBe(true);
   });
 
   it('keeps the hangar self-contained since M2 took the seam slot (no seam, no graph edges, own exit)', () => {

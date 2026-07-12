@@ -284,6 +284,40 @@ const entombed = placements
   .map((p) => ({ ...p, dist: distTo(p.x, p.y) }))
   .filter((p) => p.dist > TOLERANCE);
 misses.push(...entombed.map((p) => ({ ...p, label: `placement ${p.label}` })));
+
+// Door audit: a trigger must sit INSIDE its own door sector. A shut door is a solid block, so a
+// trigger placed beyond it is only reachable from one side — the door opens one-way and seals
+// whoever stands on the far side (M3 shipped three of these; the return from M9 landed in one).
+const doorSectorBox = (sector) => {
+  const vs = new Set();
+  for (const line of map.linedefs) {
+    if (line.front?.sector === sector || line.back?.sector === sector) {
+      vs.add(line.v1);
+      vs.add(line.v2);
+    }
+  }
+  const pts = [...vs].map((v) => map.vertices[v]);
+  return {
+    x1: Math.min(...pts.map((p) => p.x)),
+    x2: Math.max(...pts.map((p) => p.x)),
+    y1: Math.min(...pts.map((p) => p.y)),
+    y2: Math.max(...pts.map((p) => p.y)),
+  };
+};
+
+for (const [i, d] of LEVEL.doors.entries()) {
+  const b = doorSectorBox(d.sector);
+  const outside =
+    d.triggerX < b.x1 || d.triggerX > b.x2 || d.triggerY < b.y1 || d.triggerY > b.y2;
+
+  if (outside) {
+    misses.push({
+      label: `door[${i}] trigger (${d.triggerX},${d.triggerY}) sits OUTSIDE its door sector [${b.x1},${b.y1}→${b.x2},${b.y2}] — it would open one-way and seal the far side`,
+      dist: Infinity,
+      tol: 0,
+    });
+  }
+}
 const ms = Math.round(performance.now() - t0);
 
 if (misses.length === 0) {

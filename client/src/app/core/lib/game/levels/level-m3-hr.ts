@@ -4,8 +4,8 @@ import type { MapSource } from '../../bsp-engine';
 import type { Level } from '../level';
 import { poly, rect } from './poly';
 
-// M3 "RH / Ressources Humaines" — introduces the YELLOW (manager) badge; hides the condemned-archives stub that will
-// carry the secret M9 exit. Authored via RoomBuilder. y increases DOWN (arrival from M2 is at the EAST).
+// M3 "RH / Ressources Humaines" — introduces the YELLOW (manager) badge; hides the condemned-archives
+// freight lift down to the secret M9. Authored via RoomBuilder. y increases DOWN (arrival from M2 is at the EAST).
 
 const GROUND = { floorZ: 0, floorTex: 'CARPET', ceilTex: 'TECHNICAL' };
 const UPPER = { floorZ: 2.8, floorTex: 'CARPET', ceilTex: 'TECHNICAL' };
@@ -294,7 +294,7 @@ function buildMap(): {
     wallTex: 'METAL',
   });
 
-  // Secret 1 — condemned archives (the M9 stub). Unmarked CUBICLE door; the tell is the dark scuffed
+  // Secret 1 — condemned archives (the lift seam down to M9). Unmarked CUBICLE door; the tell is the dark scuffed
   // SLAB threshold strip in front of it.
   const SDOOR = b.room(rect(29, 66, 32, 68), {
     floorZ: 0,
@@ -335,8 +335,7 @@ function buildMap(): {
   });
 
   b.connect(ASTEP, ARCH, { tex: 'DAMAGED' });
-  // TODO(M9): the dead freight lift (wall 6) is the future secret seam — when M9 ships, add
-  // `exits: [{ x: 15.5, y: 77, to: 'm9', entry: 'from-m3' }]` plus M9's return entry.
+  // The freight lift (wall 6) was never dead: it is the seam down to M9, the condemned archives.
 
   // Secret 2 — the walled-off break room. Unmarked SCREEN door; tells: the bright TILE light-leak strip
   // and the cooler shoved against the wall beside it.
@@ -484,14 +483,18 @@ export const M3_HR: Level = {
     main: { x: 114, y: 17, angle: Math.PI },
     'from-m2': { x: 114, y: 17, angle: Math.PI },
     'from-m4': { x: 58.5, y: 21, angle: 0 }, // on the landing, clear of the m4 exit's re-trigger radius
+    'from-m9': { x: 19.5, y: 77, angle: 0 }, // stepping out of the lift, 4.0 clear of its own trigger
   },
   exits: [
     { x: 122.5, y: 17, to: 'm2', entry: 'from-m3' },
     { x: 55, y: 22, to: 'm4', entry: 'from-m3' },
+    { x: 15.5, y: 77, to: 'm9', entry: 'from-m3' }, // the freight lift, behind the archives secret
   ],
+  // Triggers sit INSIDE their door sector (DOOR_TRIGGER_RADIUS 2.4 must reach from BOTH sides — a
+  // shut door is solid, so an outside trigger opens one-way and seals whoever is on the far side).
   doors: [
-    { sector: built.gateSector, triggerX: 73, triggerY: 22, requiresCard: 'yellow' },
-    { sector: built.archDoorSector, triggerX: 30.5, triggerY: 65, requiresCard: null },
-    { sector: built.pauseDoorSector, triggerX: 99, triggerY: 66, requiresCard: null },
+    { sector: built.gateSector, triggerX: 70, triggerY: 22, requiresCard: 'yellow' },
+    { sector: built.archDoorSector, triggerX: 30.5, triggerY: 67, requiresCard: null },
+    { sector: built.pauseDoorSector, triggerX: 101, triggerY: 66, requiresCard: null },
   ],
 };

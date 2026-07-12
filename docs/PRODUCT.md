@@ -581,18 +581,21 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   above it, reached through the LIVE M1 ⇄ M2 passable seam — cubicle farm, sunken collab pit, mezzanine
   with glass offices, the episode's first badge gate), **`level-m3-hr`** (the HR floor below, reached
   through the M2 ⇄ M3 graph airlock — filing hall, sunken interview pit, mezzanine offices, the yellow
-  badge on the DRH desk, two secrets incl. the condemned-archives stub for M9), **`level-m4-meetings`**
+  badge on the DRH desk, two secrets incl. the condemned-archives lift down to M9), **`level-m4-meetings`**
   (meeting hell — glass war rooms, a tiered amphi, the red DIRECTOR badge, and the boardroom arena whose
   boss slot awaits the Middle-Manager), **`level-m5-cafeteria`** (the grimy kitchen breather),
   **`level-m6-direction`** (the C-suite — rank as altitude, the CEO tier behind the thematic red door),
   **`level-m7-serveurs`** (the server room — the glass core shaft descent, and the BFG earned across the
   generator-hall climax), **`level-m8-datacenter`** (the AI core — the glass-ringed orbit around the boss
   rotunda, an empty slot awaiting the Overseer's spider, and the episode's WIN exit up the epilogue
-  stairs), and the earlier **worked-example levels** —
+  stairs) and the SECRET floor **`level-m9-archives`** (the condemned archives, reached by the dead
+  freight lift behind M3's secret — a dense derelict maze where the light LIES: the bright pools are
+  ambushes, the true path is the dim one; it pays the detour with the plasma PX-1 prototype), and the
+  earlier **worked-example levels** —
   `level-accueil` (a hand-authored reception→climax techbase), **`level-hangar`** (a large original
   techbase showcasing a spiral staircase + verticality), the engine-showcase `demo-map`, and the
   URL-only `level-showroom` prop gallery (the permanent art bench — every prop/pickup/weapon, zero enemies).
-  Planned: the secret floor (**M9 Archives**, off M3's stub), the **two
+  Planned: the **two
   bosses**, **audio** (music + SFX), and the **menu / intertitle screens**. The per-level canon (the 9-floor table,
   palettes, badges, beats AND each level's built/planned status) lives in the `level-designer` agent —
   this doc doesn't duplicate it.
