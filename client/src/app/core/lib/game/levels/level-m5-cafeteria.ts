@@ -486,10 +486,12 @@ export const M5_CAFETERIA: Level = {
   entries: {
     main: { x: 106, y: 39, angle: Math.PI },
     'from-m4': { x: 106, y: 39, angle: Math.PI },
+    'from-m6': { x: 56, y: 60, angle: Math.PI },
   },
-  exits: [{ x: 118.5, y: 39, to: 'm4', entry: 'from-m5' }],
-  // onward is the TEMP win exit at the monte-charge doors (→ M6 when it ships)
-  exit: [60, 58],
+  exits: [
+    { x: 118.5, y: 39, to: 'm4', entry: 'from-m5' },
+    { x: 60, y: 58, to: 'm6', entry: 'from-m5' }, // the monte-charge climbs to the C-suite
+  ],
   doors: [
     { sector: built.ltDoorSector, triggerX: 7, triggerY: 50, requiresCard: 'yellow' },
     { sector: built.freezerDoorSector, triggerX: 37, triggerY: 41, requiresCard: null },

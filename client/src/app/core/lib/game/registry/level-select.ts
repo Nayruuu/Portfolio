@@ -8,6 +8,7 @@ import {
   M3_HR,
   M4_MEETINGS,
   M5_CAFETERIA,
+  M6_DIRECTION,
   SHOWROOM,
 } from '../levels';
 
@@ -20,6 +21,7 @@ export const LEVELS: Readonly<Record<string, Level>> = {
   m3: M3_HR,
   m4: M4_MEETINGS,
   m5: M5_CAFETERIA,
+  m6: M6_DIRECTION,
   accueil: ACCUEIL,
   hangar: HANGAR,
   demo: DEMO_LEVEL,

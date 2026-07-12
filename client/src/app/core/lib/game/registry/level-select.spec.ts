@@ -8,6 +8,7 @@ import {
   M3_HR,
   M4_MEETINGS,
   M5_CAFETERIA,
+  M6_DIRECTION,
   SHOWROOM,
 } from '../levels';
 import { EXIT_RADIUS } from '../game-tuning';
@@ -39,6 +40,7 @@ describe('level registry', () => {
       m3: M3_HR,
       m4: M4_MEETINGS,
       m5: M5_CAFETERIA,
+      m6: M6_DIRECTION,
       accueil: ACCUEIL,
       hangar: HANGAR,
       demo: DEMO_LEVEL,
@@ -81,13 +83,16 @@ describe('level registry', () => {
   });
 
   it('arms the fists-only start: every level with enemies places a RANGED weapon pickup (valid placements everywhere)', () => {
+    // approved arsenal-pause floors: campaign arrivals carry the full M1-M5 arsenal, the floor seeds none
+    const ARSENAL_PAUSE_KEYS = ['m6'];
+
     for (const [key, level] of Object.entries(LEVELS)) {
       for (const [x, y, id] of level.weapons ?? []) {
         expect(Number.isFinite(x), `level "${key}": weapon "${id}" x`).toBe(true);
         expect(Number.isFinite(y), `level "${key}": weapon "${id}" y`).toBe(true);
         expect(WEAPON_IDS, `level "${key}": unknown weapon id "${id}"`).toContain(id);
       }
-      if (level.enemies.length === 0) {
+      if (level.enemies.length === 0 || ARSENAL_PAUSE_KEYS.includes(key)) {
         continue;
       }
       const ranged = (level.weapons ?? []).some(([, , id]) => !MELEE_WEAPON_IDS.includes(id));
@@ -99,12 +104,13 @@ describe('level registry', () => {
     }
   });
 
-  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5', () => {
+  it('stages the episode progression: pistol + chainsaw in M1, shotgun in M2, chaingun in M3, rocket in M4, plasma in M5 — M6 ships none (the arsenal pause before the finale)', () => {
     expect(M1_LOBBY.weapons?.map(([, , id]) => id)).toEqual(['pistol', 'chainsaw']);
     expect(M2_OPENSPACE.weapons?.map(([, , id]) => id)).toEqual(['shotgun']);
     expect(M3_HR.weapons?.map(([, , id]) => id)).toEqual(['chaingun']);
     expect(M4_MEETINGS.weapons?.map(([, , id]) => id)).toEqual(['rocket']);
     expect(M5_CAFETERIA.weapons?.map(([, , id]) => id)).toEqual(['plasma']);
+    expect(M6_DIRECTION.weapons).toBeUndefined();
   });
 
   it('gates M4 behind the DIRECTOR badge found on the floor itself (red), yellow demoted to thematic dressing', () => {
@@ -148,10 +154,24 @@ describe('level registry', () => {
 
   it('wires M4 ⇄ M5 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
     expect(M4_MEETINGS.exits).toContainEqual({ x: 92, y: 17.5, to: 'm5', entry: 'from-m4' });
-    expect(M5_CAFETERIA.exits).toEqual([{ x: 118.5, y: 39, to: 'm4', entry: 'from-m5' }]);
+    expect(M5_CAFETERIA.exits).toHaveLength(2);
+    expect(M5_CAFETERIA.exits).toContainEqual({ x: 118.5, y: 39, to: 'm4', entry: 'from-m5' });
     expect(M4_MEETINGS.exit).toBeUndefined(); // onward is the real m5 graph edge now
-    expect(M5_CAFETERIA.exit).toBeDefined(); // the TEMP win marker (→ M6 when it ships)
     for (const level of [M4_MEETINGS, M5_CAFETERIA]) {
+      for (const exit of level.exits ?? []) {
+        for (const entry of Object.values(level.entries ?? {})) {
+          expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
+        }
+      }
+    }
+  });
+
+  it('wires M5 ⇄ M6 as reciprocal walk-into graph edges whose arrivals land clear of the exit re-trigger', () => {
+    expect(M5_CAFETERIA.exits).toContainEqual({ x: 60, y: 58, to: 'm6', entry: 'from-m5' });
+    expect(M6_DIRECTION.exits).toEqual([{ x: 122.3, y: 58, to: 'm5', entry: 'from-m6' }]);
+    expect(M5_CAFETERIA.exit).toBeUndefined(); // onward is the real m6 graph edge now
+    expect(M6_DIRECTION.exit).toBeDefined(); // the TEMP win marker (→ M7 when it ships)
+    for (const level of [M5_CAFETERIA, M6_DIRECTION]) {
       for (const exit of level.exits ?? []) {
         for (const entry of Object.values(level.entries ?? {})) {
           expect(Math.hypot(exit.x - entry.x, exit.y - entry.y)).toBeGreaterThan(EXIT_RADIUS * 2);
@@ -165,6 +185,14 @@ describe('level registry', () => {
     expect(M5_CAFETERIA.doors.filter((d) => d.requiresCard === 'yellow')).toHaveLength(1);
     expect(
       M5_CAFETERIA.doors.some((d) => d.requiresCard === 'red' || d.requiresCard === 'blue'),
+    ).toBe(false);
+  });
+
+  it('keeps M6 badge-free: no keycard objective, its one red door is thematic dressing on held clearance', () => {
+    expect(M6_DIRECTION.keycards).toEqual([]);
+    expect(M6_DIRECTION.doors.filter((d) => d.requiresCard === 'red')).toHaveLength(1);
+    expect(
+      M6_DIRECTION.doors.some((d) => d.requiresCard === 'blue' || d.requiresCard === 'yellow'),
     ).toBe(false);
   });
 

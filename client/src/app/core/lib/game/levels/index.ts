@@ -8,4 +8,5 @@ export * from './level-m2-openspace';
 export * from './level-m3-hr';
 export * from './level-m4-meetings';
 export * from './level-m5-cafeteria';
+export * from './level-m6-direction';
 export * from './level-showroom';
