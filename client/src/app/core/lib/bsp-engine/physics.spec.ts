@@ -366,7 +366,11 @@ describe('climbTarget', () => {
     middleTex: 'M',
   });
 
-  const mapWith = (eastFloor: number, eastCeil = 5, divider: Partial<MapSource['linedefs'][number]> = {}): MapSource => ({
+  const mapWith = (
+    eastFloor: number,
+    eastCeil = 5,
+    divider: Partial<MapSource['linedefs'][number]> = {},
+  ): MapSource => ({
     vertices: [
       { x: 0, y: 0 },
       { x: 0, y: 8 },
@@ -414,11 +418,15 @@ describe('climbTarget', () => {
   // The M5 catch: every pre-M5 fence sat on a ≥2.8 rise (safe by height alone) — a fence INSIDE the
   // mantle window must still refuse the vault, or "renders open, never crossable" is breached.
   it('refuses to mantle THROUGH a fence even when the rise is climbable', () => {
-    expect(climbTarget(buildBsp(mapWith(0.8, 5, { fence: true })), 3, 4, 0, 1, 0, 4, 0.35, 1.4, 0.9)).toBeNull();
+    expect(
+      climbTarget(buildBsp(mapWith(0.8, 5, { fence: true })), 3, 4, 0, 1, 0, 4, 0.35, 1.4, 0.9),
+    ).toBeNull();
   });
 
   it('refuses to mantle through glass', () => {
-    expect(climbTarget(buildBsp(mapWith(0.8, 5, { glass: true })), 3, 4, 0, 1, 0, 4, 0.35, 1.4, 0.9)).toBeNull();
+    expect(
+      climbTarget(buildBsp(mapWith(0.8, 5, { glass: true })), 3, 4, 0, 1, 0, 4, 0.35, 1.4, 0.9),
+    ).toBeNull();
   });
 
   it('still mantles when the barrier line is elsewhere (not crossed by the probe)', () => {
@@ -479,7 +487,11 @@ describe('castFloorCeil', () => {
     middleTex: 'M',
   });
 
-  const mapWith = (eastFloor: number, eastCeil = 5, divider: Partial<MapSource['linedefs'][number]> = {}): MapSource => ({
+  const mapWith = (
+    eastFloor: number,
+    eastCeil = 5,
+    divider: Partial<MapSource['linedefs'][number]> = {},
+  ): MapSource => ({
     vertices: [
       { x: 0, y: 0 },
       { x: 0, y: 8 },
