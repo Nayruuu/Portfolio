@@ -6,10 +6,10 @@ import {
   type CompiledMap,
   type MapSource,
   type Sprite,
-  type Texture,
   type ZoneNeighbor,
 } from '../../bsp-engine';
 import { proceduralTextures } from './load-textures';
+import { unpackSharedTextures, type PackedTextureEntry } from './shared-textures';
 
 // Owns one horizontal BAND, painted into the SHARED framebuffer + z-buffer (a SharedArrayBuffer viewed
 // directly — no copy). Every zone ever built is CACHED by key, which makes a seamless crossing free: a
@@ -55,7 +55,11 @@ type Inbound =
       // The warm neighbor's live billboards by zone key, in that zone's own coordinates.
       readonly neighborSprites?: ReadonlyMap<string, readonly Sprite[]>;
     }
-  | { readonly type: 'textures'; readonly textures: ReadonlyMap<string, Texture> };
+  | {
+      readonly type: 'textures';
+      readonly sab: SharedArrayBuffer;
+      readonly entries: readonly PackedTextureEntry[];
+    };
 
 /** A held zone with its AUTHORED sector heights, restored when the zone is demoted from primary to neighbor
  *  (live door mutations must not linger in a neighbor render). */
@@ -121,7 +125,9 @@ addEventListener('message', ({ data }: MessageEvent<Inbound>) => {
       primary = data.key;
     }
   } else if (data.type === 'textures') {
-    for (const [name, texture] of data.textures) {
+    // Views over the ONE shared buffer — nothing was cloned on the way here (the A/B probe measured
+    // the clone-equivalent at 2707 MB total RSS vs 1197 MB shared: −56%).
+    for (const [name, texture] of unpackSharedTextures(data.sab, data.entries)) {
       textures.set(name, texture);
     }
   } else {

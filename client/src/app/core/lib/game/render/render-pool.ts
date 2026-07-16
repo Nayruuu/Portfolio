@@ -1,4 +1,5 @@
 import type { Camera, MapSource, Sprite, Texture } from '../../bsp-engine';
+import { packSharedTextures } from './shared-textures';
 
 /** Per-frame live sector heights — only `ceilZ`/`floorZ` change at runtime (animated doors). */
 export type SectorHeights = readonly { readonly floorZ: number; readonly ceilZ: number }[];
@@ -235,8 +236,12 @@ export function createRenderPool(
       }
     },
     setTextures(textures: ReadonlyMap<string, Texture>): void {
+      // ONE copy into a SharedArrayBuffer; the message ships the shared handle + view metadata — the
+      // old path structured-cloned the whole library into EVERY worker (×8 ≈ 1.2 GB post-vox).
+      const packed = packSharedTextures(textures);
+
       for (const worker of workers) {
-        worker.postMessage({ type: 'textures', textures });
+        worker.postMessage({ type: 'textures', sab: packed.sab, entries: packed.entries });
       }
     },
     dispose(): void {
