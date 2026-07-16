@@ -629,7 +629,10 @@ export async function loadPropTextures(): Promise<Map<string, Texture>> {
  *  Absent → the icon billboard stays. The hand-sculpted grid is used AS-IS — NO AO bake, NO regrade: the
  *  model carries its own colour/shading; the engine only frames (trim) and scales (budget + the sprite's
  *  voxHeight × the model's own ratio), never repaints. */
-const VOX_PICKUP_MAX_SIDE = 128; // ~2 px/voxel at the largest on-screen pickup size — beyond is invisible
+// Resolution budget as a DENSITY, not a flat side: the validated A/B (pistol, 128 voxels over a
+// 0.53-unit display) fixed ~242 voxels per world unit as the invisible-loss threshold — a flat 128
+// had silently run the chainsaw (1.87 units on screen) at 68 v/u, 3.5× coarser than approved.
+const VOX_DENSITY_PER_UNIT = 250;
 
 export async function loadWeaponPickupVox(): Promise<Map<string, Texture>> {
   const out = new Map<string, Texture>();
@@ -637,11 +640,18 @@ export async function loadWeaponPickupVox(): Promise<Map<string, Texture>> {
   for (const spec of WEAPON_PICKUP_SPECS) {
     const grid = await loadVoxFile(`/game/weapons/${spec.id}/pickup.vox`);
 
-    if (grid !== null) {
-      // Trim (pure framing: empty border slices only), then budget the RESOLUTION — the user sculpts
-      // at 256-class comfort, the engine right-sizes (a pickup can never show more than ~1 px/voxel).
-      out.set(spec.texName, downsampleVoxelGrid(trimVoxelGrid(grid), VOX_PICKUP_MAX_SIDE));
+    if (grid === null) {
+      continue;
     }
+    // Trim (pure framing: empty border slices only), then budget the RESOLUTION by display size —
+    // the user sculpts at 256-class comfort, the engine right-sizes per what the screen can show.
+    const trimmed = trimVoxelGrid(grid);
+    const ny = trimmed.voxelDepth ?? 1;
+    const ratio = trimmed.width / (trimmed.height / ny);
+    const displayMax = spec.voxHeight * Math.max(ratio, 1);
+    const budget = Math.ceil(displayMax * VOX_DENSITY_PER_UNIT);
+
+    out.set(spec.texName, downsampleVoxelGrid(trimmed, budget));
   }
 
   return out;
