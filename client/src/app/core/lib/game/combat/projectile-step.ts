@@ -94,7 +94,8 @@ export function detonate(
       }
     }
     for (const e of frame.enemies) {
-      if (!e.dying && Math.hypot(e.x - x, e.y - y) <= splashR) {
+      // dormant: a placed-but-not-decoded husk is untargetable — splash must not kill it off-screen
+      if (!e.dying && !e.dormant && Math.hypot(e.x - x, e.y - y) <= splashR) {
         frame.hurtEnemy(e, splashDmg);
       }
     }

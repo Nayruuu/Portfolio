@@ -105,7 +105,7 @@ describe('ZoneRuntime — active world load', () => {
     expect(hooks.onZoneReset).toHaveBeenCalledTimes(1);
   });
 
-  it('loads bare geometry before the atlases decode, then populates in place on markAtlasesReady', () => {
+  it('loads bare geometry, then populates the OBJECTS on markPopulated — the foes arrive dormant', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
@@ -114,12 +114,83 @@ describe('ZoneRuntime — active world load', () => {
     expect(runtime.world.enemies).toHaveLength(0);
     expect(runtime.world.vitals).toHaveLength(0);
 
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
 
     expect(runtime.atlasesReady).toBe(true);
     expect(runtime.world.populated).toBe(true);
-    expect(runtime.world.enemies.length).toBeGreaterThan(0);
-    expect(runtime.world.vitals.length).toBeGreaterThan(0);
+    expect(runtime.world.vitals.length).toBeGreaterThan(0); // the objectives exist: the floor is playable
+    expect(runtime.world.enemies.length).toBeGreaterThan(0); // placed…
+    expect(runtime.world.enemies.every((e) => e.dormant)).toBe(true); // …but not yet alive
+  });
+
+  it('wakes a decoded species only where the player cannot see it (behind a wall / out of the cone)', () => {
+    const { runtime } = makeRuntime();
+
+    runtime.loadZone('m1');
+    runtime.markPopulated();
+    const foe = runtime.world.enemies[0];
+    const spec = foe.spec.texName;
+
+    // species not decoded yet → nothing wakes, wherever the player looks
+    runtime.wakeHidden(foe.x + 3, foe.y, Math.PI);
+    expect(foe.dormant).toBe(true);
+
+    runtime.markSpeciesDecoded(spec);
+
+    // staring straight at it from up close: it must NOT materialise in his face
+    const angle = Math.atan2(foe.y - (foe.y - 2), foe.x - (foe.x - 2));
+
+    runtime.wakeHidden(foe.x - 2, foe.y - 2, angle);
+    expect(foe.dormant).toBe(true);
+
+    // looking the other way → it wakes behind his back
+    runtime.wakeHidden(foe.x - 2, foe.y - 2, angle + Math.PI);
+    expect(foe.dormant).toBe(false);
+  });
+
+  it('wakes a species on a floor with NO live seam (no warm neighbour to wake alongside it)', () => {
+    const { runtime } = makeRuntime();
+
+    runtime.loadZone('m3'); // only the M1 ⇄ M2 edge is a live seam
+    expect(runtime.warm).toBeNull();
+
+    runtime.markPopulated();
+    const foe = runtime.world.enemies[0];
+
+    runtime.markSpeciesDecoded(foe.spec.texName);
+    runtime.wakeHidden(-999, -999, 0); // far away → it wakes
+
+    expect(foe.dormant).toBe(false);
+  });
+
+  it('holds a foe dormant when the player stands EXACTLY on it (degenerate distance, still in his face)', () => {
+    const { runtime } = makeRuntime();
+
+    runtime.loadZone('m1');
+    runtime.markPopulated();
+    const foe = runtime.world.enemies[0];
+
+    runtime.markSpeciesDecoded(foe.spec.texName);
+    runtime.wakeHidden(foe.x, foe.y, 0); // dist 0 → the facing test must not divide by zero and wake it
+
+    expect(foe.dormant).toBe(true);
+  });
+
+  it('wakes every foe once its species is decoded and it is out of sight, and is idempotent', () => {
+    const { runtime } = makeRuntime();
+
+    runtime.loadZone('m1');
+    runtime.markPopulated();
+    for (const e of runtime.world.enemies) {
+      runtime.markSpeciesDecoded(e.spec.texName);
+    }
+    runtime.wakeHidden(-999, -999, 0); // far from everything → all wake
+
+    expect(runtime.world.enemies.every((e) => !e.dormant)).toBe(true);
+
+    runtime.wakeHidden(-999, -999, 0); // idempotent
+
+    expect(runtime.world.enemies.every((e) => !e.dormant)).toBe(true);
   });
 
   it('falls back to the default level on an unknown key (never crashes on a bad load)', () => {
@@ -140,7 +211,7 @@ describe('ZoneRuntime — warm neighbour', () => {
     expect(runtime.warm?.key).toBe('m2');
     expect(runtime.warm?.populated).toBe(false);
 
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
 
     expect(runtime.warm?.populated).toBe(true);
     expect(runtime.warm?.map).toBeDefined();
@@ -160,7 +231,7 @@ describe('ZoneRuntime — warm neighbour', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     const warm = runtime.warm;
 
     expect(warm).not.toBeNull();
@@ -181,7 +252,7 @@ describe('ZoneRuntime — seamless seam crossing', () => {
     const { runtime, hooks } = makeRuntime(camera);
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     const crossed = runtime.crossSeam(26, 31, 26, 29);
 
     expect(crossed).toBe(true);
@@ -197,7 +268,7 @@ describe('ZoneRuntime — seamless seam crossing', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     const crossed = runtime.crossSeam(26, 33, 26, 32);
 
     expect(crossed).toBe(false);
@@ -208,7 +279,7 @@ describe('ZoneRuntime — seamless seam crossing', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     runtime.crossSeam(26, 31, 26, 29);
 
     expect(runtime.seams.some((seam) => seam.zone === 'm1')).toBe(true);
@@ -220,7 +291,7 @@ describe('ZoneRuntime — snapshot / restore round-trip', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     const vitalCount = runtime.world.vitals.length;
 
     expect(runtime.world.enemies.length).toBeGreaterThan(0);
@@ -242,7 +313,7 @@ describe('ZoneRuntime — snapshot / restore round-trip', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     const vitalCount = runtime.world.vitals.length;
 
     runtime.world.enemies[0].dying = true;
@@ -263,7 +334,7 @@ describe('ZoneRuntime — fade transition', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     runtime.beginTransition('accueil', 'main');
 
     expect(runtime.transition).not.toBeNull();
@@ -321,7 +392,7 @@ describe('ZoneRuntime — the read-only indexes', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
 
     const bare = runtime.zoneNeighbors(undefined);
 
@@ -340,7 +411,7 @@ describe('ZoneRuntime — the art-inspection foe strip', () => {
 
     runtime.setSpawnEnemies(false);
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
 
     expect(runtime.world.enemies).toHaveLength(0);
     expect(runtime.world.vitals.length).toBeGreaterThan(0); // pickups still populate
@@ -359,7 +430,7 @@ describe('ZoneRuntime — a self-contained graph-exit floor', () => {
     const { runtime } = makeRuntime();
 
     runtime.loadZone(KEY);
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
 
     expect(runtime.currentKey).toBe(KEY);
     expect(runtime.exits).toHaveLength(1); // the graph-exit map runs (exits-defined branch)
@@ -434,7 +505,7 @@ describe('ZoneRuntime — a crossing that has to build (not reuse) the incoming 
     const { runtime } = makeRuntime();
 
     runtime.loadZone(KEY);
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     expect(runtime.warm?.key).toBe('m1'); // the seam warms M1
 
     // First cross portal→M1: the warm neighbour IS M1 → the reuse arm.
@@ -454,7 +525,7 @@ describe('ZoneRuntime — a warm foe’s (no-op) reach across the seam', () => {
     const { runtime } = makeRuntime(camera);
 
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
     runtime.crossSeam(26, 31, 26, 29); // → active m2, warm m1
 
     const warm = runtime.warm;
@@ -501,7 +572,7 @@ describe('ZoneRuntime — snapshotting an un-decoded floor', () => {
 
     runtime.loadZone('m2'); // snapshots m1 off the authored spawns (enemy === undefined branch)
     runtime.loadZone('m1');
-    runtime.markAtlasesReady();
+    runtime.markPopulated();
 
     expect(runtime.world.enemies.length).toBeGreaterThan(0);
     expect(runtime.world.enemies.every((foe) => !foe.dying)).toBe(true);

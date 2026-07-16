@@ -87,6 +87,7 @@ const makeEnemy = (x: number, y: number, over: Partial<CombatEnemy> = {}): Comba
   hitFlash: 0,
   windup: 0,
   cooldown: 0,
+  dormant: false,
   ...over,
 });
 
@@ -208,6 +209,15 @@ describe('collectHittables', () => {
     const bag = makeBag({ enemies: [makeEnemy(40, 30, { dying: true })] });
 
     expect(collectHittables(bag)).toHaveLength(0);
+  });
+
+  it('omits a dormant enemy — you cannot shoot what has not spawned', () => {
+    const bag = makeBag({ enemies: [makeEnemy(40, 30), { ...makeEnemy(42, 30), dormant: true }] });
+
+    const hittables = collectHittables(bag);
+
+    expect(hittables).toHaveLength(1);
+    expect(hittables[0].x).toBe(40);
   });
 
   it('inflates every silhouette (radius + vertical span) by the projectile radius', () => {
@@ -553,6 +563,15 @@ describe('detonate', () => {
     detonate(bag, 30, 30, 1, 2, 15, 'impact_boom');
 
     expect(bag.hurtSpy).not.toHaveBeenCalled();
+  });
+
+  it('skips a DORMANT enemy in the blast — splash must not hurt a foe whose art has not landed', () => {
+    const enemy = makeEnemy(31, 30, { dormant: true });
+    const bag = makeBag({ enemies: [enemy] });
+
+    detonate(bag, 30, 30, 1, 2, 15, 'impact_boom');
+
+    expect(bag.hurtSpy).not.toHaveBeenCalled(); // an off-screen husk must not be damaged/killed
   });
 
   it('with a zero radius only sparks (no splash sweep)', () => {

@@ -189,6 +189,22 @@ export class DoomHud {
     this.paint(ctx, assets, width, height);
   }
 
+  /** Kick off the tier's decodes now, WITHOUT drawing: LoadedImage only fetches on its first ready(),
+   *  so a bar first painted when the loading card lifts is a bar missing from the player's first seconds.
+   *  The card must warm it, never show it. */
+  public preload(width: number): void {
+    const assets = this.ensureTier(this.selectTierKey(width));
+
+    assets.bar.ready();
+    assets.face.ready();
+    assets.digits.ready();
+    assets.armsGrey.ready();
+    assets.armsYellow.ready();
+    assets.cards.red.ready();
+    assets.cards.blue.ready();
+    assets.cards.yellow.ready();
+  }
+
   /** Force the next `render` to repaint (an image just decoded) and re-run it on the last canvas. */
   private repaint(): void {
     this.lastKey = '';

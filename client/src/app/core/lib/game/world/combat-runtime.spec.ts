@@ -48,6 +48,7 @@ const CHAINGUN = ARSENAL.findIndex((weapon) => weapon.id === 'chaingun');
 function makeEnemy(): CombatEnemy {
   return {
     spec: ENEMY_SPEC,
+    dormant: false,
     x: 35,
     y: 30,
     z: 0,

@@ -94,3 +94,11 @@ export const ZONE_FADE = 0.35;
 export const RESTART_DELAY = 1.2;
 
 export const HINT_DURATION = 1.8;
+
+// Deferred-spawn safety: a dormant foe wakes only where the player cannot see it — behind a wall, outside
+// the cone, or beyond WAKE_SAFE_DIST. The distance is a PRAGMATIC cutoff, not a "too small to notice" one:
+// at 16u a foe is still ~70px tall, so a clear-LOS wake there IS visible — but it can only happen in the
+// few-second deferred-load window, aimed at that exact far spot as the species decodes. The cone is wider
+// (60° half-angle) than the 90° render FOV (45° half-angle) so a quick turn cannot catch an edge pop-in.
+export const WAKE_SAFE_DIST = 16;
+export const WAKE_CONE_COS = Math.cos(Math.PI / 3); // 60° half-angle vs the renderer's 45°

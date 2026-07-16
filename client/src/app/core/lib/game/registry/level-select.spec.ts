@@ -17,6 +17,7 @@ import {
 import { EXIT_RADIUS } from '../game-tuning';
 import {
   DEFAULT_LEVEL_KEY,
+  LEVEL_TITLES,
   LEVELS,
   parseLevelParams,
   resolveZone,
@@ -54,6 +55,15 @@ describe('level registry', () => {
     });
     expect(DEFAULT_LEVEL_KEY).toBe('m1');
     expect(LEVELS[DEFAULT_LEVEL_KEY]).toBe(M1_LOBBY);
+  });
+
+  it('titles every campaign floor for the loading card (the dev levels need none)', () => {
+    for (const key of Object.keys(LEVELS)) {
+      if (key.startsWith('m')) {
+        expect(LEVEL_TITLES[key]).toBeTruthy();
+      }
+    }
+    expect(Object.keys(LEVEL_TITLES)).toHaveLength(9);
   });
 
   it('registers only complete levels (map + spawn + a way on: an exit, graph exits, or a passable seam)', () => {

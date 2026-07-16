@@ -372,48 +372,142 @@ function loadImageTexture(url: string, worldSize: number): Promise<Texture | nul
  *  it kills the green halo). */
 const EDGE_ALPHA_THRESHOLD = 140;
 
-/** Decode a sprite ATLAS (`rows` cells stacked vertically, alpha-keyed, typically NON-POT), downscaled so each
- *  cell is at most `maxCellH` px (the full atlas cloned to every worker would be huge). Sprites sample by
- *  division, not the walls' POT `&`-wrap, so any size is fine. `null` on SSR / load error. */
-export function loadAtlasTexture(
-  url: string,
-  rows: number,
-  maxCellH = 256,
-): Promise<Texture | null> {
+/** Network only — the browser decodes the image off the main thread. Split from {@link rasterizeAtlas}
+ *  so a species' sheets can DOWNLOAD in parallel while their (main-thread) rasterise is spread one per
+ *  frame: the pixel work is what freezes the game, never the bytes. */
+export function fetchAtlasImage(url: string): Promise<HTMLImageElement | null> {
   if (typeof Image === 'undefined' || typeof document === 'undefined') {
     return Promise.resolve(null); // SSR / prerender — no DOM
   }
 
-  return new Promise<Texture | null>((resolve) => {
+  return new Promise<HTMLImageElement | null>((resolve) => {
     const image = new Image();
 
     image.onerror = (): void => resolve(null);
-    image.onload = (): void => {
-      const scale = Math.min(1, maxCellH / (image.naturalHeight / rows));
-      const w = Math.max(1, Math.round(image.naturalWidth * scale));
-      const h = Math.max(1, Math.round(image.naturalHeight * scale));
-      const context = document.createElement('canvas').getContext('2d');
-
-      if (context === null) {
-        resolve(null);
-
-        return;
-      }
-      context.canvas.width = w;
-      context.canvas.height = h;
-      // NEAREST (no smoothing): smoothing would bleed the green chroma fringe / neighbouring cells; then HARDEN
-      // the alpha to drop the AA green fringe (mirrors the grid's `hardenEdges`).
-      context.imageSmoothingEnabled = false;
-      context.drawImage(image, 0, 0, w, h);
-      const data = context.getImageData(0, 0, w, h);
-      const px = data.data;
-
-      for (let i = 3; i < px.length; i += 4) {
-        px[i] = px[i] >= EDGE_ALPHA_THRESHOLD ? 255 : 0;
-      }
-      resolve({ width: w, height: h, pixels: px });
-    };
+    image.onload = (): void => resolve(image);
     image.src = url;
+  });
+}
+
+/** MAIN-THREAD pixel work (canvas raster + the alpha harden): call one per frame under load. */
+export function rasterizeAtlas(
+  image: HTMLImageElement,
+  rows: number,
+  maxCellH = 256,
+): Texture | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+  const scale = Math.min(1, maxCellH / (image.naturalHeight / rows));
+  const w = Math.max(1, Math.round(image.naturalWidth * scale));
+  const h = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = document.createElement('canvas').getContext('2d');
+
+  if (context === null) {
+    return null;
+  }
+  context.canvas.width = w;
+  context.canvas.height = h;
+  // NEAREST (no smoothing): smoothing would bleed the green chroma fringe / neighbouring cells; then HARDEN
+  // the alpha to drop the AA green fringe (mirrors the grid's `hardenEdges`).
+  context.imageSmoothingEnabled = false;
+  context.drawImage(image, 0, 0, w, h);
+  const data = context.getImageData(0, 0, w, h);
+  const px = data.data;
+
+  for (let i = 3; i < px.length; i += 4) {
+    px[i] = px[i] >= EDGE_ALPHA_THRESHOLD ? 255 : 0;
+  }
+
+  return { width: w, height: h, pixels: px };
+}
+
+const yieldToFrame = (): Promise<void> =>
+  typeof requestAnimationFrame === 'undefined'
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+const ATLAS_WORKERS = 2; // enough to keep the pipe full; more would just contend for the same cores
+const pending = new Map<number, (texture: Texture | null) => void>();
+let workerCount = 0; // = pool.length, so onerror can resolve exactly its own worker's in-flight ids
+let atlasPool: Worker[] | null | undefined;
+let nextDecodeId = 0;
+
+/** The worker pool, or `null` where it cannot exist (SSR, no OffscreenCanvas) — built once, lazily. */
+function decoderPool(): Worker[] | null {
+  if (atlasPool !== undefined) {
+    return atlasPool;
+  }
+  if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined') {
+    atlasPool = null;
+
+    return null;
+  }
+  atlasPool = Array.from({ length: ATLAS_WORKERS }, (_unused, index) => {
+    const worker = new Worker(new URL('./atlas.worker', import.meta.url), { type: 'module' });
+
+    worker.onmessage = (event: MessageEvent<AtlasDecoded>): void => {
+      const { id, failed, width, height, pixels } = event.data;
+      const resolve = pending.get(id);
+
+      pending.delete(id);
+      resolve?.(failed === true ? null : { width, height, pixels });
+    };
+    // A worker-level failure (chunk 404, CSP block, parse error) never posts a message: its in-flight
+    // decodes would hang forever and the loading card would never lift. Fall them back to null (the 2D
+    // billboard / procedural texture). Ids map to workers by `id % workerCount`, so resolve exactly this
+    // worker's outstanding ids.
+    worker.onerror = (): void => {
+      for (const [id, resolve] of [...pending]) {
+        if (id % workerCount === index) {
+          pending.delete(id);
+          resolve(null);
+        }
+      }
+    };
+
+    return worker;
+  });
+  workerCount = atlasPool.length;
+
+  return atlasPool;
+}
+
+interface AtlasDecoded {
+  readonly id: number;
+  readonly failed?: boolean;
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: Uint8ClampedArray;
+}
+
+/** Decode a sprite sheet OFF the main thread (fetch + raster + alpha harden in a worker, pixels returned
+ *  by transfer) — where the worker path runs, no rasterise touches the main thread at all. Without
+ *  OffscreenCanvas it falls back to a main-thread rasterise (yielding a frame first to soften the hit;
+ *  concurrent fallbacks can still bunch — the worker path is the one that fully avoids it). */
+export async function decodeAtlas(
+  url: string,
+  rows: number,
+  maxCellH = 256,
+): Promise<Texture | null> {
+  const pool = decoderPool();
+
+  if (pool === null) {
+    const image = await fetchAtlasImage(url);
+
+    if (image === null) {
+      return null;
+    }
+    await yieldToFrame();
+
+    return rasterizeAtlas(image, rows, maxCellH);
+  }
+  const id = nextDecodeId++;
+  const worker = pool[id % pool.length];
+
+  return new Promise<Texture | null>((resolve) => {
+    pending.set(id, resolve);
+    worker.postMessage({ id, url, rows, maxCellH });
   });
 }
 
@@ -423,18 +517,31 @@ export interface AtlasJob {
   readonly rows: number;
 }
 
-/** The ORDER is load-significant — the caller zips the decoded textures back by index (`jobs[i]` ↔ the i-th decode). */
-export function buildAtlasJobs(): AtlasJob[] {
-  return [
-    ...ENEMY_SPECS.flatMap((spec) => [
+/** One species' whole sheet set, keyed by its walk-atlas name — the id the runtime wakes it by. The job
+ *  order is load-significant: the caller zips the decoded textures back by index (`jobs[i]`). */
+export interface EnemyAtlasGroup {
+  readonly texName: string;
+  readonly jobs: readonly AtlasJob[];
+}
+
+/** The CRITICAL atlases: pickups, badges, the exit — the floor's objectives. They gate play, so they
+ *  load behind the loading screen; the bestiary streams in afterwards. */
+export function buildPickupJobs(): AtlasJob[] {
+  return PICKUP_TEXTURE_JOBS.map((job) => ({ name: job.name, url: job.url, rows: 1 }));
+}
+
+/** The DEFERRED atlases, grouped so each species can land — and wake — on its own. */
+export function buildEnemyGroups(): EnemyAtlasGroup[] {
+  return ENEMY_SPECS.map((spec) => ({
+    texName: spec.texName,
+    jobs: [
       { name: spec.texName, url: spec.atlasUrl, rows: spec.walkRows },
       { name: spec.deathTexName, url: spec.deathUrl, rows: 1 },
       { name: spec.attackTexName, url: spec.attackUrl, rows: 1 },
       { name: spec.painTexName, url: spec.painUrl, rows: 1 },
       ...(spec.thrower ? [{ name: spec.thrower.texName, url: spec.thrower.url, rows: 1 }] : []),
-    ]),
-    ...PICKUP_TEXTURE_JOBS.map((job) => ({ name: job.name, url: job.url, rows: 1 })),
-  ];
+    ],
+  }));
 }
 
 /** Props whose rotation sheets are CARVED into voxel grids at load (see `voxel-carve.ts`); a failed carve keeps
@@ -451,27 +558,47 @@ const VOXEL_PROPS: Readonly<Record<string, { n: number; cells: number }>> = {
 /** Returns a name → Texture map to MERGE over the procedural library (failed entries stay absent → procedural
  *  fallback). The directional prop sheets are additionally SCULPTED into voxel grids here ({@link VOXEL_PROPS}),
  *  once per load, before the map fans out to the workers and the GPU texel pool. */
-export async function loadEnvTextures(
+const isPropAsset = (url: string): boolean => url.startsWith('/game/props/');
+
+async function fetchEnvAssets(
+  entries: [string, { url: string; worldSize: number }][],
   onProgress?: (loaded: number, total: number) => void,
 ): Promise<Map<string, Texture>> {
-  const assets = Object.entries(ENV_ASSETS).map(([name, a]) => ({
-    name,
-    url: a.url,
-    worldSize: a.worldSize,
-  }));
   const out = new Map<string, Texture>();
   let loaded = 0;
 
   await Promise.all(
-    assets.map(async (asset) => {
+    entries.map(async ([name, asset]) => {
       const texture = await loadImageTexture(asset.url, asset.worldSize);
 
       if (texture !== null) {
-        out.set(asset.name, texture);
+        out.set(name, texture);
       }
       loaded += 1;
-      onProgress?.(loaded, assets.length);
+      onProgress?.(loaded, entries.length);
     }),
+  );
+
+  return out;
+}
+
+/** The WORLD's own surfaces — walls, floors, ceilings, glass. The player cannot stand in a floor that
+ *  has not landed, so these are critical; the decor (below) can dress the room after he is already in it. */
+export async function loadWorldTextures(
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<Map<string, Texture>> {
+  return fetchEnvAssets(
+    Object.entries(ENV_ASSETS).filter(([, asset]) => !isPropAsset(asset.url)),
+    onProgress,
+  );
+}
+
+/** The DECOR: prop sheets, carved into voxel volumes here. In the CRITICAL set (behind the card) because
+ *  the voxel carve + AO bake is the boot's heaviest main-thread work — a freeze there is invisible, one
+ *  under the player's feet is not. Every prop also has a procedural placeholder for the pre-decode frames. */
+export async function loadPropTextures(): Promise<Map<string, Texture>> {
+  const out = await fetchEnvAssets(
+    Object.entries(ENV_ASSETS).filter(([, asset]) => isPropAsset(asset.url)),
   );
 
   for (const [name, config] of Object.entries(VOXEL_PROPS)) {

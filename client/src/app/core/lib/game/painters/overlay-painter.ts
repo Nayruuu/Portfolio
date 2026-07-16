@@ -180,3 +180,43 @@ export function drawWinScreen(
   }
   ctx.restore();
 }
+
+/** The loading card: the floor is not playable until its world + objects land, so hold the player on a
+ *  terminal boot screen rather than let him walk an empty tower. The bestiary streams in afterwards. */
+export function drawLoadingScreen(
+  ctx: CanvasRenderingContext2D,
+  progress: number,
+  title: string,
+): void {
+  const { width, height } = ctx.canvas;
+  const done = Math.max(0, Math.min(1, progress));
+
+  ctx.save();
+  ctx.fillStyle = '#08080a';
+  ctx.fillRect(0, 0, width, height);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#5a5a62';
+  ctx.font = `600 ${Math.round(height * 0.045)}px ui-monospace, monospace`;
+  ctx.fillText('OPEN SPACE.EXE', width / 2, height * 0.34);
+
+  ctx.fillStyle = '#e8e6e0';
+  ctx.font = `800 ${Math.round(height * 0.08)}px ui-monospace, monospace`;
+  ctx.fillText(title, width / 2, height * 0.45);
+
+  const barW = width * 0.5;
+  const barH = Math.max(4, Math.round(height * 0.022));
+  const barX = (width - barW) / 2;
+  const barY = height * 0.58;
+
+  ctx.fillStyle = '#26262c';
+  ctx.fillRect(barX, barY, barW, barH);
+  ctx.fillStyle = '#d23b2e';
+  ctx.fillRect(barX, barY, barW * done, barH);
+
+  ctx.fillStyle = '#8a8a92';
+  ctx.font = `600 ${Math.round(height * 0.035)}px ui-monospace, monospace`;
+  ctx.fillText(`${Math.round(done * 100)}%`, width / 2, barY + barH + height * 0.055);
+  ctx.restore();
+}

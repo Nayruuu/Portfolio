@@ -18,6 +18,9 @@ function stepEnemy(frame: CombatFrame, e: CombatEnemy, dt: number): void {
   e.hitFlash = Math.max(0, e.hitFlash - dt);
   e.cooldown = Math.max(0, e.cooldown - dt);
 
+  if (e.dormant) {
+    return;
+  }
   if (e.dying) {
     e.deathTime += dt;
 
@@ -188,14 +191,14 @@ function accumulateSeparation(
   const push = enemies.map(() => ({ x: 0, y: 0 }));
 
   for (let i = 0; i < n; i++) {
-    if (enemies[i].dying) {
+    if (enemies[i].dying || enemies[i].dormant) {
       continue;
     }
     for (let j = i + 1; j < n; j++) {
       const a = enemies[i];
       const b = enemies[j];
 
-      if (b.dying) {
+      if (b.dying || b.dormant) {
         continue;
       }
       const d = Math.hypot(b.x - a.x, b.y - a.y);

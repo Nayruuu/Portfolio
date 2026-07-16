@@ -138,6 +138,21 @@ function statefulFoe(over: Partial<Record<string, unknown>>): Foe {
 }
 
 describe('enemySprite animation states', () => {
+  it('draws NOTHING for a dormant foe — its atlas has not landed, it is not in the world to be seen', () => {
+    const awake = buildWorldSprites({
+      world: { ...fixtureWorld(), enemies: [statefulFoe({})] },
+      viewX: 0,
+      viewY: 0,
+    });
+    const asleep = buildWorldSprites({
+      world: { ...fixtureWorld(), enemies: [statefulFoe({ dormant: true })] },
+      viewX: 0,
+      viewY: 0,
+    });
+
+    expect(asleep).toHaveLength(awake.length - 1);
+  });
+
   it('draws the death sheet (no recoil flash) for a dying foe', () => {
     const [s] = buildWorldSprites({
       world: {

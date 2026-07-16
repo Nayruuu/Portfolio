@@ -1,5 +1,6 @@
 import {
   buildBsp,
+  castRay,
   isPassableSeam,
   locateSubSector,
   mapObstacles,
@@ -16,7 +17,7 @@ import {
 import { doorCeilZ } from '../doors';
 import { LEVELS, resolveZone, type LevelParams, type ZoneLoad } from '../registry';
 import { stepEnemies, stepEnemyShots } from '../enemy';
-import { ZONE_FADE } from '../game-tuning';
+import { WAKE_CONE_COS, WAKE_SAFE_DIST, ZONE_FADE } from '../game-tuning';
 import { zoneStates, type ZoneSnapshot } from '../zone';
 import type { CombatFrame } from '../combat';
 import type { Level } from '../level';
@@ -59,6 +60,9 @@ export class ZoneRuntime {
   private slidingDoorIndex: SlidingDoor[] = [];
   private arrivalLocked = false;
   private atlasesDecoded = false;
+  // A species is only playable once ITS atlas decodes; foes of an undecoded species are placed
+  // dormant and wake later, out of sight (see wakeHidden).
+  private readonly decodedSpecs = new Set<string>();
   private spawnEnemies = true; // false = strip every zone's foes for an art-inspection capture
   private pendingTransition: {
     readonly to: string;
@@ -146,7 +150,9 @@ export class ZoneRuntime {
     this.spawnEnemies = on;
   }
 
-  public markAtlasesReady(): void {
+  /** The critical atlas landed: the floor's OBJECTS exist (pickups, badges, the exit) and the foes
+   *  are placed — dormant until their own species decodes. This is what the loading screen waits on. */
+  public markPopulated(): void {
     this.atlasesDecoded = true;
     const world = this.activeWorld;
 
@@ -162,6 +168,39 @@ export class ZoneRuntime {
     world.exit = pickups.exit;
     world.populated = true;
     this.refreshWarm();
+  }
+
+  public markSpeciesDecoded(texName: string): void {
+    this.decodedSpecs.add(texName);
+    // Only the ACTIVE zone's foes wake here (via the per-frame wakeHidden). The warm neighbour is NOT
+    // woken eagerly: the player sees into it through the seam, so an in-doorway husk would pop in. Its
+    // foes rebuild non-dormant on the next refreshWarm, or wake out-of-sight once a crossing makes it active.
+  }
+
+  /** Wakes the decoded-species foes the player CANNOT see: behind a wall, outside the view cone, or
+   *  far enough that a pop-in reads as nothing. A husk never materialises in his face. */
+  public wakeHidden(x: number, y: number, angle: number): void {
+    const world = this.activeWorld;
+    const fx = Math.cos(angle);
+    const fy = Math.sin(angle);
+
+    for (const foe of world.enemies) {
+      if (!foe.dormant || !this.decodedSpecs.has(foe.spec.texName)) {
+        continue;
+      }
+      const dx = foe.x - x;
+      const dy = foe.y - y;
+      const dist = Math.hypot(dx, dy);
+      const facing = dist > 1e-4 ? (dx * fx + dy * fy) / dist : 1;
+      const seen =
+        dist < WAKE_SAFE_DIST &&
+        facing > WAKE_CONE_COS &&
+        castRay(world.map, x, y, dx / dist, dy / dist, dist) === null;
+
+      if (!seen) {
+        foe.dormant = false;
+      }
+    }
   }
 
   public crossSeam(fromX: number, fromY: number, toX: number, toY: number): boolean {
@@ -455,6 +494,7 @@ export class ZoneRuntime {
 
       return {
         spec,
+        dormant: !this.decodedSpecs.has(spec.texName),
         x: atX,
         y: atY,
         z: this.floorOn(level, map, atX, atY),

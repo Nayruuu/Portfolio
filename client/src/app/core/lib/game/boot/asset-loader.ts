@@ -1,30 +1,52 @@
 import type { Texture } from '../../bsp-engine';
 import {
-  buildAtlasJobs,
-  loadAtlasTexture,
-  loadEnvTextures,
+  buildEnemyGroups,
+  buildPickupJobs,
+  decodeAtlas,
+  loadPropTextures,
+  loadWorldTextures,
   type AtlasJob,
+  type EnemyAtlasGroup,
 } from '../render/load-textures';
 
 export interface AssetLoaderHooks {
   applyTextures(loaded: ReadonlyMap<string, Texture>): void;
   onEnvTexturesLoaded(hasArt: boolean): void;
-  markAtlasesReady(): void;
+  /** Drives the loading screen's bar over the CRITICAL set only. */
+  onProgress(loaded: number, total: number): void;
+  /** The world's objects exist and the foes are placed (dormant) — the floor is playable. */
+  markPopulated(): void;
+  /** One species' art landed: its foes may now wake, out of sight. */
+  markSpeciesDecoded(texName: string): void;
   /** Runs once — zone transitions never re-run it. */
   seedReserves(): void;
   /** Gates the async callbacks: a late decode landing after teardown must not mutate a disposed game
-   *  (a stray {@link markAtlasesReady} would corrupt the first level of the next mount). */
+   *  (a stray {@link markPopulated} would corrupt the first level of the next mount). */
   isDisposed(): boolean;
 }
 
 export interface AssetDecoders {
-  loadEnvTextures(): Promise<Map<string, Texture>>;
-  buildAtlasJobs(): AtlasJob[];
-  loadAtlasTexture(url: string, rows: number): Promise<Texture | null>;
+  loadWorldTextures(
+    onProgress?: (loaded: number, total: number) => void,
+  ): Promise<Map<string, Texture>>;
+  loadPropTextures(): Promise<Map<string, Texture>>;
+  buildPickupJobs(): AtlasJob[];
+  buildEnemyGroups(): EnemyAtlasGroup[];
+  /** Decodes a sprite sheet — OFF the main thread where the browser allows it. */
+  decodeAtlas(url: string, rows: number): Promise<Texture | null>;
 }
 
-const BROWSER_DECODERS: AssetDecoders = { loadEnvTextures, buildAtlasJobs, loadAtlasTexture };
+const BROWSER_DECODERS: AssetDecoders = {
+  loadWorldTextures,
+  loadPropTextures,
+  buildPickupJobs,
+  buildEnemyGroups,
+  decodeAtlas,
+};
 
+/** Two phases, deliberately SERIAL: on a thin connection every byte is contended, so the 6 MB of enemy
+ *  sheets must not race the world the player is waiting to stand in. Critical first (behind the loading
+ *  screen), then the bestiary species by species while he plays. */
 export class AssetLoader {
   constructor(
     private readonly hooks: AssetLoaderHooks,
@@ -32,40 +54,84 @@ export class AssetLoader {
   ) {}
 
   public async load(): Promise<void> {
-    await Promise.all([this.loadEnvironment(), this.loadAtlases()]);
+    await this.loadCritical();
+    await this.loadDeferred();
   }
 
-  private async loadEnvironment(): Promise<void> {
-    const loaded = await this.decoders.loadEnvTextures();
+  public async loadCritical(): Promise<void> {
+    const pickupJobs = this.decoders.buildPickupJobs();
+    let envDone = 0;
+    let envTotal = 0;
+    let pickupsDone = 0;
+    const report = (): void =>
+      this.hooks.onProgress(envDone + pickupsDone, envTotal + pickupJobs.length);
+
+    const [env, props, pickups] = await Promise.all([
+      this.decoders.loadWorldTextures((done, total) => {
+        envDone = done;
+        envTotal = total;
+        report();
+      }),
+      // The decor's VOXEL CARVE is the heaviest main-thread work in the whole boot (a 96³ grid + its AO
+      // bake). Its bytes could stream during play, but its CPU cannot: a 300 ms freeze is invisible behind
+      // a static card and unforgivable under the player's feet. So it waits here.
+      this.decoders.loadPropTextures(),
+      Promise.all(
+        pickupJobs.map(async (job) => {
+          const texture = await this.decoders.decodeAtlas(job.url, job.rows);
+
+          pickupsDone++;
+          report();
+
+          return texture;
+        }),
+      ),
+    ]);
 
     if (this.hooks.isDisposed()) {
       return; // tore down mid-decode — do not touch a disposed host
     }
-    this.hooks.applyTextures(loaded);
-    this.hooks.onEnvTexturesLoaded(loaded.size > 0);
-  }
+    const loaded = new Map([...env, ...props]);
 
-  private async loadAtlases(): Promise<void> {
-    const jobs = this.decoders.buildAtlasJobs();
-    const textures = await Promise.all(
-      jobs.map((job) => this.decoders.loadAtlasTexture(job.url, job.rows)),
-    );
-
-    if (this.hooks.isDisposed()) {
-      return; // a late atlas decode must NOT markAtlasesReady on a disposed game (first level would load wrong)
-    }
-    const loaded = new Map<string, Texture>();
-
-    textures.forEach((texture, i) => {
+    pickups.forEach((texture, i) => {
       if (texture !== null) {
-        loaded.set(jobs[i].name, texture);
+        loaded.set(pickupJobs[i].name, texture);
       }
     });
+    this.hooks.onEnvTexturesLoaded(env.size > 0);
+
     if (loaded.size === 0) {
-      return; // nothing decoded (SSR / all 404) — leave the procedural fallback + the deferred-spawn gate shut
+      return; // nothing decoded (SSR / all 404) — leave the procedural fallback + the spawn gate shut
     }
     this.hooks.applyTextures(loaded);
-    this.hooks.markAtlasesReady();
+    this.hooks.markPopulated();
     this.hooks.seedReserves();
+  }
+
+  public async loadDeferred(): Promise<void> {
+    for (const group of this.decoders.buildEnemyGroups()) {
+      // A species' sheets decode in PARALLEL — the pixel work lives in a worker, so the game keeps its
+      // frame while the tower fills in behind the player.
+      const textures = await Promise.all(
+        group.jobs.map((job) => this.decoders.decodeAtlas(job.url, job.rows)),
+      );
+
+      if (this.hooks.isDisposed()) {
+        return;
+      }
+      const loaded = new Map<string, Texture>();
+
+      textures.forEach((texture, i) => {
+        if (texture !== null) {
+          loaded.set(group.jobs[i].name, texture);
+        }
+      });
+
+      if (loaded.size === 0) {
+        continue; // this species' art is missing — its foes stay dormant rather than render as gaps
+      }
+      this.hooks.applyTextures(loaded);
+      this.hooks.markSpeciesDecoded(group.texName);
+    }
   }
 }

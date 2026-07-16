@@ -34,7 +34,7 @@ export function collectHittables(frame: PlayerCombatFrame, inflate = 0): Hittabl
     });
   }
   for (const e of frame.enemies) {
-    if (e.dying) {
+    if (e.dying || e.dormant) {
       continue;
     }
     out.push({

@@ -36,6 +36,19 @@ export const LEVELS: Readonly<Record<string, Level>> = {
 
 export const DEFAULT_LEVEL_KEY = 'm1';
 
+/** Shown on the loading card. Proper nouns — the game's canvas overlays are French, like the HUD. */
+export const LEVEL_TITLES: Readonly<Record<string, string>> = {
+  m1: 'LOBBY',
+  m2: 'OPEN SPACE',
+  m3: 'RESSOURCES HUMAINES',
+  m4: 'SALLES DE RÉUNION',
+  m5: 'CAFÉTÉRIA',
+  m6: 'DIRECTION',
+  m7: 'SALLE DES SERVEURS',
+  m8: 'DATACENTER',
+  m9: 'ARCHIVES CONDAMNÉES',
+};
+
 export interface LevelParams {
   readonly levelKey: string; // RAW requested key — resolveZone falls back on unknown keys
   readonly spawn: { readonly x: number; readonly y: number; readonly angle: number } | null;

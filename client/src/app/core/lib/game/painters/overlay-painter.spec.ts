@@ -7,6 +7,7 @@ import {
   drawPickupFx,
   drawWinScreen,
   drawZoneFade,
+  drawLoadingScreen,
 } from './overlay-painter';
 
 interface FillCall {
@@ -122,5 +123,34 @@ describe('overlay-painter washes', () => {
 
     expect(fills).toHaveLength(1);
     expect(fills[0].fillStyle).toBe('rgba(8, 0, 0, 0.45)');
+  });
+});
+
+describe('drawLoadingScreen — the boot card', () => {
+  it('blacks the frame out, then fills the bar in proportion to the progress', () => {
+    const { ctx, fills } = fakeCtx(200, 100);
+
+    drawLoadingScreen(ctx, 0.5, 'LOBBY');
+
+    expect(fills[0]).toEqual({ fillStyle: '#08080a', rect: [0, 0, 200, 100] }); // the world is hidden
+    const track = fills[1];
+    const filled = fills[2];
+
+    expect(filled.rect[2]).toBeCloseTo(track.rect[2] / 2, 5); // half the track
+    expect(filled.rect[0]).toBe(track.rect[0]); // grows from the left edge
+  });
+
+  it('clamps a wild progress to the bar (never overruns, never inverts)', () => {
+    const { ctx, fills } = fakeCtx(200, 100);
+
+    drawLoadingScreen(ctx, 9, 'LOBBY');
+    const [, track, filled] = fills;
+
+    expect(filled.rect[2]).toBe(track.rect[2]);
+
+    const second = fakeCtx(200, 100);
+
+    drawLoadingScreen(second.ctx, -3, 'LOBBY');
+    expect(second.fills[2].rect[2]).toBe(0);
   });
 });

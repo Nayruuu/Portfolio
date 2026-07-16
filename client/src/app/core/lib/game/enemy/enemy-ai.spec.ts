@@ -114,6 +114,7 @@ const makeEnemy = (spec: EnemyCombat, over: Partial<CombatEnemy> = {}): CombatEn
   hitFlash: 0,
   windup: 0,
   cooldown: 0,
+  dormant: false,
   ...over,
 });
 
@@ -171,6 +172,18 @@ describe('stepEnemies — chase / hold / retreat by the standoff band', () => {
 
     expect(e.x).toBeLessThan(29);
     expect(e.walkDist).toBeGreaterThan(0);
+  });
+
+  it('a DORMANT enemy does not move, wind up, or strike — its atlas has not landed yet', () => {
+    const e = makeEnemy(MELEE, { x: 29, y: 30, dormant: true });
+    const frame = makeFrame([e]);
+
+    stepEnemies(frame, 0.5);
+
+    expect(e.x).toBe(29);
+    expect(e.walkDist).toBe(0);
+    expect(e.windup).toBe(0);
+    expect(frame.hurtSpy).not.toHaveBeenCalled();
   });
 
   it('stays idle behind a glass pane — combat sight is glass-blocked', () => {
@@ -485,6 +498,17 @@ describe('stepEnemyShots', () => {
 });
 
 describe('separateEnemies', () => {
+  it('never pushes a dormant enemy (it is not in the world yet)', () => {
+    const live = makeEnemy(MELEE, { x: 20, y: 30 });
+    const dormant = makeEnemy(MELEE, { x: 20.1, y: 30, dormant: true });
+    const frame = makeFrame([live, dormant]);
+
+    separateEnemies(frame);
+
+    expect(dormant.x).toBe(20.1);
+    expect(live.x).toBe(20);
+  });
+
   it('pushes two overlapping foes symmetrically apart', () => {
     const a = makeEnemy(MELEE, { x: 30, y: 30 });
     const b = makeEnemy(MELEE, { x: 30.5, y: 30 });

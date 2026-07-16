@@ -12,6 +12,9 @@ export interface CombatEnemy {
   hitFlash: number;
   windup: number; // seconds left; 0 = not attacking
   cooldown: number;
+  // Its atlas has not landed yet: authored into the world (so the snapshot keeps its slot) but not
+  // yet ALIVE — invisible, inert, untargetable. It wakes out of sight once the species decodes.
+  dormant: boolean;
 }
 
 export interface EnemyShot {

@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import { type Camera, type Sprite } from '../../core/lib/bsp-engine';
+import { LEVEL_TITLES } from '../../core/lib/game/registry/level-select';
 import {
   parseLevelParams,
   RENDER_SETTLE_TIMEOUT_MS,
@@ -49,6 +50,7 @@ import {
   drawGameOver,
   drawHint,
   drawHurtFx,
+  drawLoadingScreen,
   drawPickupFx,
   drawWinScreen,
   drawZoneFade,
@@ -95,6 +97,8 @@ export class BspDemoComponent {
   protected readonly threads = signal(1);
   protected readonly poolSize = signal(1);
   protected readonly backend = signal<'cpu' | 'gpu'>('cpu');
+
+  private readonly loadProgress = signal(0);
 
   private readonly params: LevelParams = parseLevelParams(
     typeof location === 'undefined' ? '' : location.search,
@@ -154,6 +158,8 @@ export class BspDemoComponent {
 
       this.bootstrapRenderHost(context, canvasEl);
       this.combatRuntime.climbView.preload(); // decode the mantle hands now so the first vault isn't blank
+      this.resizeHud(); // size the HUD backing store first, so preload warms the tier the DISPLAY needs
+      this.hud.preload(this.hudCanvas().nativeElement.width); // …and the status bar, so it is up when the card lifts
       this.bindInputListeners(canvasEl);
       const hudResize = this.observeHudResize();
 
@@ -244,7 +250,9 @@ export class BspDemoComponent {
     return {
       applyTextures: (loaded) => this.renderHost.applyTextures(loaded),
       onEnvTexturesLoaded: (hasArt) => this.texturesLoaded.set(hasArt),
-      markAtlasesReady: () => this.zoneRuntime.markAtlasesReady(),
+      onProgress: (loaded, total) => this.loadProgress.set(total === 0 ? 1 : loaded / total),
+      markPopulated: () => this.zoneRuntime.markPopulated(),
+      markSpeciesDecoded: (texName) => this.zoneRuntime.markSpeciesDecoded(texName),
       seedReserves: () => this.combatRuntime.seedReserves(),
       isDisposed: () => this.renderHost.disposed,
     };
@@ -368,6 +376,18 @@ export class BspDemoComponent {
     const dt = this.lastTime === 0 ? 0 : Math.min(0.05, (now - this.lastTime) / 1000);
 
     this.lastTime = now;
+
+    // The floor is not playable until its world + objects land: hold the player on the boot card
+    // rather than let him walk an empty tower (the bestiary keeps streaming in behind it).
+    if (!this.zoneRuntime.atlasesReady) {
+      drawLoadingScreen(
+        context,
+        this.loadProgress(),
+        LEVEL_TITLES[this.zoneRuntime.currentKey] ?? '',
+      );
+
+      return;
+    }
     this.advance(dt);
     this.applyDisplaySnapshot(this.renderHost.measureDisplay(now));
 
@@ -471,6 +491,24 @@ export class BspDemoComponent {
     drawCrosshair(context, this.combatRuntime.shotFx);
     drawHint(context, this.pickupRuntime.hint);
     drawZoneFade(context, this.zoneRuntime.transition, ZONE_FADE);
+    this.paintHud(drawDt);
+    drawGameOver(
+      context,
+      this.combatRuntime.dead,
+      this.combatRuntime.deadClock,
+      this.combatRuntime.deadClock >= RESTART_DELAY,
+    );
+    drawWinScreen(
+      context,
+      this.combatRuntime.won,
+      this.combatRuntime.wonClock,
+      this.combatRuntime.wonClock >= RESTART_DELAY,
+    );
+  }
+
+  // Draws the status bar each frame (its own canvas, composited under the game canvas). Its art is warmed
+  // at boot by hud.preload() so it is up the instant the loading card lifts — see the constructor.
+  private paintHud(drawDt: number): void {
     this.hudPainter.draw({
       hud: this.hud,
       canvas: this.hudCanvas().nativeElement,
@@ -484,18 +522,6 @@ export class BspDemoComponent {
       weaponView: this.combatRuntime.weaponView,
       cameraAngle: this.camera.angle,
     });
-    drawGameOver(
-      context,
-      this.combatRuntime.dead,
-      this.combatRuntime.deadClock,
-      this.combatRuntime.deadClock >= RESTART_DELAY,
-    );
-    drawWinScreen(
-      context,
-      this.combatRuntime.won,
-      this.combatRuntime.wonClock,
-      this.combatRuntime.wonClock >= RESTART_DELAY,
-    );
   }
 
   // ordered tick — step order + each early return (dead/won/transition/mantle/crossSeam) is pixel/behaviour-load-bearing
@@ -531,6 +557,7 @@ export class BspDemoComponent {
   }
 
   private stepWorld(dt: number): void {
+    this.zoneRuntime.wakeHidden(this.camera.x, this.camera.y, this.camera.angle);
     this.combatRuntime.stepStress(dt); // DEBUG load test (no-op unless toggled) — before projectiles so its shots step this frame
     stepEnemies(this.combatRuntime.activeFrame(), dt);
     stepEnemyShots(this.combatRuntime.activeFrame(), dt);

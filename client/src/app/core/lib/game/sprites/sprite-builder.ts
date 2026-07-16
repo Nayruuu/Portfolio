@@ -154,6 +154,9 @@ export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
     .map((t) => orientSprite(t.sprite, viewX, viewY));
 
   for (const e of world.enemies) {
+    if (e.dormant) {
+      continue; // no atlas yet — it is not in the world to be seen
+    }
     sprites.push(enemySprite(e));
   }
   for (const shot of world.enemyShots) {

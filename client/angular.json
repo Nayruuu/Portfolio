@@ -91,6 +91,7 @@
               "**/features/bsp-demo/bsp-demo.component.html",
               "**/core/lib/game/render/render-pool.ts",
               "**/core/lib/game/render/render.worker.ts",
+              "**/core/lib/game/render/atlas.worker.ts",
               "**/core/lib/game/render/gpu-renderer.ts",
               "**/core/lib/game/render/render-host.ts",
               "**/core/lib/game/render/load-textures.ts",
