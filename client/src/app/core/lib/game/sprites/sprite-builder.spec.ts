@@ -217,6 +217,46 @@ describe('weapon pickups — the vox aspect override', () => {
   });
 });
 
+describe('ammo boxes — the vox branch', () => {
+  it('renders an ammo box as a rotating volume when its vox is loaded, billboard otherwise', () => {
+    const box = {
+      x: 3,
+      y: 4,
+      z: 0,
+      age: 2,
+      idx: 0,
+      spec: {
+        id: 'box_staples',
+        texName: 'AMMO_BOX_STAPLES',
+        url: '/game/weapons/pistol/ammo/staples_turn_strip.webp',
+        frames: 7,
+        frameMs: 100,
+        worldHeight: 0.5,
+        aspect: 150 / 168,
+        ammoType: 'bullets',
+        amount: 20,
+        max: 100,
+      },
+    };
+    const build = (voxAspects?: ReadonlyMap<string, number>) =>
+      buildWorldSprites({
+        world: { ...fixtureWorld(), ammoBoxes: [box] },
+        viewX: 0,
+        viewY: 0,
+        voxAspects,
+      }).find((s) => s.tex === 'AMMO_BOX_STAPLES');
+
+    const flat = build();
+    const voxed = build(new Map([['AMMO_BOX_STAPLES', 1.33]]));
+
+    expect(flat?.voxel).toBeUndefined(); // no vox → the spinning billboard
+    expect(flat?.cols).toBe(7);
+    expect(voxed?.voxel).toBe(true); // vox → a true volume…
+    expect(voxed?.width).toBeCloseTo(0.5 * 1.33, 5); // …sized by the model's own ratio
+    expect(voxed?.facing).toBeGreaterThan(0); // …turning with its age
+  });
+});
+
 describe('enemySprite animation states', () => {
   it('draws NOTHING for a dormant foe — its atlas has not landed, it is not in the world to be seen', () => {
     const awake = buildWorldSprites({

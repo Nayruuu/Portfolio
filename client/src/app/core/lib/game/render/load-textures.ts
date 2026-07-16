@@ -12,7 +12,7 @@ import {
   type Texture,
 } from '../../bsp-engine';
 import { ENEMY_SPECS } from '../enemy';
-import { PICKUP_TEXTURE_JOBS, WEAPON_PICKUP_SPECS } from '../world/pickups';
+import { AMMO_BOX_SPECS, PICKUP_TEXTURE_JOBS, WEAPON_PICKUP_SPECS } from '../world/pickups';
 
 function plantPlaceholder(): Texture {
   const size = 64;
@@ -636,22 +636,31 @@ const VOX_DENSITY_PER_UNIT = 250;
 
 export async function loadWeaponPickupVox(): Promise<Map<string, Texture>> {
   const out = new Map<string, Texture>();
-
-  for (const spec of WEAPON_PICKUP_SPECS) {
-    const grid = await loadVoxFile(`/game/weapons/${spec.id}/pickup.vox`);
+  // Trim (pure framing: empty border slices only), then budget the RESOLUTION by display size —
+  // the user sculpts at 256-class comfort, the engine right-sizes per what the screen can show.
+  const intake = async (url: string, texName: string, displayHeight: number): Promise<void> => {
+    const grid = await loadVoxFile(url);
 
     if (grid === null) {
-      continue;
+      return;
     }
-    // Trim (pure framing: empty border slices only), then budget the RESOLUTION by display size —
-    // the user sculpts at 256-class comfort, the engine right-sizes per what the screen can show.
     const trimmed = trimVoxelGrid(grid);
     const ny = trimmed.voxelDepth ?? 1;
     const ratio = trimmed.width / (trimmed.height / ny);
-    const displayMax = spec.voxHeight * Math.max(ratio, 1);
-    const budget = Math.ceil(displayMax * VOX_DENSITY_PER_UNIT);
+    const budget = Math.ceil(displayHeight * Math.max(ratio, 1) * VOX_DENSITY_PER_UNIT);
 
-    out.set(spec.texName, downsampleVoxelGrid(trimmed, budget));
+    out.set(texName, downsampleVoxelGrid(trimmed, budget));
+  };
+
+  for (const spec of WEAPON_PICKUP_SPECS) {
+    await intake(`/game/weapons/${spec.id}/pickup.vox`, spec.texName, spec.voxHeight);
+  }
+  // Ammo boxes follow the same convention, one folder down: <weapon>/ammo/pickup.vox — the path is
+  // derived from each spec's own art url, so no weapon-id table to maintain.
+  for (const spec of AMMO_BOX_SPECS) {
+    const dir = spec.url.slice(0, spec.url.lastIndexOf('/'));
+
+    await intake(`${dir}/pickup.vox`, spec.texName, spec.worldHeight);
   }
 
   return out;

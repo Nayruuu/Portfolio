@@ -140,6 +140,30 @@ function spinningSprite(
   };
 }
 
+/** A pickup whose hand-sculpted vox is loaded: voxel: true routes the renderer to the VOLUME walk —
+ *  without it the grid texture would draw as a flat billboard (a ~97%-transparent smear). The volume
+ *  TURNS with the pickup's age (the vox twin of the 2D icon's frame spin), sized by the MODEL's ratio. */
+function voxPickupSprite(
+  x: number,
+  y: number,
+  z: number,
+  tex: string,
+  height: number,
+  ratio: number,
+  age: number,
+): Sprite {
+  return {
+    x,
+    y,
+    z,
+    tex,
+    width: height * ratio,
+    height,
+    voxel: true,
+    facing: age * WEAPON_VOX_SPIN,
+  };
+}
+
 function exitSprite(exit: Marker): Sprite {
   return {
     x: exit.x,
@@ -171,7 +195,15 @@ export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
     sprites.push(spinningSprite(v.x, v.y, v.z, v.spec, v.age, v.spec.spin));
   }
   for (const b of world.ammoBoxes) {
-    sprites.push(spinningSprite(b.x, b.y, b.z, b.spec, b.age));
+    const voxAspect = input.voxAspects?.get(b.spec.texName);
+
+    if (voxAspect === undefined) {
+      sprites.push(spinningSprite(b.x, b.y, b.z, b.spec, b.age));
+      continue;
+    }
+    sprites.push(
+      voxPickupSprite(b.x, b.y, b.z, b.spec.texName, b.spec.worldHeight, voxAspect, b.age),
+    );
   }
   for (const k of world.keycards) {
     sprites.push(spinningSprite(k.x, k.y, k.z, k.spec, k.age));
@@ -183,19 +215,9 @@ export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
       sprites.push(spinningSprite(p.x, p.y, p.z, p.spec, p.age));
       continue;
     }
-    // voxel: true routes the renderer to the VOLUME walk — without it the grid texture would draw
-    // as a flat billboard (a 97%-transparent smear). The volume TURNS with the pickup's age, the
-    // vox twin of the 2D icon's frame spin; its height is the per-weapon voxHeight knob.
-    sprites.push({
-      x: p.x,
-      y: p.y,
-      z: p.z,
-      tex: p.spec.texName,
-      width: p.spec.voxHeight * voxAspect,
-      height: p.spec.voxHeight,
-      voxel: true,
-      facing: p.age * WEAPON_VOX_SPIN,
-    });
+    sprites.push(
+      voxPickupSprite(p.x, p.y, p.z, p.spec.texName, p.spec.voxHeight, voxAspect, p.age),
+    );
   }
   if (world.exit !== null) {
     sprites.push(exitSprite(world.exit));
