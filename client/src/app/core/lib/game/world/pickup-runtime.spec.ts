@@ -237,6 +237,15 @@ describe('PickupRuntime — weapon pickups', () => {
     expect(world.weaponPickups).toHaveLength(0);
   });
 
+  it('collects a weapon anywhere ON its visual footprint — a 2u-wide chainsaw must not need a center-hug', () => {
+    // standing at 1.1u from center = on the blade of the displayed volume, well past the old 0.6
+    const { pr, combat } = setup({ weaponPickups: [weaponPickup(1.1, 0, 'chainsaw')] });
+
+    pr.stepPickups(0.1);
+
+    expect(combat.owns('chainsaw')).toBe(true);
+  });
+
   it('leaves an out-of-reach weapon pickup in place, still spinning', () => {
     const { pr, combat, world } = setup({ weaponPickups: [weaponPickup(5, 5, 'shotgun')] });
 

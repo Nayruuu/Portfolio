@@ -24,6 +24,7 @@ import {
   type LevelParams,
 } from './level-select';
 import { WEAPON_IDS, type WeaponId } from '../../../../domain';
+import { WEAPON_PICKUP_SPECS } from '../world/pickups';
 
 const MELEE_WEAPON_IDS: readonly WeaponId[] = ['fist', 'chainsaw'];
 
@@ -55,6 +56,17 @@ describe('level registry', () => {
     });
     expect(DEFAULT_LEVEL_KEY).toBe('m1');
     expect(LEVELS[DEFAULT_LEVEL_KEY]).toBe(M1_LOBBY);
+  });
+
+  it('gives every weapon pickup a vox display height (the per-weapon size knob, pistol deliberately small)', () => {
+    for (const spec of WEAPON_PICKUP_SPECS) {
+      expect(spec.voxHeight).toBeGreaterThan(0);
+    }
+    const pistol = WEAPON_PICKUP_SPECS.find((spec) => spec.id === 'pistol');
+    const chainsaw = WEAPON_PICKUP_SPECS.find((spec) => spec.id === 'chainsaw');
+
+    expect(pistol?.voxHeight).toBe(0.38); // a pistol is a small thing
+    expect(chainsaw?.voxHeight).toBe(0.55); // unlisted weapons keep the shared default
   });
 
   it('titles every campaign floor for the loading card (the dev levels need none)', () => {

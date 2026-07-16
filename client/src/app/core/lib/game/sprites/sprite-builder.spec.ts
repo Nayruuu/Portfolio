@@ -137,6 +137,86 @@ function statefulFoe(over: Partial<Record<string, unknown>>): Foe {
   } as unknown as Foe;
 }
 
+describe('weapon pickups — the vox aspect override', () => {
+  it('sizes a voxel collectible by its MODEL ratio, not the 2D icon ratio', () => {
+    const world = {
+      ...fixtureWorld(),
+      weaponPickups: [
+        {
+          x: 1,
+          y: 2,
+          z: 0,
+          age: 0,
+          idx: 0,
+          spec: {
+            id: 'pistol' as const,
+            texName: 'PICKUP_WEAPON_PISTOL',
+            url: '/icon.webp',
+            worldHeight: 0.5,
+            voxHeight: 0.5,
+            aspect: 0.89,
+            frames: 1,
+            frameMs: 100,
+            ammoType: 'bullets',
+          },
+        },
+      ],
+    };
+    const flat = buildWorldSprites({ world, viewX: 0, viewY: 0 });
+    const voxed = buildWorldSprites({
+      world,
+      viewX: 0,
+      viewY: 0,
+      voxAspects: new Map([['PICKUP_WEAPON_PISTOL', 1.4]]),
+    });
+    const pick = (
+      list: readonly { tex: string; width: number; height: number; voxel?: boolean }[],
+    ) => list.find((s) => s.tex === 'PICKUP_WEAPON_PISTOL');
+
+    expect(pick(flat)?.width).toBeCloseTo(0.5 * 0.89, 5); // no vox → the icon ratio
+    expect(pick(flat)?.voxel).toBeUndefined(); // …and a plain billboard
+    expect(pick(voxed)?.width).toBeCloseTo(0.5 * 1.4, 5); // vox → the model's own ratio
+    expect(pick(voxed)?.height).toBe(0.5); // height is the design knob, untouched
+    // the flag is what routes the renderer to the VOLUME walk — without it the grid texture
+    // draws as a flat billboard: a 97%-transparent smear (the bug this test pins)
+    expect(pick(voxed)?.voxel).toBe(true);
+  });
+
+  it('spins a vox collectible with its age, and sizes it by its OWN display height', () => {
+    const pickupAt = (age: number) => ({
+      x: 1,
+      y: 2,
+      z: 0,
+      age,
+      idx: 0,
+      spec: {
+        id: 'pistol' as const,
+        texName: 'PICKUP_WEAPON_PISTOL',
+        url: '/icon.webp',
+        worldHeight: 0.55,
+        voxHeight: 0.4,
+        aspect: 0.89,
+        frames: 1,
+        frameMs: 100,
+        ammoType: 'bullets',
+      },
+    });
+    const at = (age: number) =>
+      buildWorldSprites({
+        world: { ...fixtureWorld(), weaponPickups: [pickupAt(age)] },
+        viewX: 0,
+        viewY: 0,
+        voxAspects: new Map([['PICKUP_WEAPON_PISTOL', 1.4]]),
+      }).find((s) => s.tex === 'PICKUP_WEAPON_PISTOL');
+
+    expect(at(0)?.height).toBe(0.4); // the per-weapon vox height, not the shared 0.55
+    expect(at(0)?.width).toBeCloseTo(0.4 * 1.4, 5);
+    expect(at(0)?.facing).toBe(0);
+    expect(at(1)?.facing).toBeGreaterThan(0); // the volume turns as the pickup ages
+    expect(at(1)?.facing).not.toBe(at(2)?.facing);
+  });
+});
+
 describe('enemySprite animation states', () => {
   it('draws NOTHING for a dormant foe — its atlas has not landed, it is not in the world to be seen', () => {
     const awake = buildWorldSprites({

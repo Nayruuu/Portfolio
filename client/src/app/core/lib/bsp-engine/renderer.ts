@@ -51,15 +51,16 @@ interface SpriteDef {
   readonly rotations?: number;
   readonly voxel?: true;
 }
-// A voxel prop's `width` spans its carved grid (the front cell's TRIMMED art bbox), so on-screen size
-// matches the billboard's. A cubic .vox needs width == height or it renders distorted.
+// A voxel prop's box maps the TRIMMED grid onto (width, height): cubic voxels require
+// width == height × (n/nz) of the trimmed grid — restate the width when a sculpt's box changes.
+// (The weapon pickups derive this ratio at load via voxAspects; props still pin it here.)
 const SPRITES: Partial<Record<ThingType, SpriteDef>> = {
   barrel: { tex: 'BARREL', width: 0.8, height: 1.1 },
   prop: { tex: 'PROP', width: 0.8, height: 1.6 }, // potted plant — symmetric, one frame
-  prop_screen: { tex: 'PROP_SCREEN', width: 0.57, height: 0.6, rotations: 8, voxel: true }, // 1×8 sheet + served top view
+  prop_screen: { tex: 'PROP_SCREEN', width: 0.64, height: 0.6, rotations: 8, voxel: true }, // trimmed 160×95×150 → 0.6 × 1.0667
   prop_totem: { tex: 'PROP_TOTEM', width: 1.25, height: 2.0, rotations: 4, voxel: true },
   prop_board: { tex: 'PROP_BOARD', width: 1.49, height: 1.7, rotations: 4, voxel: true },
-  prop_chair: { tex: 'PROP_CHAIR', width: 1.2, height: 1.2, rotations: 4, voxel: true }, // hand-sculpted .vox — width MUST equal height
+  prop_chair: { tex: 'PROP_CHAIR', width: 1.108, height: 1.2, rotations: 4, voxel: true }, // trimmed 108×110×117 → 1.2 × 0.9231
   prop_cooler: { tex: 'PROP_COOLER', width: 0.6, height: 1.5 }, // water cooler — symmetric, one frame
 };
 

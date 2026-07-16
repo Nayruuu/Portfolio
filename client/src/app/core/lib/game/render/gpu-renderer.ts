@@ -66,7 +66,16 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
     if (adapter === null) {
       return null;
     }
-    device = await adapter.requestDevice();
+    // The default binding cap is 128 MB — the texel pool (all atlases + every voxel grid) can exceed it.
+    // Ask for what the adapter really offers, capped at 1 GB; setTextures still guards the granted limit.
+    const gib = 1 << 30;
+
+    device = await adapter.requestDevice({
+      requiredLimits: {
+        maxStorageBufferBindingSize: Math.min(adapter.limits.maxStorageBufferBindingSize, gib),
+        maxBufferSize: Math.min(adapter.limits.maxBufferSize, gib),
+      },
+    });
   } catch {
     return null;
   }
@@ -175,6 +184,19 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
       size: info.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    // Both granted limits bind the pool buffer (spec-legal adapters may order them either way).
+    const bufferCap = Math.min(
+      device.limits.maxStorageBufferBindingSize,
+      device.limits.maxBufferSize,
+    );
+
+    if (texels.byteLength > bufferCap) {
+      // WebGPU would NOT throw here — createBuffer just goes invalid and every later submit fails
+      // validation, a silent per-frame death with no fallback. Throw so the host can drop to CPU.
+      throw new Error(
+        `gpu texel pool ${texels.byteLength} B exceeds the granted limit ${bufferCap} B`,
+      );
+    }
     texelsBuf = device.createBuffer({
       size: texels.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,

@@ -184,7 +184,8 @@ export const AMMO_BOX_SPECS: readonly AmmoBoxSpec[] = [
   ),
 ];
 
-// v1 ART PLACEHOLDER: `url`/`frames`/`aspect` hold the HUD icon as a single frame until a real `_rot` strip ships.
+// `url`/`frames`/`aspect` describe the 2D icon billboard — the fallback when a weapon has no pickup.vox yet
+// (the vox path renders a rotating VOLUME instead and ignores frames; see loadWeaponPickupVox).
 export interface WeaponPickupSpec {
   readonly id: WeaponId;
   readonly texName: string;
@@ -192,6 +193,8 @@ export interface WeaponPickupSpec {
   readonly frames: number;
   readonly frameMs: number;
   readonly worldHeight: number;
+  /** Display height of the VOX collectible (the 2D icon billboard keeps `worldHeight`). */
+  readonly voxHeight: number;
   readonly aspect: number;
   readonly ammoType: string | null;
 }
@@ -209,6 +212,13 @@ const WEAPON_ICON_ASPECTS: Readonly<Record<WeaponId, number>> = {
 
 const WEAPON_WORLD_HEIGHT = 0.55;
 
+// Display height of the VOX collectible per weapon (the 2D icon keeps WEAPON_WORLD_HEIGHT): with the
+// model's own ratio driving the width, the height is the one size knob — a pistol is a small thing,
+// a chainsaw is not. Unlisted weapons default to WEAPON_WORLD_HEIGHT.
+const WEAPON_VOX_HEIGHTS: Partial<Record<WeaponId, number>> = {
+  pistol: 0.38,
+};
+
 export const WEAPON_PICKUP_SPECS: readonly WeaponPickupSpec[] = WEAPON_IDS.map((id) => {
   const weapon = requireWeapon(id);
 
@@ -219,6 +229,7 @@ export const WEAPON_PICKUP_SPECS: readonly WeaponPickupSpec[] = WEAPON_IDS.map((
     frames: 1,
     frameMs: PICKUP_SPIN_MS,
     worldHeight: WEAPON_WORLD_HEIGHT,
+    voxHeight: WEAPON_VOX_HEIGHTS[id] ?? WEAPON_WORLD_HEIGHT,
     aspect: WEAPON_ICON_ASPECTS[id],
     ammoType: weapon.ammoType,
   };

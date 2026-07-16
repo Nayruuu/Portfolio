@@ -5,6 +5,7 @@ import {
   HINT_DURATION,
   PICKUP_FX_DURATION,
   PICKUP_RADIUS,
+  WEAPON_PICKUP_RADIUS,
   SLIDE_TRIGGER_RADIUS,
 } from '../game-tuning';
 import { shouldAutoEquip } from '../weapons';
@@ -199,7 +200,7 @@ export class PickupRuntime {
 
     world.weaponPickups = world.weaponPickups.filter((p) => {
       p.age += dt;
-      if (Math.hypot(p.x - camera.x, p.y - camera.y) >= PICKUP_RADIUS) {
+      if (Math.hypot(p.x - camera.x, p.y - camera.y) >= WEAPON_PICKUP_RADIUS) {
         return true;
       }
       this.collectWeapon(p.spec);

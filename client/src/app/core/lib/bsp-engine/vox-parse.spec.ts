@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { downsampleVoxelGrid, trimVoxelGrid } from './vox-parse';
 
 import { parseVox } from './vox-parse';
 import type { Texture } from './texture';
@@ -294,5 +295,148 @@ describe('parseVox', () => {
     const bad = concat(tag('VOX '), u32(150), main);
 
     expect(() => parseVox(bad)).toThrow(/negative size/);
+  });
+});
+
+describe('trimVoxelGrid', () => {
+  const grid = (n: number, ny: number, nz: number, solids: readonly [number, number, number][]) => {
+    const pixels = new Uint8ClampedArray(n * ny * nz * 4);
+
+    for (const [x, y, z] of solids) {
+      const i = ((z * ny + y) * n + x) * 4;
+
+      pixels[i] = 200;
+      pixels[i + 3] = 255;
+    }
+
+    return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+  };
+
+  it('crops empty border slices on all three axes — pure framing, no voxel touched', () => {
+    // a single solid voxel at (2,1,3) inside an 8×4×6 box → trims to 1×1×1
+    const trimmed = trimVoxelGrid(grid(8, 4, 6, [[2, 1, 3]]));
+
+    expect(trimmed.width).toBe(1);
+    expect(trimmed.voxelDepth).toBe(1);
+    expect(trimmed.height).toBe(1);
+    expect(trimmed.pixels[0]).toBe(200); // the voxel survived, colour intact
+    expect(trimmed.pixels[3]).toBe(255);
+  });
+
+  it('keeps a tight grid byte-identical (nothing to trim)', () => {
+    const tight = grid(2, 1, 2, [
+      [0, 0, 0],
+      [1, 0, 1],
+    ]);
+    const trimmed = trimVoxelGrid(tight);
+
+    expect(trimmed.width).toBe(2);
+    expect(trimmed.height).toBe(2);
+    expect(trimmed.pixels).toEqual(tight.pixels);
+  });
+
+  it('spans the full occupied bbox (two far-apart voxels)', () => {
+    const trimmed = trimVoxelGrid(
+      grid(10, 5, 10, [
+        [2, 1, 2],
+        [7, 3, 8],
+      ]),
+    );
+
+    expect(trimmed.width).toBe(6); // x 2..7
+    expect(trimmed.voxelDepth).toBe(3); // y 1..3
+    expect(trimmed.height / (trimmed.voxelDepth ?? 1)).toBe(7); // z 2..8
+  });
+
+  it('returns an all-empty grid unchanged (a degenerate crop would be zero-size)', () => {
+    const empty = grid(4, 2, 4, []);
+
+    expect(trimVoxelGrid(empty)).toBe(empty);
+  });
+
+  it('throws on a flat texture (no voxelDepth) — this is a voxel-grid tool', () => {
+    expect(() => trimVoxelGrid({ width: 2, height: 2, pixels: new Uint8ClampedArray(16) })).toThrow(
+      'not a voxel grid',
+    );
+  });
+});
+
+describe('downsampleVoxelGrid', () => {
+  const grid = (
+    n: number,
+    ny: number,
+    nz: number,
+    solids: readonly [number, number, number, number][], // x,y,z,grey
+  ) => {
+    const pixels = new Uint8ClampedArray(n * ny * nz * 4);
+
+    for (const [x, y, z, grey] of solids) {
+      const i = ((z * ny + y) * n + x) * 4;
+
+      pixels[i] = grey;
+      pixels[i + 1] = grey;
+      pixels[i + 2] = grey;
+      pixels[i + 3] = 255;
+    }
+
+    return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+  };
+
+  it('returns a grid already under budget UNTOUCHED (same object)', () => {
+    const small = grid(4, 4, 4, [[1, 1, 1, 100]]);
+
+    expect(downsampleVoxelGrid(small, 128)).toBe(small);
+  });
+
+  it('halves an over-budget grid with a box filter (dims rounded up)', () => {
+    const big = grid(6, 3, 5, [[0, 0, 0, 100]]);
+    const out = downsampleVoxelGrid(big, 3);
+
+    expect(out.width).toBe(3); // 6/2
+    expect(out.voxelDepth).toBe(2); // ceil(3/2)
+    expect(out.height / (out.voxelDepth ?? 1)).toBe(3); // ceil(5/2)
+  });
+
+  it('keeps a cell occupied if ANY source voxel in its block is (thin parts survive)', () => {
+    // one lone voxel at a block corner — a 2×2×2 block averages 1/8 occupancy, yet must stay solid
+    const big = grid(4, 4, 4, [[3, 3, 3, 200]]);
+    const out = downsampleVoxelGrid(big, 2);
+    const n = out.width;
+    const ny = out.voxelDepth ?? 1;
+    const i = ((1 * ny + 1) * n + 1) * 4; // block (1,1,1)
+
+    expect(out.pixels[i + 3]).toBe(255);
+    expect(out.pixels[i]).toBe(200);
+  });
+
+  it('colours a block by the MAJORITY colour of its occupied voxels', () => {
+    // block (0,0,0) of a 2× downsample: three voxels grey 50, one grey 200 → 50 wins
+    const big = grid(2, 2, 2, [
+      [0, 0, 0, 50],
+      [1, 0, 0, 50],
+      [0, 1, 0, 50],
+      [1, 1, 1, 200],
+    ]);
+    const out = downsampleVoxelGrid(big, 1);
+
+    expect(out.width).toBe(1);
+    expect(out.pixels[0]).toBe(50);
+    expect(out.pixels[3]).toBe(255);
+  });
+
+  it('clips edge blocks on a width not divisible by the factor (no read past the row)', () => {
+    // width 5, k=2 → 3 blocks; the last block's second column (gx=5) is past the edge and must be skipped
+    const odd = grid(5, 2, 2, [[4, 0, 0, 120]]);
+    const out = downsampleVoxelGrid(odd, 3);
+
+    expect(out.width).toBe(3);
+    expect(out.pixels[(0 * 3 + 2) * 4]).toBe(120); // the lone edge voxel lands in block x=2
+    expect(out.pixels[(0 * 3 + 2) * 4 + 3]).toBe(255);
+  });
+
+  it('throws on a flat texture (no voxelDepth)', () => {
+    expect(() =>
+      downsampleVoxelGrid({ width: 2, height: 2, pixels: new Uint8ClampedArray(16) }, 128),
+    ).toThrow('not a voxel grid');
   });
 });

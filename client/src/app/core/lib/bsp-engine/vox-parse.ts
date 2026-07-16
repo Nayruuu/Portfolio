@@ -163,3 +163,152 @@ export function parseVox(input: ArrayBuffer | Uint8Array): Texture {
 
   return { width: n, height: ny * nz, pixels, voxelDepth: ny };
 }
+
+/** Crop a voxel grid to its occupied bounding box — PURE FRAMING: only empty border slices are removed,
+ *  no voxel is touched. A generator often exports a loose box (a pistol inside a 256³ cube); the display
+ *  maps the GRID onto the sprite box, so empty slices shrink the model on screen. Returns the input grid
+ *  unchanged when it is already tight or entirely empty. */
+export function trimVoxelGrid(grid: Texture): Texture {
+  const ny = grid.voxelDepth;
+
+  if (ny === undefined) {
+    throw new Error('trimVoxelGrid: not a voxel grid (no voxelDepth)');
+  }
+  const n = grid.width;
+  const nz = grid.height / ny;
+  const px = grid.pixels;
+  let x0 = n;
+  let x1 = -1;
+  let y0 = ny;
+  let y1 = -1;
+  let z0 = nz;
+  let z1 = -1;
+
+  for (let gz = 0; gz < nz; gz++) {
+    for (let gy = 0; gy < ny; gy++) {
+      for (let gx = 0; gx < n; gx++) {
+        if (px[((gz * ny + gy) * n + gx) * 4 + 3] === 0) {
+          continue;
+        }
+        x0 = Math.min(x0, gx);
+        x1 = Math.max(x1, gx);
+        y0 = Math.min(y0, gy);
+        y1 = Math.max(y1, gy);
+        z0 = Math.min(z0, gz);
+        z1 = Math.max(z1, gz);
+      }
+    }
+  }
+
+  if (x1 < 0) {
+    return grid; // entirely empty — a zero-size crop would be degenerate
+  }
+  const tn = x1 - x0 + 1;
+  const tny = y1 - y0 + 1;
+  const tnz = z1 - z0 + 1;
+
+  if (tn === n && tny === ny && tnz === nz) {
+    return grid; // already tight
+  }
+  const out = new Uint8ClampedArray(tn * tny * tnz * 4);
+
+  for (let gz = 0; gz < tnz; gz++) {
+    for (let gy = 0; gy < tny; gy++) {
+      for (let gx = 0; gx < tn; gx++) {
+        const src = (((gz + z0) * ny + (gy + y0)) * n + (gx + x0)) * 4;
+        const dst = ((gz * tny + gy) * tn + gx) * 4;
+
+        out[dst] = px[src];
+        out[dst + 1] = px[src + 1];
+        out[dst + 2] = px[src + 2];
+        out[dst + 3] = px[src + 3];
+      }
+    }
+  }
+
+  return { ...grid, width: tn, height: tny * tnz, pixels: out, voxelDepth: tny };
+}
+
+/** Box-filter an over-budget voxel grid down so no side exceeds `maxSide` — RESOLUTION scaling, the only
+ *  transform allowed on a hand-sculpted model. Policy mirrors the offline `downsample-vox` tool: a block
+ *  is occupied if ANY source voxel is (thin parts survive), coloured by the majority colour among them.
+ *  A dense grid costs 4 B per cell INCLUDING empty air (~97 % of a typical sculpt), so a 256-class export
+ *  weighs ~17 MB while the screen can only ever show ~1 px per voxel at pickup size — halving the grid
+ *  divides the memory by 8 at no visible cost. Returns the grid untouched when already within budget. */
+export function downsampleVoxelGrid(grid: Texture, maxSide: number): Texture {
+  const ny = grid.voxelDepth;
+
+  if (ny === undefined) {
+    throw new Error('downsampleVoxelGrid: not a voxel grid (no voxelDepth)');
+  }
+  const n = grid.width;
+  const nz = grid.height / ny;
+  const k = Math.ceil(Math.max(n, ny, nz) / maxSide);
+
+  if (k <= 1) {
+    return grid;
+  }
+  const tn = Math.ceil(n / k);
+  const tny = Math.ceil(ny / k);
+  const tnz = Math.ceil(nz / k);
+  const src = grid.pixels;
+  const out = new Uint8ClampedArray(tn * tny * tnz * 4);
+
+  for (let bz = 0; bz < tnz; bz++) {
+    for (let by = 0; by < tny; by++) {
+      for (let bx = 0; bx < tn; bx++) {
+        // Majority colour among the block's OCCUPIED voxels (exact RGB vote — the palette is discrete).
+        const votes = new Map<number, number>();
+        let bestKey = -1;
+        let bestCount = 0;
+
+        for (let dz = 0; dz < k; dz++) {
+          const gz = bz * k + dz;
+
+          if (gz >= nz) {
+            continue;
+          }
+          for (let dy = 0; dy < k; dy++) {
+            const gy = by * k + dy;
+
+            if (gy >= ny) {
+              continue;
+            }
+            for (let dx = 0; dx < k; dx++) {
+              const gx = bx * k + dx;
+
+              if (gx >= n) {
+                continue;
+              }
+              const i = ((gz * ny + gy) * n + gx) * 4;
+
+              if (src[i + 3] === 0) {
+                continue;
+              }
+              const key = (src[i] << 16) | (src[i + 1] << 8) | src[i + 2];
+              const count = (votes.get(key) ?? 0) + 1;
+
+              votes.set(key, count);
+              if (count > bestCount) {
+                bestCount = count;
+                bestKey = key;
+              }
+            }
+          }
+        }
+
+        if (bestKey < 0) {
+          continue; // empty block — stays transparent
+        }
+        const o = ((bz * tny + by) * tn + bx) * 4;
+
+        out[o] = (bestKey >> 16) & 0xff;
+        out[o + 1] = (bestKey >> 8) & 0xff;
+        out[o + 2] = bestKey & 0xff;
+        out[o + 3] = 255;
+      }
+    }
+  }
+
+  return { ...grid, width: tn, height: tny * tnz, pixels: out, voxelDepth: tny };
+}

@@ -6,11 +6,13 @@ import {
   ceilTexture,
   floorTexture,
   metalTexture,
+  downsampleVoxelGrid,
   parseVox,
+  trimVoxelGrid,
   type Texture,
 } from '../../bsp-engine';
 import { ENEMY_SPECS } from '../enemy';
-import { PICKUP_TEXTURE_JOBS } from '../world/pickups';
+import { PICKUP_TEXTURE_JOBS, WEAPON_PICKUP_SPECS } from '../world/pickups';
 
 function plantPlaceholder(): Texture {
   const size = 64;
@@ -603,7 +605,10 @@ export async function loadPropTextures(): Promise<Map<string, Texture>> {
 
   for (const [name, config] of Object.entries(VOXEL_PROPS)) {
     // A hand-sculpted `.vox` wins over the carve when present; absent / 404 / parse-fail → the carve runs.
-    const voxel = await loadVoxFile(`/game/props/${name.toLowerCase()}.vox`);
+    // Trimmed like the weapon pickups (pure framing): the renderer maps the GRID onto the def's box, so
+    // empty export slices shrink the model and skew the def's width/height contract (see renderer SPRITES).
+    const raw = await loadVoxFile(`/game/props/${name.toLowerCase()}.vox`);
+    const voxel = raw === null ? null : trimVoxelGrid(raw);
     const sheet = out.get(name);
     const top = out.get(`${name}_TOP`);
     const grid =
@@ -613,6 +618,29 @@ export async function loadPropTextures(): Promise<Map<string, Texture>> {
     // Bake per-voxel AO BEFORE the grid fans out, so both backends sample the shadowed RGB identically.
     if (grid !== null) {
       out.set(name, bakeVoxelAo(grid));
+    }
+  }
+
+  return out;
+}
+
+/** WEAPON COLLECTIBLES as voxel volumes: a per-weapon `/game/weapons/<id>/pickup.vox` overrides the 2D
+ *  spinning icon under the same PICKUP_WEAPON_<ID> name (the renderer volume-renders any voxel grid).
+ *  Absent → the icon billboard stays. The hand-sculpted grid is used AS-IS — NO AO bake, NO regrade: the
+ *  model carries its own colour/shading; the engine only frames (trim) and scales (budget + the sprite's
+ *  voxHeight × the model's own ratio), never repaints. */
+const VOX_PICKUP_MAX_SIDE = 128; // ~2 px/voxel at the largest on-screen pickup size — beyond is invisible
+
+export async function loadWeaponPickupVox(): Promise<Map<string, Texture>> {
+  const out = new Map<string, Texture>();
+
+  for (const spec of WEAPON_PICKUP_SPECS) {
+    const grid = await loadVoxFile(`/game/weapons/${spec.id}/pickup.vox`);
+
+    if (grid !== null) {
+      // Trim (pure framing: empty border slices only), then budget the RESOLUTION — the user sculpts
+      // at 256-class comfort, the engine right-sizes (a pickup can never show more than ~1 px/voxel).
+      out.set(spec.texName, downsampleVoxelGrid(trimVoxelGrid(grid), VOX_PICKUP_MAX_SIDE));
     }
   }
 

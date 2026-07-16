@@ -18,6 +18,7 @@ function decoders(overrides: Partial<AssetDecoders> = {}): AssetDecoders {
       return new Map<string, Texture>([['FLOOR', TEXTURE]]);
     },
     loadPropTextures: async () => new Map<string, Texture>([['PROP_CHAIR', TEXTURE]]),
+    loadWeaponPickupVox: async () => new Map<string, Texture>(),
     buildPickupJobs: () => [PICKUP],
     buildEnemyGroups: () => GROUPS,
     decodeAtlas: async () => TEXTURE,
@@ -54,6 +55,25 @@ describe('AssetLoader — the critical phase (what the loading card waits on)', 
     expect(hooks.markPopulated).toHaveBeenCalledTimes(1);
     expect(hooks.seedReserves).toHaveBeenCalledTimes(1);
     expect(hooks.markSpeciesDecoded).not.toHaveBeenCalled(); // the bestiary is NOT in the critical set
+  });
+
+  it('lets a weapon pickup.vox OVERRIDE its 2D icon under the same name (voxel collectible wins)', async () => {
+    const vox = { ...TEXTURE, voxelDepth: 4 } satisfies Texture; // a voxel grid, not a flat sheet
+    const applied = new Map<string, Texture>();
+    const hooks = spyHooks({
+      applyTextures: (loaded) => loaded.forEach((t, k) => applied.set(k, t)),
+    });
+
+    await new AssetLoader(
+      hooks,
+      decoders({
+        buildPickupJobs: () => [{ name: 'PICKUP_WEAPON_CHAINSAW', url: '/icon.webp', rows: 1 }],
+        loadWeaponPickupVox: async () =>
+          new Map<string, Texture>([['PICKUP_WEAPON_CHAINSAW', vox]]),
+      }),
+    ).loadCritical();
+
+    expect(applied.get('PICKUP_WEAPON_CHAINSAW')?.voxelDepth).toBe(4); // the vox, not the flat icon
   });
 
   it('reports progress over the whole critical set (world assets + object atlases)', async () => {

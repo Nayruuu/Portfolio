@@ -1,7 +1,7 @@
 // The produced array's contents + ORDER are load-bearing (a changed list is a visual diff), so build order,
 // culling, and atlas gating mirror the render contract exactly.
 import { orientSprite, type Sprite } from '../../bsp-engine';
-import { ENEMY_RECOIL, HIT_FLASH_DURATION } from '../game-tuning';
+import { ENEMY_RECOIL, HIT_FLASH_DURATION, WEAPON_VOX_SPIN } from '../game-tuning';
 import type { EnemyShot } from '../enemy';
 import type { Foe } from '../world/enemy-runtime';
 import type { WarmZone, ZoneExit } from '../world/zone-world';
@@ -24,6 +24,9 @@ export interface WorldSpritesInput {
   readonly world: WorldSpriteSource;
   readonly viewX: number;
   readonly viewY: number;
+  /** texName → the voxel model's own lat/height ratio: a vox collectible is sized by ITS proportions,
+   *  not the 2D icon's (the grid maps onto the sprite box, so a mismatched box distorts the model). */
+  readonly voxAspects?: ReadonlyMap<string, number>;
 }
 
 export interface LiveSpritesInput {
@@ -33,6 +36,7 @@ export interface LiveSpritesInput {
   readonly atlasesReady: boolean;
   readonly zoneExits: readonly ZoneExit[];
   readonly stress: readonly { readonly x: number; readonly y: number; readonly z: number }[];
+  readonly voxAspects?: ReadonlyMap<string, number>;
 }
 
 /** `cameraX`/`cameraY` are in the ACTIVE zone's coordinates; the matching seam translates them into the warm
@@ -42,6 +46,7 @@ export interface WarmSpritesInput {
   readonly cameraX: number;
   readonly cameraY: number;
   readonly seams: readonly { readonly zone: string; readonly dx: number; readonly dy: number }[];
+  readonly voxAspects?: ReadonlyMap<string, number>;
 }
 
 interface SpinningPickupSpec {
@@ -172,7 +177,25 @@ export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
     sprites.push(spinningSprite(k.x, k.y, k.z, k.spec, k.age));
   }
   for (const p of world.weaponPickups) {
-    sprites.push(spinningSprite(p.x, p.y, p.z, p.spec, p.age));
+    const voxAspect = input.voxAspects?.get(p.spec.texName);
+
+    if (voxAspect === undefined) {
+      sprites.push(spinningSprite(p.x, p.y, p.z, p.spec, p.age));
+      continue;
+    }
+    // voxel: true routes the renderer to the VOLUME walk — without it the grid texture would draw
+    // as a flat billboard (a 97%-transparent smear). The volume TURNS with the pickup's age, the
+    // vox twin of the 2D icon's frame spin; its height is the per-weapon voxHeight knob.
+    sprites.push({
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      tex: p.spec.texName,
+      width: p.spec.voxHeight * voxAspect,
+      height: p.spec.voxHeight,
+      voxel: true,
+      facing: p.age * WEAPON_VOX_SPIN,
+    });
   }
   if (world.exit !== null) {
     sprites.push(exitSprite(world.exit));
@@ -184,7 +207,7 @@ export function buildWorldSprites(input: WorldSpritesInput): Sprite[] {
 /** Projectiles are NOT here — they are painted screen-space over the frame by the world-fx painter. */
 export function buildLiveSprites(input: LiveSpritesInput): Sprite[] {
   const { world, viewX, viewY, atlasesReady, zoneExits, stress } = input;
-  const sprites = buildWorldSprites({ world, viewX, viewY });
+  const sprites = buildWorldSprites({ world, viewX, viewY, voxAspects: input.voxAspects });
 
   if (atlasesReady) {
     for (const e of zoneExits) {
@@ -215,5 +238,6 @@ export function buildWarmSprites(input: WarmSpritesInput): Sprite[] {
     world: warm,
     viewX: cameraX - (seam?.dx ?? 0),
     viewY: cameraY - (seam?.dy ?? 0),
+    voxAspects: input.voxAspects,
   });
 }

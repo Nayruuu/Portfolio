@@ -62,6 +62,9 @@ export const ENEMY_SEP_DIST = 0.85;
 // ─────────────────────────────── Pickup ──────────────────────────────
 
 export const PICKUP_RADIUS = 0.6;
+// Weapons are DISPLAYED far bigger than 0.6 now (a vox chainsaw spans ~1.9): touching the visible
+// volume must collect, DOOM-style — no center-hug on the blade of the thing you came for.
+export const WEAPON_PICKUP_RADIUS = 1.3;
 export const VITAL_SMALL = 25;
 export const VITAL_LARGE = 50;
 export const VITAL_MAX = 100;
@@ -102,3 +105,6 @@ export const HINT_DURATION = 1.8;
 // (60° half-angle) than the 90° render FOV (45° half-angle) so a quick turn cannot catch an edge pop-in.
 export const WAKE_SAFE_DIST = 16;
 export const WAKE_CONE_COS = Math.cos(Math.PI / 3); // 60° half-angle vs the renderer's 45°
+
+// A vox collectible turns like a DOOM pickup — a full revolution every 4 s reads as an item, not a prop.
+export const WEAPON_VOX_SPIN = Math.PI / 2; // rad/s

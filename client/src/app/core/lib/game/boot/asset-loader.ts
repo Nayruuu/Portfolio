@@ -4,6 +4,7 @@ import {
   buildPickupJobs,
   decodeAtlas,
   loadPropTextures,
+  loadWeaponPickupVox,
   loadWorldTextures,
   type AtlasJob,
   type EnemyAtlasGroup,
@@ -30,6 +31,8 @@ export interface AssetDecoders {
     onProgress?: (loaded: number, total: number) => void,
   ): Promise<Map<string, Texture>>;
   loadPropTextures(): Promise<Map<string, Texture>>;
+  /** Per-weapon `pickup.vox` collectibles, keyed by PICKUP_WEAPON_<ID> to override the 2D icon. */
+  loadWeaponPickupVox(): Promise<Map<string, Texture>>;
   buildPickupJobs(): AtlasJob[];
   buildEnemyGroups(): EnemyAtlasGroup[];
   /** Decodes a sprite sheet — OFF the main thread where the browser allows it. */
@@ -39,6 +42,7 @@ export interface AssetDecoders {
 const BROWSER_DECODERS: AssetDecoders = {
   loadWorldTextures,
   loadPropTextures,
+  loadWeaponPickupVox,
   buildPickupJobs,
   buildEnemyGroups,
   decodeAtlas,
@@ -66,7 +70,7 @@ export class AssetLoader {
     const report = (): void =>
       this.hooks.onProgress(envDone + pickupsDone, envTotal + pickupJobs.length);
 
-    const [env, props, pickups] = await Promise.all([
+    const [env, props, pickups, weaponVox] = await Promise.all([
       this.decoders.loadWorldTextures((done, total) => {
         envDone = done;
         envTotal = total;
@@ -86,6 +90,8 @@ export class AssetLoader {
           return texture;
         }),
       ),
+      // Weapon collectibles as voxel volumes — override the 2D icon under the same name (below).
+      this.decoders.loadWeaponPickupVox(),
     ]);
 
     if (this.hooks.isDisposed()) {
@@ -98,6 +104,10 @@ export class AssetLoader {
         loaded.set(pickupJobs[i].name, texture);
       }
     });
+    // AFTER the 2D icons, so a sculpted pickup.vox wins its PICKUP_WEAPON_<ID> slot.
+    for (const [name, grid] of weaponVox) {
+      loaded.set(name, grid);
+    }
     this.hooks.onEnvTexturesLoaded(env.size > 0);
 
     if (loaded.size === 0) {

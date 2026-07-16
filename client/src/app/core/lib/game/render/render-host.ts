@@ -269,7 +269,16 @@ export class RenderHost {
     for (const [name, texture] of loaded) {
       this.textures.set(name, texture); // the main-thread fallback AND the GPU pool read this map
     }
-    this.gpu?.setTextures(this.textures);
+    try {
+      this.gpu?.setTextures(this.textures);
+    } catch (error) {
+      // The texel pool outgrew the device's binding limit: keep the GPU would mean invalid submits
+      // every frame (a silent freeze) — drop to the CPU path for good instead.
+      console.warn('[bsp] GPU texel pool over device limit — falling back to CPU:', error);
+      this.gpu?.dispose();
+      this.gpu = null;
+      this.backendState = 'cpu';
+    }
   }
 
   /** Render one frame via the active backend — GPU compute, else the worker pool, else the main thread. */
@@ -332,7 +341,11 @@ export class RenderHost {
     const { width, height } = this.renderConfig;
 
     try {
-      gpu.setTextures(this.textures);
+      try {
+        gpu.setTextures(this.textures);
+      } catch (error) {
+        return { available: false, reason: `texel pool over the GPU limit: ${String(error)}` };
+      }
       const neighbors = request.zoneNeighbors(request.neighborSprites);
       const cpu = new Uint8ClampedArray(width * height * 4);
       const gpuBuf = new Uint8ClampedArray(width * height * 4);
@@ -466,7 +479,14 @@ export class RenderHost {
         return;
       }
       gpu.resize(this.renderConfig); // the resolution may have changed while the device was initializing
-      gpu.setTextures(this.textures);
+      try {
+        gpu.setTextures(this.textures);
+      } catch (error) {
+        console.warn('[bsp] GPU texel pool over device limit at init — staying on CPU:', error);
+        gpu.dispose();
+
+        return;
+      }
       this.gpu = gpu;
       this.backendState = 'gpu';
       console.info('[bsp] WebGPU compute backend active');

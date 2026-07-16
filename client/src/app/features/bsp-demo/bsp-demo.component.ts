@@ -99,6 +99,9 @@ export class BspDemoComponent {
   protected readonly backend = signal<'cpu' | 'gpu'>('cpu');
 
   private readonly loadProgress = signal(0);
+  // texName → the voxel model's lat/height ratio, recorded as textures apply — sizes vox collectibles
+  // by their OWN proportions (sprite-builder voxAspects); flat sheets never enter it.
+  private readonly voxAspects = new Map<string, number>();
 
   private readonly params: LevelParams = parseLevelParams(
     typeof location === 'undefined' ? '' : location.search,
@@ -248,7 +251,14 @@ export class BspDemoComponent {
 
   private buildAssetHooks(): AssetLoaderHooks {
     return {
-      applyTextures: (loaded) => this.renderHost.applyTextures(loaded),
+      applyTextures: (loaded) => {
+        for (const [name, texture] of loaded) {
+          if (texture.voxelDepth !== undefined) {
+            this.voxAspects.set(name, texture.width / (texture.height / texture.voxelDepth));
+          }
+        }
+        this.renderHost.applyTextures(loaded);
+      },
       onEnvTexturesLoaded: (hasArt) => this.texturesLoaded.set(hasArt),
       onProgress: (loaded, total) => this.loadProgress.set(total === 0 ? 1 : loaded / total),
       markPopulated: () => this.zoneRuntime.markPopulated(),
@@ -619,6 +629,7 @@ export class BspDemoComponent {
       atlasesReady: this.zoneRuntime.atlasesReady,
       zoneExits: this.zoneRuntime.exits,
       stress: this.combatRuntime.stressEnemies,
+      voxAspects: this.voxAspects,
     });
   }
 
@@ -629,6 +640,7 @@ export class BspDemoComponent {
       cameraX: this.camera.x,
       cameraY: this.camera.y,
       seams: this.zoneRuntime.seams,
+      voxAspects: this.voxAspects,
     });
   }
 
