@@ -4,6 +4,8 @@ import {
   buildFrameCommands,
   createFrameCommands,
   missingTexture,
+  PALETTE_BYTES,
+  PALETTE_SIZE,
   SPAN_STRIDE,
   TEX_ANCHOR,
   type Camera,
@@ -114,6 +116,7 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
   });
   let texInfoBuf!: GPUBuffer;
   let texelsBuf!: GPUBuffer;
+  let palettesBuf!: GPUBuffer;
 
   const growColumns = (words: number): void => {
     columnsCapacity = Math.max(words, cfg.width * 7); // geometry + windows + one glass set minimum
@@ -144,7 +147,9 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
   };
 
   // Id 0 is always MISSING; the rest follow in insertion order (POT walls/flats sample by `&`-wrap off
-  // perUnit/invWorld, non-POT atlases by division into their cell).
+  // perUnit/invWorld, non-POT atlases by division into their cell). The pool holds 1-BYTE palette
+  // indices (offsets are in bytes, packed 4 per word); each texture's 256-entry RGBA palette lives in
+  // its own buffer at word `paletteBase` — the shader resolves index → colour per sample.
   const upload = (textures: ReadonlyMap<string, Texture>): void => {
     const pool: Texture[] = [missingTexture()];
     const nextIds = new Map<string, number>();
@@ -154,25 +159,25 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
       pool.push(tex);
     }
     const total = pool.reduce((sum, t) => sum + t.width * t.height, 0);
-    const texels = new Uint32Array(total);
+    const texels = new Uint32Array(Math.ceil(total / 4));
+    const texelBytes = new Uint8ClampedArray(texels.buffer);
+    const palettes = new Uint32Array(pool.length * PALETTE_SIZE);
+    const paletteBytes = new Uint8ClampedArray(palettes.buffer);
     const info = new ArrayBuffer(pool.length * 32);
     const infoU32 = new Uint32Array(info);
     const infoF32 = new Float32Array(info);
     let offset = 0;
 
     pool.forEach((tex, i) => {
-      const words = new Uint32Array(
-        tex.pixels.buffer,
-        tex.pixels.byteOffset,
-        tex.width * tex.height,
-      );
-
-      texels.set(words, offset);
+      texelBytes.set(tex.pixels, offset);
+      // Byte-wise copy — a SAB-view palette's byteOffset may not be word-aligned.
+      paletteBytes.set(tex.palette, i * PALETTE_BYTES);
       const perUnit = tex.height / (tex.worldSize ?? 1);
 
       infoU32[i * 8] = offset;
       infoU32[i * 8 + 1] = tex.width;
       infoU32[i * 8 + 2] = tex.height;
+      infoU32[i * 8 + 3] = i * PALETTE_SIZE; // paletteBase, in words
       infoF32[i * 8 + 4] = perUnit;
       infoF32[i * 8 + 5] = 1 / (tex.worldSize ?? 1);
       infoF32[i * 8 + 6] = (TEX_ANCHOR * perUnit) % tex.height; // f64 here — see the shader's vRaw note
@@ -180,6 +185,7 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
     });
     texInfoBuf?.destroy();
     texelsBuf?.destroy();
+    palettesBuf?.destroy();
     texInfoBuf = device.createBuffer({
       size: info.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -201,8 +207,13 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
       size: texels.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    palettesBuf = device.createBuffer({
+      size: palettes.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
     device.queue.writeBuffer(texInfoBuf, 0, info);
     device.queue.writeBuffer(texelsBuf, 0, texels);
+    device.queue.writeBuffer(palettesBuf, 0, palettes);
     lib = textures;
     ids = nextIds;
     bindGroup = null;
@@ -274,6 +285,7 @@ export async function createGpuRenderer(config: RenderConfig): Promise<GpuRender
           { binding: 4, resource: { buffer: texelsBuf } },
           { binding: 5, resource: { buffer: auxBuf } },
           { binding: 6, resource: { buffer: outputBuf } },
+          { binding: 7, resource: { buffer: palettesBuf } },
         ],
       });
       const encoder = device.createCommandEncoder();

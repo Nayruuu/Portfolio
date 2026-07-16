@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { carveVoxelProp, VOXEL_GRID } from './voxel-carve';
+import { expandRgba, palettizeRgba } from './palettize';
 import type { Texture } from './texture';
 
 type Rgba = readonly [number, number, number, number];
@@ -33,7 +34,7 @@ function makeSheet(
     }
   });
 
-  return { width, height, pixels };
+  return palettizeRgba(width, height, pixels);
 }
 
 function box(
@@ -48,16 +49,17 @@ function box(
 
 function voxelAt(grid: Texture, x: number, y: number, z: number): Rgba {
   const ny = grid.voxelDepth ?? 0;
+  const rgba = expandRgba(grid);
   const i = ((z * ny + y) * grid.width + x) * 4;
 
-  return [grid.pixels[i], grid.pixels[i + 1], grid.pixels[i + 2], grid.pixels[i + 3]];
+  return [rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]];
 }
 
 function solidCount(grid: Texture): number {
   let total = 0;
 
-  for (let i = 3; i < grid.pixels.length; i += 4) {
-    if (grid.pixels[i] !== 0) {
+  for (const index of grid.pixels) {
+    if (index !== 0) {
       total++;
     }
   }
@@ -416,7 +418,7 @@ describe('carveVoxelProp — top view (plan footprint + upward faces)', () => {
       }
     }
 
-    return { width: w, height: h, pixels };
+    return palettizeRgba(w, h, pixels);
   }
 
   const fullBox = makeSheet(16, 16, [box(0, 16, 0, 16), box(0, 16, 0, 16), box(0, 16, 0, 16), box(0, 16, 0, 16)]); // prettier-ignore

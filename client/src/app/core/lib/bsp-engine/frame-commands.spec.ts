@@ -14,6 +14,7 @@ import {
   type FrameCommands,
 } from './frame-commands';
 import { buildBsp } from './node-builder';
+import { expandRgba, palettizeRgba } from './palettize';
 import {
   BG_CEILING,
   BG_FLOOR,
@@ -65,6 +66,9 @@ function texturePool(lib: ReadonlyMap<string, Texture>): {
 }
 
 function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArray {
+  // The reference executor samples the expanded RGBA — exact for these ≤255-colour fixtures, so the
+  // arithmetic below stays byte-identical to the RGBA era.
+  const rgbaPool = pool.map(expandRgba);
   const { width, height, focal, horizon, camZ } = cmds;
   const buf = new Uint8ClampedArray(width * height * 4);
   const buf32 = new Uint32Array(buf.buffer);
@@ -88,13 +92,14 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
       const y0 = cmds.spanWords[base + 2];
       const y1 = cmds.spanWords[base + 3];
       const tex = pool[cmds.spanWords[base + 1]];
+      const px = rgbaPool[cmds.spanWords[base + 1]];
 
       if (kind === SPAN_WALL) {
         const u = cmds.spanFloats[base + 4];
         const zPerRow = cmds.spanFloats[base + 5];
         const shade = cmds.spanFloats[base + 6];
         const forward = cmds.spanFloats[base + 7];
-        const { width: tw, height: th, pixels: px } = tex;
+        const { width: tw, height: th } = tex;
         const perUnit = th / (tex.worldSize ?? 1);
         const texCol = (u * perUnit) & (tw - 1);
         let vRaw = (TEX_ANCHOR - (camZ + (horizon - y0) * zPerRow)) * perUnit;
@@ -123,7 +128,7 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
         const light = cmds.spanFloats[base + 8];
         const camX = cmds.spanFloats[base + 9];
         const camY = cmds.spanFloats[base + 10];
-        const { width: tw, height: th, pixels: px } = tex;
+        const { width: tw, height: th } = tex;
         const inv = 1 / (tex.worldSize ?? 1);
         let i = y0 * width + x;
 
@@ -192,7 +197,7 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
           const sh = cmds.auxFloats[g + 5];
           const depth = cmds.auxFloats[g + 6];
           const tex = pool[cmds.auxWords[g + 7]];
-          const layerTex = tu >= 0 ? tex.pixels : null;
+          const layerTex = tu >= 0 ? rgbaPool[cmds.auxWords[g + 7]] : null;
           const col = layerTex !== null ? Math.min(tex.width - 1, tu | 0) : 0;
           let i = y0 * width + x;
 
@@ -241,7 +246,8 @@ function execute(cmds: FrameCommands, pool: readonly Texture[]): Uint8ClampedArr
       const cellH = cmds.auxWords[sb + 8];
       const forward = cmds.auxFloats[sb + 9];
       const shade = cmds.auxFloats[sb + 10];
-      const { width: tw, pixels: px } = tex;
+      const tw = tex.width;
+      const px = rgbaPool[cmds.auxWords[sb + 4]];
       const colSpan = right - left + 1;
       const rowSpan = yBottom - yTop + 1;
       const yLo = Math.max(0, yTop);
@@ -616,11 +622,11 @@ function side(sector: number, middleTex = 'BRICK'): SideDef {
 }
 
 function halfGlassTexture(): Texture {
-  return {
-    width: 2,
-    height: 2,
-    pixels: new Uint8ClampedArray([40, 200, 60, 255, 40, 200, 60, 255, 0, 0, 0, 0, 0, 0, 0, 0]),
-  };
+  return palettizeRgba(
+    2,
+    2,
+    new Uint8ClampedArray([40, 200, 60, 255, 40, 200, 60, 255, 0, 0, 0, 0, 0, 0, 0, 0]),
+  );
 }
 
 function nonPotSprite(): Texture {
@@ -642,7 +648,7 @@ function nonPotSprite(): Texture {
     }
   }
 
-  return { width, height, pixels };
+  return palettizeRgba(width, height, pixels);
 }
 
 function glassCorridor(kind: 'plain' | 'pane' | 'sliding'): MapSource {
@@ -762,13 +768,11 @@ describe('buildFrameCommands — layered glass', () => {
       { x: 4.3, y: 9, z: 0, tex: 'REDGUY', width: 1, height: 2.6 },
       { x: 4.1, y: 4.5, z: 0, tex: 'REDGUY', width: 0.7, height: 1.2 },
     ];
-    const red: Texture = {
-      width: 2,
-      height: 2,
-      pixels: new Uint8ClampedArray([
-        255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
-      ]),
-    };
+    const red: Texture = palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255]),
+    );
     const lib = new Map([...GLASS_TEX, ['REDGUY', red]]);
 
     expectQuantized(
@@ -866,13 +870,11 @@ describe('buildFrameCommands — zone portals', () => {
 
   it('draws a warm neighbour sprite through the seam, clipped to its windows and z-tested', () => {
     const sprite: Sprite[] = [{ x: 2, y: 3, z: 0, tex: 'REDGUY', width: 1, height: 2.4 }];
-    const red: Texture = {
-      width: 2,
-      height: 2,
-      pixels: new Uint8ClampedArray([
-        255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
-      ]),
-    };
+    const red: Texture = palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255]),
+    );
     const lib = new Map([...GLASS_TEX, ['REDGUY', red]]);
     const neighbors = new Map<string, ZoneNeighbor>([['n', { map: NMAP, sprites: sprite }]]);
     const { cmds, pixels } = roundTrip(PMAP, PORTAL_CAM, lib, [], undefined, neighbors);
@@ -950,14 +952,12 @@ describe('buildFrameCommands — sprites', () => {
   });
 
   it('reproduces VOXEL props (per-pixel DDA volumes) within the f32 bound, head-on and oblique', () => {
-    const grid: Texture = {
-      width: 4,
-      height: 16,
-      pixels: new Uint8ClampedArray(
-        Array.from({ length: 4 * 16 }, () => [200, 90, 40, 255]).flat(),
-      ),
-      voxelDepth: 4,
-    };
+    const grid: Texture = palettizeRgba(
+      4,
+      16,
+      new Uint8ClampedArray(Array.from({ length: 4 * 16 }, () => [200, 90, 40, 255]).flat()),
+      { voxelDepth: 4 },
+    );
     const lib = new Map([...TEX, ['VOXGRID', grid]]);
     const vox: Sprite = {
       x: 8,
@@ -988,12 +988,12 @@ describe('buildFrameCommands — sprites', () => {
   });
 
   it('serializes a voxel record (kind + grid dims + grid-space tail) and zeroes it on billboards', () => {
-    const grid: Texture = {
-      width: 2,
-      height: 6,
-      pixels: new Uint8ClampedArray(Array.from({ length: 2 * 6 }, () => [200, 90, 40, 255]).flat()),
-      voxelDepth: 2,
-    };
+    const grid: Texture = palettizeRgba(
+      2,
+      6,
+      new Uint8ClampedArray(Array.from({ length: 2 * 6 }, () => [200, 90, 40, 255]).flat()),
+      { voxelDepth: 2 },
+    );
     const sprites: Sprite[] = [
       { x: 6, y: 5, z: 0, tex: 'BARREL', width: 0.8, height: 1.1 },
       {

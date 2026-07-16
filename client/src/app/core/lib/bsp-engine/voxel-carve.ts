@@ -1,3 +1,4 @@
+import { expandRgba, palettizeRgba } from './palettize';
 import type { Texture } from './texture';
 
 // Carves a directional rotation sheet into a coloured VOXEL GRID by visual-hull intersection (a voxel
@@ -11,7 +12,10 @@ import type { Texture } from './texture';
 // Grid axes (renderer world-anchoring contract): x = front view left→right (world (−sin facing, cos
 // facing)); y = DEPTH, 0 at the front face growing away (world −(cos facing, sin facing)); z = height,
 // 0 at bottom. Encoding rides an ordinary Texture: width=n, height=voxelDepth·nz, voxel (x,y,z) at
-// pixel (x, z·voxelDepth+y), alpha 0=empty / 255=solid.
+// pixel (x, z·voxelDepth+y), index 0 = empty.
+//
+// The carve itself reasons in RGBA (alpha thresholds + colour averaging), so the palettized inputs are
+// expanded ONCE at entry and the finished grid re-palettizes on the way out.
 
 export const VOXEL_GRID = 64;
 
@@ -45,9 +49,20 @@ export interface VoxelCarveViews {
   readonly top?: Texture; // a separate top-down image: stamps the plan footprint + colours upward faces
 }
 
+// The carve's working form of a sheet: same dims, pixels EXPANDED back to RGBA.
+interface RgbaSheet {
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: Uint8ClampedArray;
+}
+
+function toRgbaSheet(tex: Texture): RgbaSheet {
+  return { width: tex.width, height: tex.height, pixels: expandRgba(tex) };
+}
+
 // A cell's DOMINANT column-run (the gap-separated run containing the cell centre, else the most
 // massive) — never the raw bbox, which neighbour bleed and edge clipping poison.
-function cellSpan(sheet: Texture, cw: number, cell: number): readonly [number, number] | null {
+function cellSpan(sheet: RgbaSheet, cw: number, cell: number): readonly [number, number] | null {
   const columnMass = new Array<number>(cw).fill(0);
 
   for (let x = 0; x < cw; x++) {
@@ -87,7 +102,7 @@ function cellSpan(sheet: Texture, cw: number, cell: number): readonly [number, n
 
 // t runs across the CELL'S OWN span (per-view recentring), v down the sheet.
 function sheetIndex(
-  sheet: Texture,
+  sheet: RgbaSheet,
   cw: number,
   span: readonly [number, number],
   cell: number,
@@ -103,7 +118,7 @@ function sheetIndex(
 
 // Rasterises view `cell`'s silhouette into a w × nz mask (row = image v, TOP-down).
 function viewMask(
-  sheet: Texture,
+  sheet: RgbaSheet,
   cw: number,
   span: readonly [number, number],
   cell: number,
@@ -128,7 +143,7 @@ function viewMask(
 // Averages the OPAQUE sheet pixels under a voxel's footprint (supersampling), or the nearest pixel when
 // sub-pixel / empty. Writes RGB straight into `pixels` — runs once per solid voxel, so no tuple garbage.
 function sampleCell(
-  sheet: Texture,
+  sheet: RgbaSheet,
   cellLeft: number,
   cw: number,
   px: number,
@@ -269,7 +284,7 @@ interface HullState {
 // silhouette IoU at shared scale `s`, then trims the hull in place. Returns null (hull untouched) when
 // the best IoU stays under IOU_MIN or the trim would empty an occupied z-slice.
 function registerDiagonal(
-  sheet: Texture,
+  sheet: RgbaSheet,
   cw: number,
   cell: number,
   cells: number,
@@ -441,7 +456,7 @@ function registerDiagonal(
 // No axis TRANSPOSITION in the search space: the per-axis bbox stretch would absorb a transposed image's
 // aspect and make it undetectable — the delivered convention pins which image axis is which.
 interface TopView {
-  readonly tex: Texture;
+  readonly tex: RgbaSheet;
   readonly flipU: boolean;
   readonly flipV: boolean;
   readonly spanX: readonly [number, number];
@@ -470,7 +485,7 @@ function topPixel(
 // convention wins ties; a cardinal-only footprint is a rectangle where the HOLE guard is the real
 // discriminator). Ignores the top under TOP_IOU_MIN or on a degenerate image; trims in place.
 function applyTop(
-  tex: Texture,
+  tex: RgbaSheet,
   hull: HullState,
   n: number,
   ny: number,
@@ -579,15 +594,16 @@ function applyTop(
 // empty cardinal silhouette, or a hull intersecting to nothing) — the caller keeps the billboard sheet
 // as the zero-regression fallback. Extra `views` are individually skipped, never fatal.
 export function carveVoxelProp(
-  sheet: Texture,
+  source: Texture,
   n = VOXEL_GRID,
   views: VoxelCarveViews = {},
 ): Texture | null {
   const cells = views.cells ?? 4;
 
-  if (cells < 4 || cells % 4 !== 0 || sheet.width % cells !== 0 || n < 2) {
+  if (cells < 4 || cells % 4 !== 0 || source.width % cells !== 0 || n < 2) {
     return null;
   }
+  const sheet = toRgbaSheet(source);
   const cw = sheet.width / cells;
   const quarter = cells / 4; // wheel cell of cardinal i is i·quarter
   const spans = [FRONT, RIGHT, BACK, LEFT].map((i) => cellSpan(sheet, cw, i * quarter));
@@ -668,7 +684,7 @@ export function carveVoxelProp(
       }
     }
   }
-  const top = views.top === undefined ? null : applyTop(views.top, hull, n, ny, nz);
+  const top = views.top === undefined ? null : applyTop(toRgbaSheet(views.top), hull, n, ny, nz);
 
   // Per-axis first/last solid maps: a voxel is VISIBLE to a cardinal iff it is that axis ray's first hit
   // — built O(cells) once instead of a scan per voxel. Diagonal visibility = the two flanking cardinals'.
@@ -789,5 +805,6 @@ export function carveVoxelProp(
     }
   }
 
-  return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+  // Averaged colours can exceed 255 uniques — palettize quantizes those; occupancy is exact either way.
+  return palettizeRgba(n, ny * nz, pixels, { voxelDepth: ny });
 }

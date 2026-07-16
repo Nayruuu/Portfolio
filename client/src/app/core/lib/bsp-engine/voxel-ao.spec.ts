@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { expandRgba, palettizeRgba } from './palettize';
 import type { Texture } from './texture';
 import { bakeVoxelAo, DEFAULT_AO } from './voxel-ao';
 
@@ -27,29 +28,25 @@ function makeGrid(
     }
   }
 
-  return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+  return palettizeRgba(n, ny * nz, pixels, { voxelDepth: ny });
 }
 
 function rgbAt(grid: Texture, n: number, ny: number, gx: number, gy: number, gz: number): number[] {
+  const rgba = expandRgba(grid);
   const out = ((gz * ny + gy) * n + gx) * 4;
 
-  return [grid.pixels[out], grid.pixels[out + 1], grid.pixels[out + 2], grid.pixels[out + 3]];
+  return [rgba[out], rgba[out + 1], rgba[out + 2], rgba[out + 3]];
 }
 
 describe('bakeVoxelAo', () => {
   it('throws when the texture is not a voxel grid (no voxelDepth)', () => {
-    const flat: Texture = { width: 2, height: 2, pixels: new Uint8ClampedArray(2 * 2 * 4) };
+    const flat: Texture = palettizeRgba(2, 2, new Uint8ClampedArray(2 * 2 * 4));
 
     expect(() => bakeVoxelAo(flat)).toThrow(/not a voxel grid/);
   });
 
   it('throws when the height is not a whole number of depth slices', () => {
-    const bad: Texture = {
-      width: 2,
-      height: 5,
-      pixels: new Uint8ClampedArray(2 * 5 * 4),
-      voxelDepth: 2,
-    };
+    const bad: Texture = palettizeRgba(2, 5, new Uint8ClampedArray(2 * 5 * 4), { voxelDepth: 2 });
 
     expect(() => bakeVoxelAo(bad)).toThrow(/whole number of depth slices/);
   });

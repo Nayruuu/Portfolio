@@ -1,14 +1,20 @@
+import { palettizeRgba } from './palettize';
+
 export interface Texture {
   readonly width: number;
   readonly height: number;
-  readonly pixels: Uint8ClampedArray; // RGBA, row-major, width*height*4
+  readonly pixels: Uint8ClampedArray; // PALETTE INDICES, row-major, width*height — 1 byte per texel
+  readonly palette: Uint8ClampedArray; // 256×RGBA (1024 B); index 0 IS transparent (see palettize.ts)
   readonly worldSize?: number; // world units one tile spans (default 1)
-  // Present on a carved VOXEL GRID (voxel-carve.ts): pixels are stacked horizontal slices, not a flat
-  // image (alpha 0 = empty cell). Marks the entry so the sprite pass renders a voxel VOLUME, not a billboard.
+  // Present on a VOXEL GRID (vox-parse / voxel-carve): pixels are stacked horizontal slices, not a flat
+  // image (index 0 = empty cell). Marks the entry so the sprite pass renders a voxel VOLUME, not a billboard.
   readonly voxelDepth?: number;
 }
 
 export const TEX_WORLD = 1;
+
+// The procedurals below PAINT in RGBA (the natural art form) and palettize on return — each uses a few
+// dozen colours, so the exact path applies and the rendered output is bit-identical to the RGBA era.
 
 export function brickTexture(): Texture {
   const width = 64;
@@ -43,7 +49,7 @@ export function brickTexture(): Texture {
     }
   }
 
-  return { width, height, pixels };
+  return palettizeRgba(width, height, pixels);
 }
 
 function tiledTexture(
@@ -78,7 +84,7 @@ function tiledTexture(
     }
   }
 
-  return { width, height, pixels };
+  return palettizeRgba(width, height, pixels);
 }
 
 export function floorTexture(): Texture {
@@ -112,7 +118,7 @@ export function barrelTexture(): Texture {
     }
   }
 
-  return { width, height, pixels };
+  return palettizeRgba(width, height, pixels);
 }
 
 // Drawn when a surface names a texture the library lacks.
@@ -121,7 +127,7 @@ export function missingTexture(): Texture {
     255, 0, 220, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 220, 255,
   ]);
 
-  return { width: 2, height: 2, pixels };
+  return palettizeRgba(2, 2, pixels);
 }
 
 // Keyed by the names used in a level's sidedefs/sectors.

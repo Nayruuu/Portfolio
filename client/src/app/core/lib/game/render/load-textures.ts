@@ -4,9 +4,11 @@ import {
   brickTexture,
   carveVoxelProp,
   ceilTexture,
+  expandRgba,
   floorTexture,
   metalTexture,
   downsampleVoxelGrid,
+  palettizeRgba,
   parseVox,
   trimVoxelGrid,
   type Texture,
@@ -43,7 +45,7 @@ function plantPlaceholder(): Texture {
     }
   }
 
-  return { width: size, height: size, pixels };
+  return palettizeRgba(size, size, pixels);
 }
 
 function boardPlaceholder(): Texture {
@@ -75,7 +77,7 @@ function boardPlaceholder(): Texture {
     }
   }
 
-  return { width: size, height: size, pixels };
+  return palettizeRgba(size, size, pixels);
 }
 
 function chairPlaceholder(): Texture {
@@ -101,7 +103,7 @@ function chairPlaceholder(): Texture {
     }
   }
 
-  return { width: size, height: size, pixels };
+  return palettizeRgba(size, size, pixels);
 }
 
 function coolerPlaceholder(): Texture {
@@ -132,13 +134,14 @@ function coolerPlaceholder(): Texture {
     }
   }
 
-  return { width: size, height: size, pixels };
+  return palettizeRgba(size, size, pixels);
 }
 
 /** Fallback for a prop whose real rotation sheet failed to load: tint one frame into `cells` cardinal looks
  *  (a count above 4 repeats each look over its span) so the sheet always matches the def's `cols`. */
 function directionalSheetPlaceholder(base: Texture, cells = 4): Texture {
-  const { width: w, height: h, pixels: src } = base;
+  const { width: w, height: h } = base;
+  const src = expandRgba(base); // the gain math needs RGBA — expand, tint, re-palettize
   const out = new Uint8ClampedArray(cells * w * h * 4);
   const looks: readonly { gain: readonly [number, number, number]; mirror: boolean }[] = [
     { gain: [1, 1, 1], mirror: false },
@@ -163,7 +166,7 @@ function directionalSheetPlaceholder(base: Texture, cells = 4): Texture {
     }
   }
 
-  return { width: cells * w, height: h, pixels: out };
+  return palettizeRgba(cells * w, h, out);
 }
 
 /** Sampled per pixel like a door leaf: alpha ≥ 128 → stamped as opaque frame, alpha 0 → clear glass (tinted). */
@@ -198,7 +201,7 @@ function glassPaneTexture(): Texture {
     }
   }
 
-  return { width: size, height: size, pixels };
+  return palettizeRgba(size, size, pixels);
 }
 
 /** The procedural fallback library — what renders before, or instead of, the WebP art. */
@@ -364,7 +367,7 @@ function loadImageTexture(url: string, worldSize: number): Promise<Texture | nul
       context.canvas.width = w;
       context.canvas.height = h;
       context.drawImage(image, 0, 0);
-      resolve({ width: w, height: h, pixels: context.getImageData(0, 0, w, h).data, worldSize });
+      resolve(palettizeRgba(w, h, context.getImageData(0, 0, w, h).data, { worldSize }));
     };
     image.src = url;
   });
@@ -421,7 +424,7 @@ export function rasterizeAtlas(
     px[i] = px[i] >= EDGE_ALPHA_THRESHOLD ? 255 : 0;
   }
 
-  return { width: w, height: h, pixels: px };
+  return palettizeRgba(w, h, px);
 }
 
 const yieldToFrame = (): Promise<void> =>
@@ -430,12 +433,19 @@ const yieldToFrame = (): Promise<void> =>
     : new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 const ATLAS_WORKERS = 2; // enough to keep the pipe full; more would just contend for the same cores
-const pending = new Map<number, (texture: Texture | null) => void>();
-let workerCount = 0; // = pool.length, so onerror can resolve exactly its own worker's in-flight ids
+
+interface PendingDecode {
+  readonly resolve: (texture: Texture | null) => void;
+  readonly retry: () => Promise<Texture | null>; // this decode's own main-thread fallback
+}
+
+const pending = new Map<number, PendingDecode>();
+let workerCount = 0; // = pool.length, so onerror can re-route exactly its own worker's in-flight ids
 let atlasPool: Worker[] | null | undefined;
 let nextDecodeId = 0;
 
-/** The worker pool, or `null` where it cannot exist (SSR, no OffscreenCanvas) — built once, lazily. */
+/** The worker pool, or `null` where it cannot exist (SSR, no OffscreenCanvas) or has DIED — built once,
+ *  lazily, and retired for good on worker failure (see onerror below). */
 function decoderPool(): Worker[] | null {
   if (atlasPool !== undefined) {
     return atlasPool;
@@ -449,21 +459,23 @@ function decoderPool(): Worker[] | null {
     const worker = new Worker(new URL('./atlas.worker', import.meta.url), { type: 'module' });
 
     worker.onmessage = (event: MessageEvent<AtlasDecoded>): void => {
-      const { id, failed, width, height, pixels } = event.data;
-      const resolve = pending.get(id);
+      const { id, failed, width, height, pixels, palette, worldSize } = event.data;
+      const entry = pending.get(id);
 
       pending.delete(id);
-      resolve?.(failed === true ? null : { width, height, pixels });
+      entry?.resolve(failed === true ? null : { width, height, pixels, palette, worldSize });
     };
-    // A worker-level failure (chunk 404, CSP block, parse error) never posts a message: its in-flight
-    // decodes would hang forever and the loading card would never lift. Fall them back to null (the 2D
-    // billboard / procedural texture). Ids map to workers by `id % workerCount`, so resolve exactly this
-    // worker's outstanding ids.
+    // A worker-level failure (chunk 404 on deploy skew, CSP block, parse error) never posts a message —
+    // and it fires ONCE: later postMessage calls to the dead worker vanish silently, which would hang
+    // the loading card forever on the next decode. So RETIRE the whole pool (decoderPool() now answers
+    // null → every later decode takes its main-thread path) and re-route this worker's in-flight
+    // decodes through their own fallbacks. Ids map to workers by `id % workerCount`.
     worker.onerror = (): void => {
-      for (const [id, resolve] of [...pending]) {
+      atlasPool = null;
+      for (const [id, entry] of [...pending]) {
         if (id % workerCount === index) {
           pending.delete(id);
-          resolve(null);
+          void entry.retry().then(entry.resolve);
         }
       }
     };
@@ -480,13 +492,31 @@ interface AtlasDecoded {
   readonly failed?: boolean;
   readonly width: number;
   readonly height: number;
-  readonly pixels: Uint8ClampedArray;
+  readonly pixels: Uint8ClampedArray; // palette indices — the worker palettizes at the source
+  readonly palette: Uint8ClampedArray;
+  readonly worldSize?: number; // env mode only
+}
+
+/** The atlas decode's main-thread path — the no-pool fallback AND a dead worker's retry (yields a
+ *  frame first to soften the raster hit; concurrent fallbacks can still bunch). */
+async function mainThreadAtlas(
+  url: string,
+  rows: number,
+  maxCellH: number,
+): Promise<Texture | null> {
+  const image = await fetchAtlasImage(url);
+
+  if (image === null) {
+    return null;
+  }
+  await yieldToFrame();
+
+  return rasterizeAtlas(image, rows, maxCellH);
 }
 
 /** Decode a sprite sheet OFF the main thread (fetch + raster + alpha harden in a worker, pixels returned
- *  by transfer) — where the worker path runs, no rasterise touches the main thread at all. Without
- *  OffscreenCanvas it falls back to a main-thread rasterise (yielding a frame first to soften the hit;
- *  concurrent fallbacks can still bunch — the worker path is the one that fully avoids it). */
+ *  by transfer) — where the worker path runs, no rasterise touches the main thread at all. Falls back to
+ *  the main-thread rasterise where the pool cannot exist, or died. */
 export async function decodeAtlas(
   url: string,
   rows: number,
@@ -495,21 +525,32 @@ export async function decodeAtlas(
   const pool = decoderPool();
 
   if (pool === null) {
-    const image = await fetchAtlasImage(url);
-
-    if (image === null) {
-      return null;
-    }
-    await yieldToFrame();
-
-    return rasterizeAtlas(image, rows, maxCellH);
+    return mainThreadAtlas(url, rows, maxCellH);
   }
   const id = nextDecodeId++;
   const worker = pool[id % pool.length];
 
   return new Promise<Texture | null>((resolve) => {
-    pending.set(id, resolve);
-    worker.postMessage({ id, url, rows, maxCellH });
+    pending.set(id, { resolve, retry: () => mainThreadAtlas(url, rows, maxCellH) });
+    worker.postMessage({ id, url, mode: 'atlas', rows, maxCellH });
+  });
+}
+
+/** Decode a WORLD surface off the main thread (env mode: natural size, no alpha harden, POT-gated —
+ *  plus the palette quantization, the new heavy step a lossy WebP forces). Falls back to the
+ *  main-thread `loadImageTexture` where the pool cannot exist, or died. */
+function decodeEnv(url: string, worldSize: number): Promise<Texture | null> {
+  const pool = decoderPool();
+
+  if (pool === null) {
+    return loadImageTexture(url, worldSize);
+  }
+  const id = nextDecodeId++;
+  const worker = pool[id % pool.length];
+
+  return new Promise<Texture | null>((resolve) => {
+    pending.set(id, { resolve, retry: () => loadImageTexture(url, worldSize) });
+    worker.postMessage({ id, url, mode: 'env', rows: 1, maxCellH: 0, worldSize });
   });
 }
 
@@ -571,7 +612,7 @@ async function fetchEnvAssets(
 
   await Promise.all(
     entries.map(async ([name, asset]) => {
-      const texture = await loadImageTexture(asset.url, asset.worldSize);
+      const texture = await decodeEnv(asset.url, asset.worldSize);
 
       if (texture !== null) {
         out.set(name, texture);

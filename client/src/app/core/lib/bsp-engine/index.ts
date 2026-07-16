@@ -4,6 +4,7 @@ export * from './node-builder';
 export * from './physics';
 export * from './camera';
 export * from './texture';
+export * from './palettize';
 export * from './raycast';
 export * from './seams';
 export * from './renderer';

@@ -233,6 +233,7 @@ function paintWall(
   const tw = tex.width;
   const th = tex.height;
   const px = tex.pixels;
+  const pal = tex.palette;
   // SQUARE texels: HEIGHT spans `worldSize` world units, and the same texels/unit drive U so art keeps aspect.
   const perUnit = th / (tex.worldSize ?? TEX_WORLD);
   const texCol = (u * perUnit) & (tw - 1); // constant down the column (tw/th are powers of two → & wraps)
@@ -242,10 +243,13 @@ function paintWall(
 
   for (let y = lo; y <= hi; y++) {
     if (forward < zbuf[i]) {
-      const ti = (((vRaw & (th - 1)) * tw + texCol) << 2) | 0;
+      const pi = px[(vRaw & (th - 1)) * tw + texCol] << 2;
 
       buf32[i] =
-        0xff000000 | ((px[ti + 2] * shade) << 16) | ((px[ti + 1] * shade) << 8) | (px[ti] * shade);
+        0xff000000 |
+        ((pal[pi + 2] * shade) << 16) |
+        ((pal[pi + 1] * shade) << 8) |
+        (pal[pi] * shade);
       zbuf[i] = forward;
     }
     i += dims.width;
@@ -277,6 +281,7 @@ function castFlat(
   const tw = tex.width;
   const th = tex.height;
   const px = tex.pixels;
+  const pal = tex.palette;
   const dz = camera.z - planeZ;
   const inv = 1 / (tex.worldSize ?? TEX_WORLD); // 1 tile per `worldSize` world units (default 1)
   let i = lo * dims.width + x;
@@ -289,10 +294,13 @@ function castFlat(
       const tcx = (((camera.x + dist * rayX) * inv + FLAT_ANCHOR) * tw) & (tw - 1);
       const tcy = (((camera.y + dist * rayY) * inv + FLAT_ANCHOR) * th) & (th - 1);
       const shade = light * Math.max(0.25, Math.min(1, falloff * (y - horizon)));
-      const ti = (tcy * tw + tcx) << 2;
+      const pi = px[tcy * tw + tcx] << 2;
 
       buf32[i] =
-        0xff000000 | ((px[ti + 2] * shade) << 16) | ((px[ti + 1] * shade) << 8) | (px[ti] * shade);
+        0xff000000 |
+        ((pal[pi + 2] * shade) << 16) |
+        ((pal[pi + 1] * shade) << 8) |
+        (pal[pi] * shade);
       zbuf[i] = dist;
     }
     i += dims.width;
@@ -488,10 +496,10 @@ function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: G
         continue;
       }
       const img = tex[l];
-      const layerTex = img !== null && tu[l] >= 0 ? img.pixels : null; // sampled layer; null = plain window
+      const layer = img !== null && tu[l] >= 0 ? img : null; // sampled layer; null = plain window
       const tw = img?.width ?? 0;
       const th = img?.height ?? 0;
-      const col = layerTex !== null ? Math.min(tw - 1, tu[l] | 0) : 0;
+      const col = layer !== null ? Math.min(tw - 1, tu[l] | 0) : 0;
       const vt = vTop[l]; // texture V anchored to the FULL pane extent (may be off-screen), not the
       const vh = vBot[l] - vt; // clipped span, so the art keeps world scale up close
       const sh = shade[l];
@@ -507,15 +515,15 @@ function blendGlass(buf32: Uint32Array, zbuf: Float32Array, dims: Dims, panes: G
         let cg = 0;
         let cb = 0;
 
-        if (layerTex !== null) {
+        if (layer !== null) {
           const v = Math.min(th - 1, Math.max(0, (((y - vt) / vh) * th) | 0));
-          const ti = (v * tw + col) << 2;
+          const pi = layer.pixels[v * tw + col] << 2;
 
-          if (layerTex[ti + 3] >= 128) {
+          if (layer.palette[pi + 3] >= 128) {
             framed = true; // an opaque frame / mullion / handle texel
-            cr = (layerTex[ti] * sh) | 0;
-            cg = (layerTex[ti + 1] * sh) | 0;
-            cb = (layerTex[ti + 2] * sh) | 0;
+            cr = (layer.palette[pi] * sh) | 0;
+            cg = (layer.palette[pi + 1] * sh) | 0;
+            cb = (layer.palette[pi + 2] * sh) | 0;
           }
         }
         if (framed) {
@@ -769,6 +777,7 @@ function drawVoxel(
   const { width } = dims;
   const { tex, shade } = q;
   const px = tex.pixels;
+  const pal = tex.palette;
   const { n, ny, nz, camGX, camGY, camGZ, fwdGX, fwdGY, rightGX, rightGY, zScale } = vox;
   const halfW = width / 2;
   // Per-axis march state (grid axes 0 = lateral, 1 = depth, 2 = up). One shared code path per axis keeps
@@ -866,9 +875,9 @@ function drawVoxel(
         if (t >= zbuf[i]) {
           break; // everything from here on is occluded (t only grows)
         }
-        const ti = ((cell[2] * ny + cell[1]) * n + cell[0]) << 2;
+        const pi = px[(cell[2] * ny + cell[1]) * n + cell[0]] << 2;
 
-        if (px[ti + 3] !== 0) {
+        if (pi !== 0) {
           const face =
             axis === 2
               ? dz < 0
@@ -881,9 +890,9 @@ function drawVoxel(
 
           buf32[i] =
             0xff000000 |
-            (Math.min(255, (px[ti + 2] * lit) | 0) << 16) |
-            (Math.min(255, (px[ti + 1] * lit) | 0) << 8) |
-            Math.min(255, (px[ti] * lit) | 0);
+            (Math.min(255, (pal[pi + 2] * lit) | 0) << 16) |
+            (Math.min(255, (pal[pi + 1] * lit) | 0) << 8) |
+            Math.min(255, (pal[pi] * lit) | 0);
           zbuf[i] = t; // the volume writes depth — real geometry to every later surface
 
           // Seen THROUGH glass: same wash as billboards, at this PIXEL's depth (layers nearest-first).
@@ -941,6 +950,7 @@ function drawSprites(
     const { tex, forward, left, right, yTop, yBottom, u0, v0, cellW, cellH, shade } = q;
     const tw = tex.width;
     const px = tex.pixels;
+    const pal = tex.palette;
     const colSpan = right - left + 1;
     const rowSpan = yBottom - yTop + 1;
     const yLo = Math.max(dims.rowStart, yTop);
@@ -961,15 +971,16 @@ function drawSprites(
       let i = colLo * width + x;
 
       for (let y = colLo; y <= colHi; y++) {
-        const ti = ((v0 + ((((y - yTop) / rowSpan) * cellH) | 0)) * tw + texCol) << 2;
+        const pi = px[(v0 + ((((y - yTop) / rowSpan) * cellH) | 0)) * tw + texCol] << 2;
 
-        // Per-pixel depth + alpha test: skip pixels behind a wall/step or transparent in the sprite.
-        if (forward < zbuf[i] && px[ti + 3] !== 0) {
+        // Per-pixel depth + alpha test: skip pixels behind a wall/step or transparent in the sprite
+        // (index 0 IS the transparent slot, so `pi !== 0` is the whole alpha test).
+        if (forward < zbuf[i] && pi !== 0) {
           buf32[i] =
             0xff000000 |
-            (Math.min(255, (px[ti + 2] * shade) | 0) << 16) |
-            (Math.min(255, (px[ti + 1] * shade) | 0) << 8) |
-            Math.min(255, (px[ti] * shade) | 0);
+            (Math.min(255, (pal[pi + 2] * shade) | 0) << 16) |
+            (Math.min(255, (pal[pi + 1] * shade) | 0) << 8) |
+            Math.min(255, (pal[pi] * shade) | 0);
 
           // Seen THROUGH glass → wash the cool tint ONCE PER PANE in front (layers nearest-first, so stop
           // at the first layer at/beyond the sprite's own depth).

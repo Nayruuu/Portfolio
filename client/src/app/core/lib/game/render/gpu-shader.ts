@@ -36,10 +36,10 @@ struct Uniforms {
 }
 
 struct TexInfo {
-  offset: u32,   // first texel in the pool
+  offset: u32,      // first index BYTE in the pool (indices pack 4 per word)
   width: u32,
   height: u32,
-  pad0: u32,
+  paletteBase: u32, // first word of this texture's 256-entry palette
   perUnit: f32,   // wall texels per world unit (height / worldSize) — POT wall art only
   invWorld: f32,  // flat tiles per world unit (1 / worldSize) — POT flat art only
   anchorMod: f32, // (TEX_ANCHOR · perUnit) mod height, f64-precomputed — the wall-V anchor, phase only
@@ -50,11 +50,21 @@ struct TexInfo {
 @group(0) @binding(1) var<storage, read> columns: array<u32>; // per-column tables (geometry|windows|glass)
 @group(0) @binding(2) var<storage, read> spans: array<u32>;   // SPAN_STRIDE words per geometry record
 @group(0) @binding(3) var<storage, read> texInfo: array<TexInfo>;
-@group(0) @binding(4) var<storage, read> texels: array<u32>;  // packed RGBA texel pool
+@group(0) @binding(4) var<storage, read> texels: array<u32>;  // 1-byte palette-index pool, 4 per word
 @group(0) @binding(5) var<storage, read> aux: array<u32>;     // phases + glass layers + sprites
 @group(0) @binding(6) var<storage, read_write> outPix: array<u32>;
+@group(0) @binding(7) var<storage, read> palettes: array<u32>; // 256 packed-RGBA words per texture
 
 const SENTINEL: f32 = 3.0e38; // the CPU z-buffer's Infinity: any real surface depth beats it
+
+// linear texel index → palette index byte → packed RGBA word. Index 0 IS transparent (palette[base]
+// is 0x00000000), so callers keep their (texel >> 24u) alpha tests unchanged.
+fn sampleTex(t: TexInfo, linear: u32) -> u32 {
+  let byte = t.offset + linear;
+  let index = (texels[byte >> 2u] >> ((byte & 3u) * 8u)) & 0xffu;
+
+  return palettes[t.paletteBase + index];
+}
 
 fn shadePack(texel: u32, shade: f32) -> u32 {
   let r = u32(f32(texel & 0xffu) * shade);
@@ -127,7 +137,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let vRaw = t.anchorMod - uni.camZ * t.perUnit + f32(yi - uni.horizon) * (zPerRow * t.perUnit);
         let v = u32(i32(floor(vRaw)) & i32(t.height - 1u));
 
-        color = shadePack(texels[t.offset + v * t.width + col], shade);
+        color = shadePack(sampleTex(t, v * t.width + col), shade);
         best = depth;
       }
     } else if (kind == ${SPAN_FLAT}u) {
@@ -152,7 +162,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let tcy = u32(i32(floor(wy * f32(t.height))) & i32(t.height - 1u));
         let shade = light * clamp(falloff * f32(yi - uni.horizon), 0.25, 1.0);
 
-        color = shadePack(texels[t.offset + tcy * t.width + tcx], shade);
+        color = shadePack(sampleTex(t, tcy * t.width + tcx), shade);
         best = dist;
       }
     } else if (best == SENTINEL) {
@@ -205,7 +215,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
           let vt = bitcast<i32>(aux[g + 2u]);
           let vh = bitcast<i32>(aux[g + 3u]) - vt; // the pane's TRUE extent — the texture's V anchor
           let v = clamp(i32((f32(yi - vt) / f32(vh)) * f32(t.height)), 0, i32(t.height) - 1);
-          let texel = texels[t.offset + u32(v) * t.width + col];
+          let texel = sampleTex(t, u32(v) * t.width + col);
 
           if ((texel >> 24u) >= 128u) {
             framed = true;
@@ -335,7 +345,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (t >= best) {
             break; // everything from here on is occluded (t only grows)
           }
-          let texel = texels[grid.offset + u32((iz * nyG + iy) * n + ix)];
+          let texel = sampleTex(grid, u32((iz * nyG + iy) * n + ix));
 
           if ((texel >> 24u) != 0u) {
             var face: f32 = ${VOXEL_SHADE.sideY};
@@ -393,7 +403,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       let texCol = aux[sb + 5u] + u32((f32(xi - left) / f32(right - left + 1)) * f32(aux[sb + 7u]));
       let t = texInfo[aux[sb + 4u]];
       let v = aux[sb + 6u] + u32((f32(yi - yTop) / f32(yBottom - yTop + 1)) * f32(aux[sb + 8u]));
-      let texel = texels[t.offset + v * t.width + texCol];
+      let texel = sampleTex(t, v * t.width + texCol);
 
       if (forward < best && (texel >> 24u) != 0u) {
         color = shadePackClamp(texel, bitcast<f32>(aux[sb + 10u]));

@@ -1,12 +1,12 @@
+import { expandRgba, palettizeRgba } from './palettize';
 import type { Texture } from './texture';
 
 // Bakes a per-voxel contact-shadow term into a voxel grid's RGB — the same bytes both backends sample, so
 // CPU and GPU stay pixel-identical for free. Signal: a surface voxel's occupied-neighbour count over a
 // (2·radius+1)³ cube vs a flat face's baseline — concave darkens, flat unchanged, convex lifts when `edge`>0.
-// Grid encoding (identical to voxel-carve / vox-parse): voxel (gx,gy,gz) at offset ((gz·ny+gy)·n+gx)·4.
-
-// Binary 0/255 by contract; the threshold tolerates any future non-255 "filled" marker.
-const SOLID_ALPHA = 128;
+// Grid encoding (identical to voxel-carve / vox-parse): voxel (gx,gy,gz) at offset (gz·ny+gy)·n+gx.
+// The bake multiplies CONTINUOUS factors into the colours, so it expands the palettized grid to RGBA,
+// shades, then re-palettizes (quantized when the shaded colours outgrow 255 — occupancy stays exact).
 
 // Auto radius = largest grid dimension over this (a few percent of the model, a consistent visual fraction).
 const RADIUS_DIVISOR = 34;
@@ -56,13 +56,13 @@ export function bakeVoxelAo(grid: Texture, options: VoxelAoOptions = {}): Textur
   const baseline = flatFaceNeighbors(radius);
   const maxNeighbors = (2 * radius + 1) ** 3 - 1;
   const range = maxNeighbors - baseline; // > 0 for radius ≥ 1
-  const source = grid.pixels;
-  const pixels = new Uint8ClampedArray(source); // a copy — the input is never mutated
-  // Occupancy plane (1 = solid) so the neighbourhood scan avoids the ×4 alpha lookup per probe.
+  const source = expandRgba(grid); // the bake's RGBA working copy — the input is never mutated
+  const pixels = new Uint8ClampedArray(source);
+  // 0/1 occupancy plane (the scan SUMS it) — index 0 = empty, straight off the index plane.
   const occupied = new Uint8Array(n * ny * nz);
 
   for (let index = 0; index < occupied.length; index++) {
-    occupied[index] = source[index * 4 + 3] > SOLID_ALPHA ? 1 : 0;
+    occupied[index] = grid.pixels[index] !== 0 ? 1 : 0;
   }
 
   for (let gz = 0; gz < nz; gz++) {
@@ -111,5 +111,8 @@ export function bakeVoxelAo(grid: Texture, options: VoxelAoOptions = {}): Textur
     }
   }
 
-  return { ...grid, pixels };
+  return palettizeRgba(grid.width, grid.height, pixels, {
+    worldSize: grid.worldSize,
+    voxelDepth: ny,
+  });
 }

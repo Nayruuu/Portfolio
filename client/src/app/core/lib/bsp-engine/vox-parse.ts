@@ -1,7 +1,9 @@
 import type { Texture } from './texture';
 
 // Decodes a MagicaVoxel .vox into the SAME voxel-grid Texture voxel-carve.ts produces (byte-identical
-// encoding: voxel (gx,gy,gz) at pixel (gx, gz·ny+gy), slices bottom-up; alpha 0 = empty / 255 = solid).
+// encoding: voxel (gx,gy,gz) at pixel (gx, gz·ny+gy), slices bottom-up; index 0 = empty). A .vox is
+// ALREADY palettized — the file's colour indices become the Texture's pixels as-is, its RGBA chunk the
+// palette (no ×4 expansion, so a 256-class sculpt parses at 16.7 MB, not 67 MB).
 // Reads the FIRST model only — unknown chunks (scene graph, MATL, LAYR…) are skipped by size.
 // Axis mapping (MV is Z-up like our grid): gx = MV x (lateral), gy = MV y (depth, 0 = FRONT the player
 // meets), gz = MV z (height, 0 = bottom). RGBA chunk is SHIFTED (see buildPalette).
@@ -46,28 +48,29 @@ const DEFAULT_PALETTE = new Uint32Array([
 const RGBA_BYTES = 256 * 4;
 
 // INDEX-ALIGNED palette (pal[c·4…] = colour for colorIndex c). The file's RGBA chunk is SHIFTED — stored
-// entry i is colour i+1.
-function buildPalette(raw: Uint8Array | null): Uint8Array {
-  const pal = new Uint8Array(256 * 4);
+// entry i is colour i+1. Enforces the engine invariant on the way in: entry 0 is the transparent/empty
+// slot, and every colour entry is opaque (a solid voxel is always opaque, whatever alpha the file kept).
+function buildPalette(raw: Uint8Array | null): Uint8ClampedArray {
+  const pal = new Uint8ClampedArray(256 * 4);
 
   if (raw === null) {
-    for (let c = 0; c < 256; c++) {
+    for (let c = 1; c < 256; c++) {
       const v = DEFAULT_PALETTE[c];
 
       pal[c * 4] = v & 0xff;
       pal[c * 4 + 1] = (v >> 8) & 0xff;
       pal[c * 4 + 2] = (v >> 16) & 0xff;
-      pal[c * 4 + 3] = (v >> 24) & 0xff;
     }
-
-    return pal;
+  } else {
+    // Fills palette indices 1..255 (the 256th stored entry maps to index 256 and is unused).
+    for (let i = 0; i < 255; i++) {
+      pal[(i + 1) * 4] = raw[i * 4];
+      pal[(i + 1) * 4 + 1] = raw[i * 4 + 1];
+      pal[(i + 1) * 4 + 2] = raw[i * 4 + 2];
+    }
   }
-  // Fills palette indices 1..255 (the 256th stored entry maps to index 256 and is unused).
-  for (let i = 0; i < 255; i++) {
-    pal[(i + 1) * 4] = raw[i * 4];
-    pal[(i + 1) * 4 + 1] = raw[i * 4 + 1];
-    pal[(i + 1) * 4 + 2] = raw[i * 4 + 2];
-    pal[(i + 1) * 4 + 3] = raw[i * 4 + 3];
+  for (let c = 1; c < 256; c++) {
+    pal[c * 4 + 3] = 255;
   }
 
   return pal;
@@ -141,7 +144,7 @@ export function parseVox(input: ArrayBuffer | Uint8Array): Texture {
     throw new Error('vox: degenerate model size');
   }
   const palette = buildPalette(rgba);
-  const pixels = new Uint8ClampedArray(n * ny * nz * 4); // all 0 → every cell empty until filled
+  const pixels = new Uint8ClampedArray(n * ny * nz); // all 0 → every cell empty until filled
 
   for (let k = 0; k < voxels.count; k++) {
     const base = voxels.off + k * 4;
@@ -153,15 +156,10 @@ export function parseVox(input: ArrayBuffer | Uint8Array): Texture {
     if (Math.max(gx - n, gy - ny, gz - nz) >= 0) {
       throw new Error('vox: voxel outside the model box');
     }
-    const out = ((gz * ny + gy) * n + gx) * 4;
-
-    pixels[out] = palette[c * 4];
-    pixels[out + 1] = palette[c * 4 + 1];
-    pixels[out + 2] = palette[c * 4 + 2];
-    pixels[out + 3] = 255; // alpha = occupancy: a solid voxel is always opaque
+    pixels[(gz * ny + gy) * n + gx] = c; // the file's own palette index — occupancy = index ≠ 0
   }
 
-  return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+  return { width: n, height: ny * nz, pixels, palette, voxelDepth: ny };
 }
 
 /** Crop a voxel grid to its occupied bounding box — PURE FRAMING: only empty border slices are removed,
@@ -187,7 +185,7 @@ export function trimVoxelGrid(grid: Texture): Texture {
   for (let gz = 0; gz < nz; gz++) {
     for (let gy = 0; gy < ny; gy++) {
       for (let gx = 0; gx < n; gx++) {
-        if (px[((gz * ny + gy) * n + gx) * 4 + 3] === 0) {
+        if (px[(gz * ny + gy) * n + gx] === 0) {
           continue;
         }
         x0 = Math.min(x0, gx);
@@ -210,18 +208,12 @@ export function trimVoxelGrid(grid: Texture): Texture {
   if (tn === n && tny === ny && tnz === nz) {
     return grid; // already tight
   }
-  const out = new Uint8ClampedArray(tn * tny * tnz * 4);
+  const out = new Uint8ClampedArray(tn * tny * tnz);
 
   for (let gz = 0; gz < tnz; gz++) {
     for (let gy = 0; gy < tny; gy++) {
       for (let gx = 0; gx < tn; gx++) {
-        const src = (((gz + z0) * ny + (gy + y0)) * n + (gx + x0)) * 4;
-        const dst = ((gz * tny + gy) * tn + gx) * 4;
-
-        out[dst] = px[src];
-        out[dst + 1] = px[src + 1];
-        out[dst + 2] = px[src + 2];
-        out[dst + 3] = px[src + 3];
+        out[(gz * tny + gy) * tn + gx] = px[((gz + z0) * ny + (gy + y0)) * n + (gx + x0)];
       }
     }
   }
@@ -232,9 +224,9 @@ export function trimVoxelGrid(grid: Texture): Texture {
 /** Box-filter an over-budget voxel grid down so no side exceeds `maxSide` — RESOLUTION scaling, the only
  *  transform allowed on a hand-sculpted model. Policy mirrors the offline `downsample-vox` tool: a block
  *  is occupied if ANY source voxel is (thin parts survive), coloured by the majority colour among them.
- *  A dense grid costs 4 B per cell INCLUDING empty air (~97 % of a typical sculpt), so a 256-class export
+ *  A dense grid costs 1 B per cell INCLUDING empty air (~97 % of a typical sculpt), so a 256-class export
  *  weighs ~17 MB while the screen can only ever show ~1 px per voxel at pickup size — halving the grid
- *  divides the memory by 8 at no visible cost. Returns the grid untouched when already within budget. */
+ *  still divides the memory by 8 at no visible cost. Returns the grid untouched when already within budget. */
 export function downsampleVoxelGrid(grid: Texture, maxSide: number): Texture {
   const ny = grid.voxelDepth;
 
@@ -252,14 +244,14 @@ export function downsampleVoxelGrid(grid: Texture, maxSide: number): Texture {
   const tny = Math.ceil(ny / k);
   const tnz = Math.ceil(nz / k);
   const src = grid.pixels;
-  const out = new Uint8ClampedArray(tn * tny * tnz * 4);
+  const out = new Uint8ClampedArray(tn * tny * tnz);
 
   for (let bz = 0; bz < tnz; bz++) {
     for (let by = 0; by < tny; by++) {
       for (let bx = 0; bx < tn; bx++) {
-        // Majority colour among the block's OCCUPIED voxels (exact RGB vote — the palette is discrete).
+        // Majority colour among the block's OCCUPIED voxels (an exact PALETTE-INDEX vote).
         const votes = new Map<number, number>();
-        let bestKey = -1;
+        let bestIndex = 0;
         let bestCount = 0;
 
         for (let dz = 0; dz < k; dz++) {
@@ -280,32 +272,24 @@ export function downsampleVoxelGrid(grid: Texture, maxSide: number): Texture {
               if (gx >= n) {
                 continue;
               }
-              const i = ((gz * ny + gy) * n + gx) * 4;
+              const index = src[(gz * ny + gy) * n + gx];
 
-              if (src[i + 3] === 0) {
+              if (index === 0) {
                 continue;
               }
-              const key = (src[i] << 16) | (src[i + 1] << 8) | src[i + 2];
-              const count = (votes.get(key) ?? 0) + 1;
+              const count = (votes.get(index) ?? 0) + 1;
 
-              votes.set(key, count);
+              votes.set(index, count);
               if (count > bestCount) {
                 bestCount = count;
-                bestKey = key;
+                bestIndex = index;
               }
             }
           }
         }
 
-        if (bestKey < 0) {
-          continue; // empty block — stays transparent
-        }
-        const o = ((bz * tny + by) * tn + bx) * 4;
-
-        out[o] = (bestKey >> 16) & 0xff;
-        out[o + 1] = (bestKey >> 8) & 0xff;
-        out[o + 2] = bestKey & 0xff;
-        out[o + 3] = 255;
+        // bestIndex 0 = empty block — stays transparent.
+        out[(bz * tny + by) * tn + bx] = bestIndex;
       }
     }
   }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildBsp } from './node-builder';
+import { palettizeRgba } from './palettize';
 import {
   mapSprites,
   projectSprites,
@@ -244,14 +245,12 @@ describe('renderFrame', () => {
       lowerTex: 'BRICK',
       middleTex,
     });
-    const clearLeaf = { width: 2, height: 2, pixels: new Uint8ClampedArray(16) };
-    const greenLeaf = {
-      width: 2,
-      height: 2,
-      pixels: new Uint8ClampedArray([
-        30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255,
-      ]),
-    };
+    const clearLeaf = palettizeRgba(2, 2, new Uint8ClampedArray(16));
+    const greenLeaf = palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255]), // prettier-ignore
+    );
     const TEXD = new Map(TEX).set('CLEARLEAF', clearLeaf).set('GREENLEAF', greenLeaf);
     const map = buildBsp({
       sectors: [
@@ -364,13 +363,11 @@ describe('renderFrame', () => {
       lowerTex: 'BRICK',
       middleTex: 'BRICK',
     });
-    const red = {
-      width: 2,
-      height: 2,
-      pixels: new Uint8ClampedArray([
-        255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255,
-      ]),
-    };
+    const red = palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255]), // prettier-ignore
+    );
     const TEXR = new Map(TEX).set('REDSPR', red);
     const scene = (glass: boolean): MapSource => ({
       sectors: [
@@ -423,13 +420,11 @@ describe('renderFrame', () => {
       lowerTex: 'BRICK',
       middleTex: 'BRICK',
     });
-    const red = {
-      width: 2,
-      height: 2,
-      pixels: new Uint8ClampedArray([
-        255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255,
-      ]),
-    };
+    const red = palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255]), // prettier-ignore
+    );
     const TEXR = new Map(TEX).set('REDSPR', red);
     const scene = (glass: boolean): MapSource => ({
       sectors: [
@@ -538,15 +533,15 @@ describe('renderFrame', () => {
       lowerTex: 'BRICK',
       middleTex,
     });
-    const paneTex = {
-      width: 4,
-      height: 4,
-      pixels: new Uint8ClampedArray([
+    const paneTex = palettizeRgba(
+      4,
+      4,
+      new Uint8ClampedArray([
         30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255,
         30, 220, 30, 255, 30, 220, 30, 255, 30, 220, 30, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       ]),
-    };
+    );
     const TEXD = new Map(TEX).set('PANE', paneTex);
     const map = buildBsp({
       sectors: [
@@ -595,13 +590,11 @@ describe('renderFrame', () => {
       lowerTex: 'BRICK',
       middleTex: 'BRICK',
     });
-    const red = {
-      width: 2,
-      height: 2,
-      pixels: new Uint8ClampedArray([
-        255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255,
-      ]),
-    };
+    const red = palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255, 255, 20, 20, 255]), // prettier-ignore
+    );
     const TEXR = new Map(TEX).set('REDSPR', red);
     const scene = (glass: boolean): MapSource => ({
       sectors: [
@@ -658,12 +651,12 @@ describe('renderFrame', () => {
       lowerTex: 'BRICK',
       middleTex: 'DOORGLASS',
     });
-    const doorGlass = {
-      width: 2,
-      height: 2,
-      worldSize: 4,
-      pixels: new Uint8ClampedArray([90, 90, 90, 255, 0, 0, 0, 0, 0, 0, 0, 0, 90, 90, 90, 255]),
-    };
+    const doorGlass = palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([90, 90, 90, 255, 0, 0, 0, 0, 0, 0, 0, 0, 90, 90, 90, 255]),
+      { worldSize: 4 },
+    );
     const TEXD = new Map(TEX).set('DOORGLASS', doorGlass);
     const doorMap = buildBsp({
       vertices: [
@@ -899,15 +892,15 @@ describe('atlas sprites', () => {
     things: [],
   };
   const room = buildBsp(ROOM);
-  const atlas = {
-    width: 2,
-    height: 2,
+  const atlas = palettizeRgba(
+    2,
+    2,
     // prettier-ignore
-    pixels: new Uint8ClampedArray([
+    new Uint8ClampedArray([
       250, 20, 20, 255,   20, 250, 20, 255,
       20, 20, 250, 255,   250, 250, 20, 255,
     ]),
-  };
+  );
   const tex = new Map([...TEX, ['ATLAS', atlas]]);
   const cam = { x: 5, y: 5, angle: 0, z: 1.6 };
   const sprite = { x: 8, y: 5, z: 0, tex: 'ATLAS', width: 1, height: 2, cols: 2, rows: 2 };
@@ -1037,14 +1030,14 @@ describe('voxel props (world-anchored volumes)', () => {
       }
     }
 
-    return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+    return palettizeRgba(n, ny * nz, pixels, { voxelDepth: ny });
   }
 
-  const magenta = {
-    width: 2,
-    height: 2,
-    pixels: new Uint8ClampedArray(Array.from({ length: 4 }, () => [230, 20, 230, 255]).flat()),
-  };
+  const magenta = palettizeRgba(
+    2,
+    2,
+    new Uint8ClampedArray(Array.from({ length: 4 }, () => [230, 20, 230, 255]).flat()),
+  );
   const tex = new Map([
     ...TEX,
     ['DEPTH', grid(2, 2, 2, (_x, y) => (y === 0 ? BLUE : YELLOW))],
@@ -1411,15 +1404,12 @@ describe('zone portals', () => {
     lowerTex: 'BRICK',
     middleTex,
   });
-  const flat = (
-    r: number,
-    g: number,
-    b: number,
-  ): { width: number; height: number; pixels: Uint8ClampedArray } => ({
-    width: 2,
-    height: 2,
-    pixels: new Uint8ClampedArray([r, g, b, 255, r, g, b, 255, r, g, b, 255, r, g, b, 255]),
-  });
+  const flat = (r: number, g: number, b: number): Texture =>
+    palettizeRgba(
+      2,
+      2,
+      new Uint8ClampedArray([r, g, b, 255, r, g, b, 255, r, g, b, 255, r, g, b, 255]),
+    );
   const TEXP = new Map(TEX).set('NGREEN', flat(20, 220, 20)).set('NMAG', flat(220, 20, 220));
   const sector = { floorZ: 0, ceilZ: 4, floorTex: 'FLOOR', ceilTex: 'CEIL', light: 255 };
   const CAM: Camera = { x: 4, y: 2, angle: Math.PI / 2, z: 1.6 };
@@ -1550,12 +1540,12 @@ describe('zone portals', () => {
   });
 
   it('ray-marches a warm neighbor VOXEL prop through the seam, clipped to its recorded windows', () => {
-    const redGrid: Texture = {
-      width: 2,
-      height: 4,
-      pixels: new Uint8ClampedArray(Array.from({ length: 8 }, () => [250, 20, 20, 255]).flat()),
-      voxelDepth: 2,
-    };
+    const redGrid: Texture = palettizeRgba(
+      2,
+      4,
+      new Uint8ClampedArray(Array.from({ length: 8 }, () => [250, 20, 20, 255]).flat()),
+      { voxelDepth: 2 },
+    );
     const lib = new Map([...TEXP, ['REDGRID', redGrid]]);
     const voxSpr: Sprite = {
       x: 105,

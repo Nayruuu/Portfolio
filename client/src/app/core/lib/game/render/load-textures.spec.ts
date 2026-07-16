@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildEnemyGroups, buildPickupJobs } from './load-textures';
 import { ENEMY_SPECS } from '../enemy';
 import { PICKUP_TEXTURE_JOBS } from '../world/pickups';
@@ -47,5 +47,66 @@ describe('buildEnemyGroups — the deferred set, one group per species', () => {
 
       expect(hasStrip).toBe(spec.thrower !== undefined);
     }
+  });
+});
+
+describe('a dead decoder pool (worker chunk 404 / CSP) must fall back, never hang', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it('re-routes in-flight decodes to the main thread and retires the pool for later calls', async () => {
+    const workers: { posts: number; onerror: (() => void) | null }[] = [];
+
+    vi.stubGlobal(
+      'Worker',
+      class {
+        public onmessage: unknown = null;
+        public onerror: (() => void) | null = null;
+        public posts = 0;
+
+        constructor() {
+          workers.push(this as never);
+        }
+
+        public postMessage(): void {
+          this.posts++;
+        }
+      },
+    );
+    vi.stubGlobal('OffscreenCanvas', class {});
+    // An Image whose load always errors, ASYNC like the real thing — the main-thread fallback resolves.
+    vi.stubGlobal(
+      'Image',
+      class {
+        public onerror: (() => void) | null = null;
+        public onload: (() => void) | null = null;
+
+        public set src(_value: string) {
+          queueMicrotask(() => this.onerror?.());
+        }
+      },
+    );
+    vi.resetModules();
+    const { decodeAtlas } = await import('./load-textures');
+    const hung = Symbol('hung');
+    const settle = (work: Promise<unknown>): Promise<unknown> =>
+      Promise.race([work, new Promise((resolve) => setTimeout(() => resolve(hung), 100))]);
+    const inFlight = decodeAtlas('/dead.webp', 1);
+
+    expect(workers.length).toBeGreaterThan(0);
+    expect(workers.reduce((sum, worker) => sum + worker.posts, 0)).toBe(1);
+    for (const worker of workers) {
+      worker.onerror?.(); // the chunk fails to load — every pool worker dies
+    }
+
+    expect(await settle(inFlight)).not.toBe(hung); // resolves via the main-thread fallback
+
+    const postsBefore = workers.reduce((sum, worker) => sum + worker.posts, 0);
+    const second = decodeAtlas('/dead-2.webp', 1);
+
+    expect(await settle(second)).not.toBe(hung); // a dead pool must not swallow later decodes
+    expect(workers.reduce((sum, worker) => sum + worker.posts, 0)).toBe(postsBefore); // no more posts
   });
 });

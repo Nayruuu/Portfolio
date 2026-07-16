@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Texture } from '../../bsp-engine';
+import { palettizeRgba, type Texture } from '../../bsp-engine';
 import type { AtlasJob, EnemyAtlasGroup } from '../render/load-textures';
 import { AssetLoader, type AssetDecoders, type AssetLoaderHooks } from './asset-loader';
 
-const TEXTURE = { width: 1, height: 1, pixels: new Uint8ClampedArray(4) } satisfies Texture;
+const TEXTURE = palettizeRgba(1, 1, new Uint8ClampedArray(4));
 const PICKUP: AtlasJob = { name: 'AMMO', url: '/ammo.webp', rows: 1 };
 const GROUPS: EnemyAtlasGroup[] = [
   { texName: 'PINKY_WALK', jobs: [{ name: 'PINKY_WALK', url: '/pinky.webp', rows: 4 }] },

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { downsampleVoxelGrid, trimVoxelGrid } from './vox-parse';
 
 import { parseVox } from './vox-parse';
+import { expandRgba, palettizeRgba } from './palettize';
 import type { Texture } from './texture';
 
 function u32(v: number): Uint8Array {
@@ -81,6 +82,8 @@ function paletteChunk(
   return raw;
 }
 
+// A voxel's RGBA resolved THROUGH the palette — the colour assertions stay byte-identical to the
+// RGBA-era expectations.
 function voxelAt(
   grid: Texture,
   gx: number,
@@ -88,16 +91,16 @@ function voxelAt(
   gz: number,
 ): readonly [number, number, number, number] {
   const ny = grid.voxelDepth ?? 0;
-  const i = ((gz * ny + gy) * grid.width + gx) * 4;
+  const p = grid.pixels[(gz * ny + gy) * grid.width + gx] * 4;
 
-  return [grid.pixels[i], grid.pixels[i + 1], grid.pixels[i + 2], grid.pixels[i + 3]];
+  return [grid.palette[p], grid.palette[p + 1], grid.palette[p + 2], grid.palette[p + 3]];
 }
 
 function solidCount(grid: Texture): number {
   let total = 0;
 
-  for (let i = 3; i < grid.pixels.length; i += 4) {
-    if (grid.pixels[i] !== 0) {
+  for (const index of grid.pixels) {
+    if (index !== 0) {
       total++;
     }
   }
@@ -171,7 +174,25 @@ describe('parseVox', () => {
     expect(voxelAt(grid, 1, 0, 0)).toEqual([40, 50, 60, 255]);
   });
 
-  it('forces a solid voxel opaque even when its palette alpha is 0 (alpha = occupancy)', () => {
+  it("stores the file's own colour indices (1 byte per cell) over an index-aligned palette", () => {
+    const palette = paletteChunk({ 0: [10, 20, 30, 255], 1: [40, 50, 60, 255] });
+    const grid = parseVox(
+      vox({
+        dims: [3, 1, 1],
+        voxels: [
+          [0, 0, 0, 1],
+          [2, 0, 0, 2],
+        ],
+        palette,
+      }),
+    );
+
+    expect([...grid.pixels]).toEqual([1, 0, 2]); // no remap, no expansion — cell (1,0,0) stays empty
+    expect([...grid.palette.slice(0, 4)]).toEqual([0, 0, 0, 0]); // index 0 IS the transparent slot
+    expect([...grid.palette.slice(4, 12)]).toEqual([10, 20, 30, 255, 40, 50, 60, 255]);
+  });
+
+  it("forces a solid voxel's palette entry opaque even when the file's alpha is 0", () => {
     const palette = paletteChunk({ 0: [90, 90, 90, 0] });
     const grid = parseVox(vox({ dims: [1, 1, 1], voxels: [[0, 0, 0, 1]], palette }));
 
@@ -300,16 +321,16 @@ describe('parseVox', () => {
 
 describe('trimVoxelGrid', () => {
   const grid = (n: number, ny: number, nz: number, solids: readonly [number, number, number][]) => {
-    const pixels = new Uint8ClampedArray(n * ny * nz * 4);
+    const rgba = new Uint8ClampedArray(n * ny * nz * 4);
 
     for (const [x, y, z] of solids) {
       const i = ((z * ny + y) * n + x) * 4;
 
-      pixels[i] = 200;
-      pixels[i + 3] = 255;
+      rgba[i] = 200;
+      rgba[i + 3] = 255;
     }
 
-    return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+    return palettizeRgba(n, ny * nz, rgba, { voxelDepth: ny });
   };
 
   it('crops empty border slices on all three axes — pure framing, no voxel touched', () => {
@@ -319,8 +340,7 @@ describe('trimVoxelGrid', () => {
     expect(trimmed.width).toBe(1);
     expect(trimmed.voxelDepth).toBe(1);
     expect(trimmed.height).toBe(1);
-    expect(trimmed.pixels[0]).toBe(200); // the voxel survived, colour intact
-    expect(trimmed.pixels[3]).toBe(255);
+    expect([...expandRgba(trimmed)]).toEqual([200, 0, 0, 255]); // the voxel survived, colour intact
   });
 
   it('keeps a tight grid byte-identical (nothing to trim)', () => {
@@ -355,7 +375,7 @@ describe('trimVoxelGrid', () => {
   });
 
   it('throws on a flat texture (no voxelDepth) — this is a voxel-grid tool', () => {
-    expect(() => trimVoxelGrid({ width: 2, height: 2, pixels: new Uint8ClampedArray(16) })).toThrow(
+    expect(() => trimVoxelGrid(palettizeRgba(2, 2, new Uint8ClampedArray(16)))).toThrow(
       'not a voxel grid',
     );
   });
@@ -368,18 +388,18 @@ describe('downsampleVoxelGrid', () => {
     nz: number,
     solids: readonly [number, number, number, number][], // x,y,z,grey
   ) => {
-    const pixels = new Uint8ClampedArray(n * ny * nz * 4);
+    const rgba = new Uint8ClampedArray(n * ny * nz * 4);
 
     for (const [x, y, z, grey] of solids) {
       const i = ((z * ny + y) * n + x) * 4;
 
-      pixels[i] = grey;
-      pixels[i + 1] = grey;
-      pixels[i + 2] = grey;
-      pixels[i + 3] = 255;
+      rgba[i] = grey;
+      rgba[i + 1] = grey;
+      rgba[i + 2] = grey;
+      rgba[i + 3] = 255;
     }
 
-    return { width: n, height: ny * nz, pixels, voxelDepth: ny };
+    return palettizeRgba(n, ny * nz, rgba, { voxelDepth: ny });
   };
 
   it('returns a grid already under budget UNTOUCHED (same object)', () => {
@@ -401,12 +421,13 @@ describe('downsampleVoxelGrid', () => {
     // one lone voxel at a block corner — a 2×2×2 block averages 1/8 occupancy, yet must stay solid
     const big = grid(4, 4, 4, [[3, 3, 3, 200]]);
     const out = downsampleVoxelGrid(big, 2);
+    const rgba = expandRgba(out);
     const n = out.width;
     const ny = out.voxelDepth ?? 1;
     const i = ((1 * ny + 1) * n + 1) * 4; // block (1,1,1)
 
-    expect(out.pixels[i + 3]).toBe(255);
-    expect(out.pixels[i]).toBe(200);
+    expect(rgba[i + 3]).toBe(255);
+    expect(rgba[i]).toBe(200);
   });
 
   it('colours a block by the MAJORITY colour of its occupied voxels', () => {
@@ -418,25 +439,27 @@ describe('downsampleVoxelGrid', () => {
       [1, 1, 1, 200],
     ]);
     const out = downsampleVoxelGrid(big, 1);
+    const rgba = expandRgba(out);
 
     expect(out.width).toBe(1);
-    expect(out.pixels[0]).toBe(50);
-    expect(out.pixels[3]).toBe(255);
+    expect(rgba[0]).toBe(50);
+    expect(rgba[3]).toBe(255);
   });
 
   it('clips edge blocks on a width not divisible by the factor (no read past the row)', () => {
     // width 5, k=2 → 3 blocks; the last block's second column (gx=5) is past the edge and must be skipped
     const odd = grid(5, 2, 2, [[4, 0, 0, 120]]);
     const out = downsampleVoxelGrid(odd, 3);
+    const rgba = expandRgba(out);
 
     expect(out.width).toBe(3);
-    expect(out.pixels[(0 * 3 + 2) * 4]).toBe(120); // the lone edge voxel lands in block x=2
-    expect(out.pixels[(0 * 3 + 2) * 4 + 3]).toBe(255);
+    expect(rgba[(0 * 3 + 2) * 4]).toBe(120); // the lone edge voxel lands in block x=2
+    expect(rgba[(0 * 3 + 2) * 4 + 3]).toBe(255);
   });
 
   it('throws on a flat texture (no voxelDepth)', () => {
-    expect(() =>
-      downsampleVoxelGrid({ width: 2, height: 2, pixels: new Uint8ClampedArray(16) }, 128),
-    ).toThrow('not a voxel grid');
+    expect(() => downsampleVoxelGrid(palettizeRgba(2, 2, new Uint8ClampedArray(16)), 128)).toThrow(
+      'not a voxel grid',
+    );
   });
 });
