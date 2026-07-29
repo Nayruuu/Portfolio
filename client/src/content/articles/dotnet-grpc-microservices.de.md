@@ -1,3 +1,8 @@
+Zwischen Microservices bezahlt JSON über HTTP/1.1 seinen Komfort teuer: ausführliche
+Serialisierung, kein starker Vertrag, eine Verbindung pro Aufruf. **gRPC** antwortet auf genau
+diesen Kontext — kompaktes Binärformat über HTTP/2, ein geteilter Vertrag und generierter Code
+auf beiden Seiten. In .NET ist die Integration erstklassig.
+
 ## Die .proto-Datei als einzige Quelle der Wahrheit
 
 Alles beginnt mit einer `.proto`-Datei: Sie beschreibt die Nachrichten und den Service, unabhängig von der

@@ -1,3 +1,5 @@
+Nicht der gesamte Zustand einer App gehört in ein `signal()`, das tief unten in einer Komponente vergraben ist. Sobald ein Zustand von mehreren Stellen aus geteilt, abgeleitet und mutiert wird, möchte man eine klare Grenze: schreibgeschützte Selektoren, Methoden, um ihn weiterzuentwickeln. **NgRx SignalStore** (`@ngrx/signals`) bietet genau das, ohne das Actions/Reducer-Boilerplate des klassischen NgRx.
+
 ## Anatomie eines signalStore
 
 Ein Store setzt sich aus verketteten **Features** zusammen. `withState` deklariert den initialen Zustand, `withComputed` die abgeleiteten Werte, `withMethods` die Operationen. Jedes Zustandsfeld wird automatisch zu einem Signal, das auf der Instanz verfügbar ist.
@@ -10,9 +12,7 @@ export const CartStore = signalStore(
   { providedIn: 'root' },
   withState<{ items: CartItem[] }>({ items: [] }),
   withComputed(({ items }) => ({
-    total: computed(() =>
-      items().reduce((sum, item) => sum + item.price * item.quantity, 0),
-    ),
+    total: computed(() => items().reduce((sum, item) => sum + item.price * item.quantity, 0)),
     count: computed(() => items().length),
   })),
   withMethods((store) => ({

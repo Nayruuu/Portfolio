@@ -1,3 +1,5 @@
+La reflexión tiene un coste que se paga en el peor momento: en el arranque y en la ruta caliente, en el código de producción. Los **source generators** trasladan ese trabajo al otro extremo del ciclo — a la **compilación**. El generador lee tu código, produce más código, y el compilador lo incluye en el assembly como si lo hubieras escrito a mano.
+
 ## Incremental, no la API antigua
 
 La primera oleada de generadores (`ISourceGenerator`) recalculaba todo en cada pulsación y arruinaba la experiencia en el IDE. La API correcta hoy es **`IIncrementalGenerator`**: construye un pipeline en caché, donde solo se recalculan las entradas modificadas. Filtramos la compilación en dos tiempos — un predicado **sintáctico** rápido, luego una transformación **semántica** más costosa.

@@ -66,6 +66,10 @@ import minimalApiEfCoreDotnet8De from '../../../content/articles/minimal-api-ef-
 import minimalApiEfCoreDotnet8En from '../../../content/articles/minimal-api-ef-core-dotnet8.en.md';
 import minimalApiEfCoreDotnet8Es from '../../../content/articles/minimal-api-ef-core-dotnet8.es.md';
 import minimalApiEfCoreDotnet8Fr from '../../../content/articles/minimal-api-ef-core-dotnet8.fr.md';
+import moteurDoomSoftwareWebgpuDe from '../../../content/articles/moteur-doom-software-webgpu.de.md';
+import moteurDoomSoftwareWebgpuEn from '../../../content/articles/moteur-doom-software-webgpu.en.md';
+import moteurDoomSoftwareWebgpuEs from '../../../content/articles/moteur-doom-software-webgpu.es.md';
+import moteurDoomSoftwareWebgpuFr from '../../../content/articles/moteur-doom-software-webgpu.fr.md';
 import opentelemetryObservabiliteDotnetDe from '../../../content/articles/opentelemetry-observabilite-dotnet.de.md';
 import opentelemetryObservabiliteDotnetEn from '../../../content/articles/opentelemetry-observabilite-dotnet.en.md';
 import opentelemetryObservabiliteDotnetEs from '../../../content/articles/opentelemetry-observabilite-dotnet.es.md';
@@ -180,6 +184,12 @@ export const ARTICLE_BODIES: Record<string, Record<Lang, string>> = {
     en: minimalApiEfCoreDotnet8En,
     es: minimalApiEfCoreDotnet8Es,
     fr: minimalApiEfCoreDotnet8Fr,
+  },
+  'moteur-doom-software-webgpu': {
+    de: moteurDoomSoftwareWebgpuDe,
+    en: moteurDoomSoftwareWebgpuEn,
+    es: moteurDoomSoftwareWebgpuEs,
+    fr: moteurDoomSoftwareWebgpuFr,
   },
   'opentelemetry-observabilite-dotnet': {
     de: opentelemetryObservabiliteDotnetDe,

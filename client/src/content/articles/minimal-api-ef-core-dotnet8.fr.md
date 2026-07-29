@@ -67,6 +67,7 @@ private static async Task<Results<Created<Todo>, ValidationProblem>> CreateAsync
     }
 
     var todo = new Todo { Title = request.Title };
+
     db.Todos.Add(todo);
     await db.SaveChangesAsync();
 

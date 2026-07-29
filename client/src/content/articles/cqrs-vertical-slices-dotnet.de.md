@@ -1,3 +1,8 @@
+Sobald jemand **CQRS** ausspricht, fahren viele Teams schweres Geschütz auf: Event Sourcing,
+einen Message Bus, zwei Datenbanken. Dabei ist CQRS zunächst eine bescheidene Idee — **Lese-
+und Schreibzugriffe trennen** — die man ganz ohne Overhead anwenden kann, indem man den Code
+in **Vertical Slices** organisiert.
+
 ## Nach Funktionalität schneiden, nicht nach Schicht
 
 Die Schichtenarchitektur zerlegt eine Funktionalität auf fünf Ordner: `Controllers`,

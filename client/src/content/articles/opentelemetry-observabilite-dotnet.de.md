@@ -1,3 +1,8 @@
+Wenn eine Anfrage drei Services durchläuft und langsam wird, sagen Logs allein nicht, **wo**.
+Moderne Observability beruht auf drei korrelierten Signalen — Traces, Metriken, Logs — und
+**OpenTelemetry** ist deren herstellerneutraler Standard: Man instrumentiert einmal und exportiert
+in ein beliebiges Backend (Jaeger, Prometheus, Azure Monitor), ohne den Code neu zu schreiben.
+
 ## Drei Signale, eine einzige API
 
 OpenTelemetry vereinheitlicht die drei Säulen der Observability. **Traces** verfolgen eine Anfrage

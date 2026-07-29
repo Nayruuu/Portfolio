@@ -1,3 +1,8 @@
+Cuando una petición atraviesa tres servicios y es lenta, los logs por sí solos no dicen
+**dónde**. La observabilidad moderna se basa en tres señales correlacionadas — trazas, métricas,
+logs — y **OpenTelemetry** es su estándar neutral respecto al proveedor: se instrumenta una vez y
+se exporta a cualquier backend (Jaeger, Prometheus, Azure Monitor) sin reescribir el código.
+
 ## Tres señales, una sola API
 
 OpenTelemetry unifica los tres pilares de la observabilidad. Las **trazas** siguen una petición

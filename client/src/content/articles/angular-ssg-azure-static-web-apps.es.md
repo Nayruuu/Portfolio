@@ -1,3 +1,5 @@
+Un SPA Angular clásico envía una página en blanco a los crawlers: mientras el JS no se haya ejecutado, no hay nada que indexar. La **generación de sitios estáticos** (SSG) lo resuelve prerenderizando cada ruta a HTML en la compilación. Combinada con **Azure Static Web Apps**, se obtiene un sitio sin servidor, instantáneo y perfectamente indexado.
+
 ## Prerender nativo, sin servidor Node
 
 Desde `@angular/ssr`, el modo `outputMode: 'static'` prerenderiza **todas las rutas** en la compilación y solo emite archivos estáticos — ningún servidor Node que alojar. Esto es lo que hace trivial el despliegue en Azure SWA: se sube una carpeta `browser/`.

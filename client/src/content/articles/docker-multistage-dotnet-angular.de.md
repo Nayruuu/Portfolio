@@ -1,3 +1,5 @@
+Das .NET-SDK und `node_modules` in das Image zu packen, das man in Produktion deployt, bedeutet, 800 MB an Werkzeugen auszuliefern, die zur Laufzeit niemals gebraucht werden. Der **Multi-Stage-Build** trennt, was kompiliert, von dem, was läuft: Man erhält ein winziges finales Image, das nur das enthält, was die Runtime unbedingt benötigt.
+
 ## Das Prinzip: kompilieren, dann verwerfen
 
 Ein Multi-Stage-`Dockerfile` deklariert mehrere `FROM`-Anweisungen. Jedes `FROM` öffnet einen isolierten Stage; nur der **letzte** Stage wird zum ausgelieferten Image. Die Artefakte werden selektiv vom Build-Stage in den Runtime-Stage kopiert — alles andere, SDK, Quellcode, Caches, wird verworfen.

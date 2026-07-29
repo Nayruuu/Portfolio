@@ -1,3 +1,7 @@
+Man erbt selten ein **Greenfield**. Meistens ist es ein .NET-Monolith, der seit acht
+Jahren in Produktion läuft und den niemand anzufassen wagt. Das **Strangler-Fig**-Pattern
+erlaubt es, ihn **Stück für Stück** zu ersetzen, ohne Big-Bang und ohne Ausfallfenster.
+
 ## Das Prinzip
 
 Man platziert eine Fassade vor dem Monolithen und **leitet** eine Route nach der anderen

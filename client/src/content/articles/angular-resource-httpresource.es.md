@@ -1,3 +1,8 @@
+Cargar datos asíncronos fue durante mucho tiempo sinónimo de `subscribe()` manual, de gestión
+de estado a mano (`loading`, `error`, `data`) y de fugas de memoria cuando se olvidaba un
+`unsubscribe`. Desde Angular 21, `resource()` y `httpResource()` encapsulan todo eso en
+una primitiva reactiva construida sobre **signals**.
+
 ## El modelo resource()
 
 Un `resource()` une una **petición** reactiva a un **loader** asíncrono. Cuando un signal leído

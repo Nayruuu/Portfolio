@@ -1,3 +1,7 @@
+En móvil, la conectividad nunca está garantizada: metro, ascensor, avión. Una app
+**offline-first** no trata la desconexión como un error, sino como el estado normal —
+la red no es más que una optimización. Con Flutter y Firebase, es casi gratis.
+
 ## Firestore es offline-first por defecto
 
 El SDK de Firestore mantiene una caché local persistente y **sirve las lecturas desde esa caché**

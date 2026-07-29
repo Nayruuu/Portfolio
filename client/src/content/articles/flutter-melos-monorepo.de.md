@@ -1,3 +1,5 @@
+Ein ernstzunehmendes Flutter-Produkt ist nie ein einzelnes Package: Da ist die mobile App, ein Design System, ein API-Client, vielleicht ein Feature-Modul pro Team. Sie in getrennten Repos zu halten, verwandelt jede übergreifende Änderung in einen Reigen aus `pub publish` und Versions-Bumps. **Melos** verwaltet dieses Dart/Flutter-Monorepo: ein Repo, mehrere Packages, Befehle, die überall auf einmal laufen.
+
 ## In Packages aufteilen
 
 Die Packages werden in einem Ordner (oft `packages/`) abgelegt und im Root deklariert. Jedes behält seine eigene `pubspec.yaml`; die App referenziert die anderen als **Pfadabhängigkeiten**, und Melos verknüpft alles lokal:
