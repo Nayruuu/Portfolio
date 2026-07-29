@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist/out-tsc/spec",
-    "types": ["node"]
+    "types": ["node", "@webgpu/types"]
   },
   "include": ["src/**/*.d.ts", "src/**/*.spec.ts", "src/test-providers.ts"]
 }

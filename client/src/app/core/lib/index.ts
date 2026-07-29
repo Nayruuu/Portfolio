@@ -18,4 +18,4 @@ export * from './lang-path';
 export * from './article-description';
 export * from './typing-schedule';
 export * from './focused-index';
-export * from './raycaster';
+export * from './game';

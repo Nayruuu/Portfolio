@@ -31,10 +31,36 @@
 		pointer-events: none;
 	}
 
+	// Top-right cluster (mirrors `sd-game`): exit (the door, most reachable) then fullscreen. The fullscreen
+	// button only renders when the player passes `fullscreenAvailable` — never on the standalone `/bsp` route.
+	&__exit,
+	&__fullscreen {
+		position: absolute;
+		top: 10px;
+		z-index: 2;
+		width: 36px;
+		height: 36px;
+		border-radius: 999px;
+		display: grid;
+		place-items: center;
+		background: rgb(0 0 0 / 45%);
+		border: 1px solid var(--border);
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	&__exit {
+		right: 10px;
+	}
+
+	&__fullscreen {
+		right: 54px;
+	}
+
 	&__fps {
 		position: absolute;
 		top: 0.5rem;
-		right: 0.5rem;
+		left: 0.5rem;
 		padding: 0.15rem 0.45rem;
 		border-radius: 0.25rem;
 		background: rgb(0 0 0 / 55%);
@@ -48,4 +74,68 @@
 		font-family: monospace;
 		opacity: 0.7;
 	}
+
+	// Keyboard-controls recap (top-left, semi-transparent) — mirrors the old `sd-game`'s `.game__controls`.
+	// Hidden by default (the /bsp route shows the dev FPS/hint instead); revealed in the player below.
+	&__controls {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 2;
+		display: none;
+		flex-direction: column;
+		gap: 1px;
+		padding: 5px 8px;
+		border-radius: 6px;
+		background: rgb(0 0 0 / 38%);
+		border: 1px solid var(--border);
+		color: var(--text);
+		font: 500 11px/1.5 var(--f-mono);
+		opacity: 0.62;
+		pointer-events: none;
+	}
+
+	&__control {
+		white-space: nowrap;
+	}
+}
+
+// Mounted inside the player (replacing the old `sd-game`): the host fills the player box and the inner
+// layout drops its standalone centering/padding so the BSP canvas covers the whole player area — exactly
+// as `sd-game` did. The standalone `/bsp` route keeps the centered debug layout above.
+:host-context(.player) {
+	position: absolute;
+	inset: 0;
+	display: block;
+}
+
+:host-context(.player) .bsp-demo {
+	position: absolute;
+	inset: 0;
+	gap: 0;
+	padding: 0;
+	background: var(--bg);
+}
+
+:host-context(.player) .bsp-demo__viewport {
+	position: absolute;
+	inset: 0;
+	width: auto;
+}
+
+:host-context(.player) .bsp-demo__canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+// The dev readouts (FPS + keyboard hint) are debug-only chrome for the standalone /bsp route — hide them
+// when the game is mounted inside the player, and show the clean controls recap instead.
+:host-context(.player) .bsp-demo__fps,
+:host-context(.player) .bsp-demo__hint {
+	display: none;
+}
+
+:host-context(.player) .bsp-demo__controls {
+	display: flex;
 }

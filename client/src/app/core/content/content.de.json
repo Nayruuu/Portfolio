@@ -25,7 +25,7 @@
   "copy": "kopieren",
   "copyDone": "✓ kopiert",
   "gameOver": "GAME OVER",
-  "gameControls": "[WASD] Bewegen · [Maus] Zielen · [Klick] Feuern · [R / Rechtsklick] Nachladen · [1–8 / Mausrad] Waffe · [E] Benutzen",
+  "gameControls": "[WASD] Bewegen · [Maus] Zielen · [Klick] Feuern · [R / Rechtsklick] Nachladen · [1–8 / Mausrad] Waffe · [F] Vollbild",
   "aria": {
     "play": "Wiedergabe",
     "pause": "Pause",
@@ -37,12 +37,6 @@
     "dropPhoto": "Foto hier ablegen",
     "gameStart": "Spiel starten",
     "gameExit": "Spiel verlassen",
-    "gameMute": "Musik stummschalten",
-    "gameUnmute": "Musik einschalten",
-    "gameFire": "Schießen",
-    "gameUse": "Benutzen",
-    "gameSwitch": "Waffe wechseln",
-    "gameReload": "Nachladen",
     "pip": "Mini-Player"
   },
   "bio": "Full-Stack-Entwickler .NET / Angular mit DevOps-Erfahrung auf Azure Cloud. Auch zu Hause mit Flutter + Firebase. Ich entwickle Produkte, deploye sie und überwache sie.",

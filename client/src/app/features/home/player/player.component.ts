@@ -17,7 +17,7 @@ import { GameService } from '../../../core/services/game/game.service';
 import { formatTime } from '../../../core/lib';
 import { IconComponent } from '../../../shared/icon/icon.component';
 import { PlayerStageComponent } from './player-stage/player-stage.component';
-import { GameComponent } from './game/game.component';
+import { BspDemoComponent } from '../../bsp-demo/bsp-demo.component';
 
 /**
  * `ScreenOrientation.lock()` is no longer in the TS DOM lib (Android-only in practice) —
@@ -37,7 +37,7 @@ interface OrientationLock {
   styleUrl: './player.component.scss',
   templateUrl: './player.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IconComponent, PlayerStageComponent, GameComponent],
+  imports: [IconComponent, PlayerStageComponent, BspDemoComponent],
 })
 export class PlayerComponent {
   protected readonly i18n = inject(I18nService);
@@ -183,7 +183,7 @@ export class PlayerComponent {
   }
 
   protected enterGame(): void {
-    // The game fills the screen via its own non-rotated overlay (`.player:has(sd-game)`, mobile) —
+    // The game fills the screen via its own non-rotated overlay (`.player:has(sd-bsp-demo)`, mobile) —
     // NOT the player's CSS-fallback fullscreen, whose 90° rotation breaks the game's touch coordinates.
     this.game.enter();
   }

@@ -61,6 +61,56 @@ export class ContactComponent { … }
 
 Services use `@Injectable({ providedIn: 'root' })` and the same `inject()`/signal rules.
 
+### Size & single responsibility
+
+Small, focused units. These keep a file readable at a glance and stop the god-class/god-component
+drift a large feature accretes. **Held by review today** — no `max-lines-per-function` ESLint rule is
+wired yet (the game code is mid-decomposition and still has offenders); once that lands, the ≤ 50-line
+rule should be promoted to `@typescript-eslint`/`max-lines-per-function` in `client/eslint.config.mjs`
+and this note updated.
+
+- **A function is ≤ 50 lines** — a **hard rule**. Past that, extract: name the sub-steps as helpers, or
+  the function is doing more than one thing. (Applies to every function/method, including the render
+  loop and AI steppers — the long ones get decomposed, not exempted.)
+- **One file = one responsibility** — a **hard rule**, the sharper form of the project's
+  one-declaration-per-file convention (→ `architecture.md`). A class/module does one job; if you can
+  only describe it with "and", it's two files.
+- **~5 methods per class is a smell trigger, not a cap.** Above roughly five methods, ask "is this two
+  responsibilities?" and split *only if the answer is yes*. Do **not** shatter a cohesive
+  single-responsibility class into atomic files to hit a number — artificial fragmentation hurts
+  readability as much as a god-class does. The responsibility rule governs; the count only prompts the
+  question.
+- **UI-less logic lives in `core`, not the component.** A feature component is a thin shell (canvas /
+  rAF / DOM / input wiring, template state). Its pure logic (game rules, AI, geometry, zone/state
+  math) belongs in `core/lib` (pure, 100 %-tested) or a `core/services` service — extracted and
+  unit-tested, not inlined. Refactor **test-first**: characterise the behaviour with unit tests on the
+  extracted pure unit, then move it; the component shell stays under the Playwright visual net.
+  **One bounded exception** (owned by [`architecture.md`](architecture.md) §1): `core/lib/game` is a
+  self-contained, portable embedded game engine that owns its *own* rendering + browser host code
+  (canvas / WebGPU / `Worker` / DOM-input / `Image`) — so those browser modules live inside the engine at
+  `core/lib/game`, not in the feature (whose `bsp-demo.component` is a bare mount point). They stay honest
+  via the coverage split (pure game logic 100 %-tested; the browser/canvas host adapters `coverageExclude`d
+  and proven in a real browser — see [`testing.md`](testing.md)) and are held off the barrel so SSR
+  prerender never evaluates a `Worker` / WebGPU device. The exception is scoped to `core/lib/game`;
+  everywhere else this rule holds flatly.
+
+### Comments earn their place — the WHY, never the WHAT
+
+Names carry the *what*; a comment exists only where the code cannot speak for itself. **Default to none.**
+
+- **Keep** only: a non-obvious **why** or a **trap/gotcha** whose absence would let someone break the code
+  (`// mutated in place — do not copy`, `// runs on drawDt, not the advance dt`, `// same bound ref or the
+  teardown leaks`, `// read live by the renderer — no copy`); the mandated **terse-math-symbol** definitions
+  (→ §7); and **functional** comments that are not documentation at all (`eslint-disable*`, `@ts-expect-error`,
+  `// @vitest-environment …`, other pragmas). Keep them to one line.
+- **Delete** everything that restates the code: JSDoc that repeats the signature, a field/const explained by
+  its own name, a trailing `// …` naming the obvious, prose paragraphs, module-header essays. Litmus test: if
+  the comment would still read true after you *renamed* the thing it sits on, it's restating — cut it.
+- A public export earns a doc comment only when a caller cannot infer usage from its name + signature.
+
+Comments are a maintenance liability that drift out of sync with the code; the fewer there are, the more each
+surviving one is trusted.
+
 ---
 
 ## 2. Signals for all state
@@ -284,6 +334,20 @@ Only **string *values*** that happen to be short stay — token-kind syntax-high
 (`'c'`, `'s'`) and the locale literals `'fr'`/`'en'` are values, not identifiers. Not
 ESLint-enforced; held by review and the existing code as the reference.
 
+**One exception — standard mathematical notation.** In geometry/rendering math the conventional short
+names ARE the domain vocabulary and are allowed: `dx`/`dy` (deltas), `nx`/`ny` (normals), `px`/`py`
+(pixel/point coords), `a`/`b` (segment vertices), `p`/`q` (a local point/record pair), `x`/`y`/`z` (coordinate
+axes / tight pixel-grid loops), `t` (a ray/segment parameter), `n`/`nz` (grid dimensions). Two
+guards stop this from becoming a licence for cryptic code:
+
+1. **It must read as genuine notation** — a mathematician could say what each symbol holds. A generic
+   loop or bookkeeping index that ISN'T notation gets spelled out (`neighborIndex`, `scanX`,
+   `sampleCount`, …), never a random opaque letter.
+2. **Terse symbols are defined in a comment above the method.** When a method leans on several math
+   short-names, a one-line doc comment over it names them — e.g.
+   `// p, q = segment ends; t = param along it (0..1); nx, ny = inward normal` — so the body stays
+   dense-but-readable without inflating every identifier.
+
 ---
 
 ## Quick checklist (before calling a component/service done)
@@ -299,4 +363,6 @@ ESLint-enforced; held by review and the existing code as the reference.
 - [ ] displayed text via `i18n.content()` — **no `lang()==='fr' ? … : …` text ternary** (§5)
 - [ ] braces on all blocks; blank line before `return`; blank line after declaration runs
 - [ ] no `enum`; closed unions / `as const`-derived; named constants; explicit non-abbreviated identifiers
+- [ ] functions ≤ 50 lines; one file = one responsibility; UI-less logic in `core/lib` (test-first) — the one exception is the self-contained `core/lib/game` engine, which owns its browser host code (§1)
+- [ ] comments earn their place — a non-obvious WHY / trap only; no restating JSDoc, no field/const essays (§1)
 - [ ] `make lint` clean

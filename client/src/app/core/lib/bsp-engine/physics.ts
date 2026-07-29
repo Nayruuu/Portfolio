@@ -1,29 +1,55 @@
 import { locateSubSector, signedSide } from './node-builder';
 import { castRay } from './raycast';
-import type { CompiledMap, LineDef } from './types';
+import type { CompiledMap, LineDef, ThingType } from './types';
 
-/**
- * Player movement against the world: slide along solid walls, and step UP through a two-sided portal when
- * the floor difference is climbable and there is headroom. Pure: `(map, pos, delta, …) -> resolved pos +
- * floor height`. The caller drives camera height from `floorZ`.
- *
- * A linedef BLOCKS the player when it is one-sided (the edge of the world), or two-sided but the far floor
- * is too high to step onto (`> stepMax`) or the far sector is too short to fit (`ceil - floor < headroom`).
- * Resolution pushes the player to `radius` away from each blocking wall along its normal (so crossing is
- * prevented and tangential motion is preserved — sliding).
- */
 export interface MoveResult {
   readonly x: number;
   readonly y: number;
   readonly floorZ: number;
 }
 
-/**
- * Closest point to (`px`,`py`) on the segment a→b. `clamped` is true when the foot of the perpendicular
- * fell beyond an endpoint (the player is off the end of the segment) — the caller depenetrates differently
- * in that case, so a wall whose *infinite line* passes near the player but whose *segment* does not cannot
- * phantom-push.
- */
+// Enemies reuse this as their footprint (same solver).
+export const PLAYER_RADIUS = 0.3;
+
+// A rise up to STEP_MAX is climbed in stride; taller (up to climbMax) becomes an auto-mantle ledge.
+export const STEP_MAX = 1.1;
+
+// Min sector clearance (ceil − floor) a body needs to pass through.
+export const HEADROOM = 0.8;
+
+export interface Obstacle {
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+}
+
+// `prop_screen` is absent on purpose — the monitor sits ON furniture whose edges already block.
+export const PROP_OBSTACLE_RADII: Partial<Record<ThingType, number>> = {
+  barrel: 0.35,
+  prop: 0.3, // potted plant
+  prop_totem: 0.5,
+  prop_chair: 0.26,
+  prop_board: 0.45,
+  prop_cooler: 0.26,
+};
+
+// Compute once per zone (the list is static).
+export function mapObstacles(map: CompiledMap): Obstacle[] {
+  const out: Obstacle[] = [];
+
+  for (const thing of map.source.things) {
+    const radius = PROP_OBSTACLE_RADII[thing.type];
+
+    if (radius !== undefined) {
+      out.push({ x: thing.x, y: thing.y, radius });
+    }
+  }
+
+  return out;
+}
+
+// `clamped` = the perpendicular foot fell beyond an endpoint; the caller depenetrates differently there so
+// a wall whose infinite line passes near the player but whose segment does not cannot phantom-push.
 function closestOnSeg(
   ax: number,
   ay: number,
@@ -40,18 +66,34 @@ function closestOnSeg(
   return { x: ax + t * abx, y: ay + t * aby, clamped: raw !== t };
 }
 
-/** Does `line` block a player standing on floor `fromFloor` at (`fromX`,`fromY`)? */
+// A sliding door blocks until it is at least this open (0..1).
+export const SLIDE_OPEN = 0.7;
+
+// `crossSeams` opens PASSABLE zone-portal seams for this body (the player only).
 function isBlocking(
   map: CompiledMap,
   line: LineDef,
+  lineIndex: number,
   fromX: number,
   fromY: number,
   fromFloor: number,
   stepMax: number,
   headroom: number,
+  slides: readonly number[] | undefined,
+  crossSeams: boolean,
 ): boolean {
   if (line.back === null) {
-    return true; // one-sided wall — the edge of the world
+    // Only a crossSeams body (the player) passes a passable seam — enemies never cross zones.
+    return !(crossSeams && line.zonePortal?.passable === true);
+  }
+  if (line.sliding) {
+    return (slides?.[lineIndex] ?? 0) < SLIDE_OPEN;
+  }
+  if (line.glass) {
+    return true; // see-through but still blocks
+  }
+  if (line.fence === true) {
+    return true; // renders open, never crossable
   }
 
   const a = map.source.vertices[line.v1];
@@ -62,7 +104,8 @@ function isBlocking(
   return far.floorZ - fromFloor > stepMax || far.ceilZ - far.floorZ < headroom;
 }
 
-/** Move the player by (`dx`,`dy`) from (`x`,`y`), sliding off blocking walls; returns the resolved pose. */
+// Slides off blocking walls AND solid decor obstacles in the same corner passes. With `crossSeams`, the
+// caller detects the line crossing and performs the zone swap.
 export function movePlayer(
   map: CompiledMap,
   x: number,
@@ -72,6 +115,9 @@ export function movePlayer(
   radius: number,
   stepMax: number,
   headroom: number,
+  slides?: readonly number[],
+  crossSeams = false,
+  obstacles?: readonly Obstacle[],
 ): MoveResult {
   const fromFloor = map.source.sectors[locateSubSector(map.root, x, y).sector].floorZ;
   let px = x + dx;
@@ -79,9 +125,12 @@ export function movePlayer(
 
   // Pre-resolve each blocking wall to its segment + inward normal (pointing to the player's side).
   const blockers = [];
+  const lines = map.source.linedefs;
 
-  for (const line of map.source.linedefs) {
-    if (!isBlocking(map, line, x, y, fromFloor, stepMax, headroom)) {
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+
+    if (!isBlocking(map, line, li, x, y, fromFloor, stepMax, headroom, slides, crossSeams)) {
       continue;
     }
 
@@ -98,14 +147,54 @@ export function movePlayer(
     blockers.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, nx, ny });
   }
 
-  // A few passes resolve corners (a push off one wall can press into another).
+  // A few passes resolve corners (a push off one wall can press into another — or into a prop).
   for (let pass = 0; pass < 3; pass++) {
+    if (obstacles !== undefined) {
+      for (const o of obstacles) {
+        const minDist = radius + o.radius;
+        const endD = Math.hypot(px - o.x, py - o.y);
+        const startD = Math.hypot(x - o.x, y - o.y);
+        // Past the centre plane → resolve on the START side, or the radial ejects the mover out the FAR
+        // side (a tunnel).
+        const sameSide = (px - o.x) * (x - o.x) + (py - o.y) * (y - o.y) >= 0;
+
+        if (endD < minDist) {
+          // Depenetrate radially — this is what makes grazes SLIDE.
+          let nx: number;
+          let ny: number;
+
+          if (sameSide && endD > 1e-6) {
+            nx = (px - o.x) / endD;
+            ny = (py - o.y) / endD;
+          } else if (startD > 1e-6) {
+            nx = (x - o.x) / startD;
+            ny = (y - o.y) / startD;
+          } else {
+            const ml = Math.hypot(dx, dy) || 1; // dead-centre overlap with no history: back off the motion
+
+            nx = -dx / ml || 1;
+            ny = -dy / ml;
+          }
+          px = o.x + nx * minDist;
+          py = o.y + ny * minDist;
+        } else if (!sameSide && startD > 1e-6) {
+          // Outside but on the far side: a large step tunnelled through — only count a real crossing whose
+          // path segment actually dips inside the cylinder.
+          const cp = closestOnSeg(x, y, px, py, o.x, o.y);
+
+          if (Math.hypot(cp.x - o.x, cp.y - o.y) < minDist) {
+            px = o.x + ((x - o.x) / startD) * minDist; // stop on the NEAR face, the way we came
+            py = o.y + ((y - o.y) / startD) * minDist;
+          }
+        }
+      }
+    }
     for (const blk of blockers) {
       const cp = closestOnSeg(blk.ax, blk.ay, blk.bx, blk.by, px, py);
 
       if (cp.clamped) {
-        // Off the end of this wall: only its CORNER can block, and only within the true radius — so a far
-        // wall whose infinite line happens to run near us no longer shoves the player (the phantom push).
+        // Off the end: only the CORNER blocks, within the true radius — no phantom push from a far wall's
+        // infinite line.
         const toX = px - cp.x;
         const toY = py - cp.y;
         const dist = Math.hypot(toX, toY);
@@ -115,8 +204,7 @@ export function movePlayer(
           py = cp.y + (toY / dist) * radius;
         }
       } else {
-        // Foot of the perpendicular is on the segment: push along the wall normal. Signed (not absolute) so
-        // a player who has crossed through the line is pushed back out to the correct side.
+        // Signed (not absolute) so a player who crossed through the line is pushed back to the right side.
         const signedDist = (px - cp.x) * blk.nx + (py - cp.y) * blk.ny;
 
         if (signedDist < radius) {
@@ -132,13 +220,33 @@ export function movePlayer(
   return { x: px, y: py, floorZ };
 }
 
-/**
- * Classify a forward probe for an auto-MANTLE: from `(px,py)` standing on floor `fromZ`, look `reach` cells
- * along the UNIT direction `(dx,dy)`. Return the floor height to climb up to when the spot ahead is a
- * too-tall-but-climbable LEDGE — its floor rises by more than `stepMax` but at most `climbMax`, and it has
- * `headroom` to stand in — otherwise `null` (a normal step `movePlayer` already handles, open ground, or a
- * solid wall). A one-sided wall within `reach` makes it a true wall, never a ledge.
- */
+// Returns the floor height to auto-mantle up to when the spot `reach` ahead is a too-tall-but-climbable
+// ledge (rise > stepMax, ≤ climbMax, with headroom); null otherwise. A one-sided wall within reach is a
+// Does the segment cross a categorically uncrossable two-sided line (fence / glass)?
+function barrierCrossed(map: CompiledMap, ax: number, ay: number, bx: number, by: number): boolean {
+  const cross = (ox: number, oy: number, px: number, py: number, qx: number, qy: number): number =>
+    (px - ox) * (qy - oy) - (py - oy) * (qx - ox);
+
+  for (const line of map.source.linedefs) {
+    if (line.back === null || (line.fence !== true && line.glass !== true)) {
+      continue;
+    }
+    const v1 = map.source.vertices[line.v1];
+    const v2 = map.source.vertices[line.v2];
+    const d1 = cross(ax, ay, bx, by, v1.x, v1.y);
+    const d2 = cross(ax, ay, bx, by, v2.x, v2.y);
+    const d3 = cross(v1.x, v1.y, v2.x, v2.y, ax, ay);
+    const d4 = cross(v1.x, v1.y, v2.x, v2.y, bx, by);
+
+    if (d1 * d2 < 0 && d3 * d4 < 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// true wall, never a ledge.
 export function climbTarget(
   map: CompiledMap,
   px: number,
@@ -152,44 +260,79 @@ export function climbTarget(
   headroom: number,
 ): number | null {
   if (castRay(map, px, py, dx, dy, reach) !== null) {
-    return null; // a solid one-sided wall blocks the probe — not a climbable ledge
+    return null; // a solid one-sided wall — not a ledge
+  }
+  // castRay skips ALL two-sided lines, and every pre-M5 fence was safe only by height (≥2.8 > CLIMB_MAX):
+  // a fence/glass line inside the mantle window must still refuse the vault — "renders open, never
+  // crossable". Shut sliders are exempt: they auto-open at player proximity before a mantle can matter.
+  if (barrierCrossed(map, px, py, px + dx * reach, py + dy * reach)) {
+    return null;
   }
   const ahead =
     map.source.sectors[locateSubSector(map.root, px + dx * reach, py + dy * reach).sector];
   const rise = ahead.floorZ - fromZ;
 
   if (rise <= stepMax || rise > climbMax || ahead.ceilZ - ahead.floorZ < headroom) {
-    return null; // a normal step / level ground, too tall to climb, or no room to stand at the top
+    return null;
   }
 
   return ahead.floorZ;
 }
 
-/** Where a pitched shot / flight line leaves the room VERTICALLY, as forward distance + world point. */
+export interface MantleState {
+  readonly progress: number;
+  readonly startZ: number;
+  readonly targetZ: number;
+  readonly dirX: number;
+  readonly dirY: number;
+}
+
+export interface MantleStep {
+  readonly progress: number;
+  readonly dx: number;
+  readonly dy: number;
+  readonly z: number;
+  readonly done: boolean;
+}
+
+// Heading is frozen so the vault always clears the lip; on `done` the eye snaps exactly onto the ledge.
+export function mantleStep(
+  m: MantleState,
+  dt: number,
+  duration: number,
+  advance: number,
+  eyeHeight: number,
+): MantleStep {
+  const progress = m.progress + dt / duration;
+  const stride = advance * Math.min(dt / duration, 1 - m.progress);
+  const dx = m.dirX * stride;
+  const dy = m.dirY * stride;
+
+  if (progress >= 1) {
+    return { progress, dx, dy, z: m.targetZ + eyeHeight, done: true };
+  }
+
+  return {
+    progress,
+    dx,
+    dy,
+    z: m.startZ + (m.targetZ - m.startZ) * progress + eyeHeight,
+    done: false,
+  };
+}
+
 export interface FloorCeilHit {
   readonly dist: number;
   readonly x: number;
   readonly y: number;
-  readonly z: number; // clamped to the surface it struck (its floorZ or ceilZ)
+  readonly z: number; // clamped to the surface it struck (floorZ or ceilZ)
   readonly surface: 'floor' | 'ceil';
 }
 
-/**
- * March a pitched shot / projectile line — origin (`ox`,`oy`) at height `z0`, climbing `vSlope` per cell along
- * the UNIT direction (`dx`,`dy`) — and return where it first leaves the room vertically within `maxDist`:
- * dropping BELOW the floor (aimed at the ground, or into a step that rises above it) or rising ABOVE the
- * ceiling (aimed up, or into a closing door, since the door's live `ceilZ` is read here). Sampled every `step`
- * cells so a stepped floor stops the line at the step it meets — not the far wall, which is the caller's job
- * to cap `maxDist` with. Returns null when the line stays between floor and ceiling the whole way.
- *
- * This is what makes a downward shot land on the ground instead of sailing through it, and a shot at an
- * enemy on a low step strike the step rather than flying on under the world.
- *
- * `muzzle` is a grace distance the shot clears before floor/ceiling collision begins: a steep shot off a
- * raised platform would otherwise graze the platform's OWN floor at your feet, so the muzzle lets it clear the
- * lip and reach the lower ground beyond (targets, hit separately, are never affected — this only moves where a
- * shot bursts). For a projectile stepped frame-by-frame, pass the grace REMAINING after its travel so far.
- */
+// Where a pitched shot/projectile line first leaves the room vertically (below floor / above the live
+// ceilZ) within `maxDist`, sampled every `step`; null if it stays between floor and ceiling. `muzzle` is a
+// grace distance before floor/ceiling collision begins, so a steep shot off a raised platform clears its
+// own lip. For a frame-by-frame projectile, pass the grace REMAINING after its travel so far.
 export function castFloorCeil(
   map: CompiledMap,
   ox: number,
@@ -208,7 +351,7 @@ export function castFloorCeil(
     const dist = (maxDist * i) / samples;
 
     if (dist < muzzle) {
-      continue; // still within the muzzle grace — let the shot clear the surface right in front of it
+      continue; // still within the muzzle grace
     }
     const x = ox + dx * dist;
     const y = oy + dy * dist;
