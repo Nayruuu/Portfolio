@@ -14,7 +14,9 @@
     <div class="video-meta__actions">
       <sd-like-bar />
       <button class="btn btn--sm"><sd-icon name="share" [size]="14" /> {{ content.share }}</button>
-      <button class="btn btn--sm"><sd-icon name="download" [size]="14" /> {{ content.cv }}</button>
+      <a class="btn btn--sm" [href]="content.cvUrl" download
+        ><sd-icon name="download" [size]="14" /> {{ content.cv }}</a
+      >
     </div>
   </div>
 

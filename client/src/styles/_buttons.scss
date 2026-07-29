@@ -17,6 +17,7 @@
 	cursor: pointer;
 	transition: all 0.15s;
 	white-space: nowrap;
+	text-decoration: none;
 
 	&:hover {
 		filter: brightness(1.15);

@@ -39,9 +39,9 @@
       <button class="btn btn--ghost btn--sm">
         <sd-icon name="share" [size]="14" /> {{ content().share }}
       </button>
-      <button class="btn btn--ghost btn--sm">
+      <a class="btn btn--ghost btn--sm" [href]="content().cvUrl" download>
         <sd-icon name="download" [size]="14" /> {{ content().cv }}
-      </button>
+      </a>
       <button
         [class]="subscribed() ? 'btn btn--grow' : 'btn btn--primary btn--grow'"
         (click)="subscribed.update((isSubscribed) => !isSubscribed)"

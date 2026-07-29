@@ -30,6 +30,7 @@ export interface Content {
   notification: string;
   join: string;
   cv: string;
+  cvUrl: string;
   subscribers: string;
   videos: string;
   joined: string;
