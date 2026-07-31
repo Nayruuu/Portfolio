@@ -168,7 +168,10 @@ its route is active (Home matched exactly, the rest fuzzy) and exposing `aria-se
   sitemap lists **every locale URL** (each carrying the full hreflang cluster) with **real
   `lastmod` dates**: the article's own date on its page, the newest member date on a series page,
   the newest article date on the evolving pages (home + the two lists), and none on
-  about/stack/contact.
+  about/stack/contact. After each successful deploy, the `deploy-client` workflow **pings IndexNow**
+  (Bing/DuckDuckGo/Yandex/Naver) with the full sitemap URL list — the committed key file in
+  `client/public/` proves ownership; Google is not on IndexNow and follows the sitemap's `lastmod`
+  instead. The ping is non-blocking: a failed hint never fails a succeeded deploy.
 
 ### 2.5 Routing & app config (the param-less static-tree shell)
 

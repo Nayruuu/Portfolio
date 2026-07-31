@@ -95,7 +95,7 @@ under `.github/workflows/`. The **client is automatic** (push to `main`); **infr
 
 | Workflow | Trigger | Role |
 |---|---|---|
-| `deploy-client.yml` | **push `main`** (auto) + `workflow_dispatch` | SSG build (`npm run build:ssg`) → deploys the static output to the Azure Static Web App |
+| `deploy-client.yml` | **push `main`** (auto) + `workflow_dispatch` | SSG build (`npm run build:ssg`) → deploys the static output to the Azure Static Web App → pings IndexNow (non-blocking) |
 | `deploy-infra.yml` | `workflow_dispatch` (manual) | `terraform init/plan/apply` at the root of `infra/` |
 | `deploy-api.yml` | `workflow_dispatch` (manual) | builds the .NET image → pushes to GHCR → `az containerapp update` |
 

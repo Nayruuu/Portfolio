@@ -59,3 +59,10 @@ jobs:
           swa deploy dist/super-dev-portfolio/browser \
             --deployment-token "$SWA_TOKEN" \
             --env production
+
+      # AFTER the deploy so the key file is live when the engines validate it. Notifies
+      # Bing/DuckDuckGo/Yandex/Naver (Google follows the sitemap's real lastmod instead).
+      # Non-blocking by design: a failed hint never fails a deploy that already succeeded.
+      - name: Ping IndexNow
+        working-directory: client
+        run: npm run ping:indexnow

@@ -10,6 +10,7 @@
     "gen:og": "node scripts/gen-og.mjs",
     "gen:icons": "node scripts/gen-icons.mjs",
     "gen:seo": "node scripts/gen-seo.mjs",
+    "ping:indexnow": "node scripts/ping-indexnow.mjs",
     "gen:article-bodies": "node scripts/gen-article-bodies.mjs",
     "i18n": "node scripts/gen-i18n.mjs",
     "build:ssg": "ng build --configuration production && npm run gen:seo && node scripts/check-prerender.mjs",

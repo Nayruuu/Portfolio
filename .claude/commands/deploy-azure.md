@@ -6,7 +6,7 @@ Deployment is **GitHub Actions, not manual `az`**. Three workflows in `.github/w
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `deploy-client.yml` | **`push:` to `main`** (auto) + `workflow_dispatch` | build SSG (`npm run build:ssg`) → deploy the static output to the Azure Static Web App |
+| `deploy-client.yml` | **`push:` to `main`** (auto) + `workflow_dispatch` | build SSG (`npm run build:ssg`) → deploy the static output to the Azure Static Web App → ping IndexNow (non-blocking) |
 | `deploy-infra.yml` | `workflow_dispatch` only (manual) | `terraform init/plan/apply` at the `infra/` root |
 | `deploy-api.yml` | `workflow_dispatch` only (manual) | build the .NET image → push to GHCR → `az containerapp update` |
 
