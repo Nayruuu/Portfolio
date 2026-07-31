@@ -1,6 +1,6 @@
-No todo el estado de una app cabe en un `signal()` perdido en el fondo de un componente. En
-cuanto un estado se comparte, se deriva y se muta desde varios lugares, se quiere una frontera
-clara: selectores de solo lectura, métodos para hacerlo evolucionar. **NgRx SignalStore**
+El estado completo de una app no cabe en un `signal()` perdido en el fondo de un componente. En cuanto un
+estado se comparte, se deriva y se muta desde varios sitios, se necesita una frontera clara:
+selectores de solo lectura, métodos para hacerlo evolucionar. **NgRx SignalStore**
 (`@ngrx/signals`) ofrece exactamente eso, sin el boilerplate de las actions/reducers del NgRx
 clásico.
 
@@ -33,13 +33,13 @@ export const CartStore = signalStore(
 ```
 
 El estado nunca se muta directamente: se pasa por `patchState`, que aplica una actualización
-inmutable y notifica a los signals implicados.
+inmutable y notifica a los signals afectados.
 
 ## Selectores que son signals
 
-`store.total` y `store.count` no son funciones que se llaman en el servicio: son
-`computed`, es decir, signals de pleno derecho. En un componente, se leen como
-cualquier signal, y el change detection zoneless solo re-renderiza lo que depende de ellos.
+`store.total` y `store.count` son `computed`, es decir, signals de pleno derecho, no funciones
+de servicio que haya que invocar. En un componente, se leen como cualquier signal, y
+la detección de cambios zoneless solo re-renderiza lo que depende de ellos.
 
 ```typescript
 export class CartBadge {
@@ -57,24 +57,24 @@ export class CartBadge {
 ### Componer con llamadas async
 
 `withMethods` puede integrar `rxMethod` (desde `@ngrx/signals/rxjs-interop`) para conectar un
-flujo RxJS, o simplemente `async`/`await` para un `fetch`. Se mantiene la lógica de orquestación
-en el store, el componente permanece como una vista. También es aquí donde se añade un estado
+flujo RxJS, o simplemente `async`/`await` para un `fetch`. La lógica de orquestación se mantiene
+en el store, y el componente sigue siendo una vista. Es también ahí donde se define un estado
 `loading` para un patrón stale-while-revalidate.
 
 ## ¿Store o simple signal?
 
-No todo necesita un store. Un estado **local** a un componente — una pestaña activa, la apertura
-de un menú — sigue siendo un `signal()` privado: un store añadiría indirección innecesaria. El
-SignalStore se justifica cuando el estado es:
+No todo necesita un store. Un estado **local** de un componente (una pestaña activa, la
+apertura de un menú) sigue siendo un `signal()` privado: un store añadiría ahí una indirección
+innecesaria. El SignalStore se justifica cuando el estado es:
 
 - **compartido** entre varios componentes o rutas;
 - **derivado** por varios `computed` que se quieren centralizar;
-- **mutado** por operaciones que se quieren probar en aislamiento.
+- **mutado** por operaciones que se quieren testear de forma aislada.
 
 La regla práctica: empieza con signals locales, extrae un store el día en que copies el
 mismo estado en un segundo componente. La documentación cubre cada feature en la
-[guía SignalStore](https://ngrx.io/guide/signals/signal-store).
+[guía de SignalStore](https://ngrx.io/guide/signals/signal-store).
 
-> El SignalStore no es el NgRx «actions en todas partes» de ayer. Es una fachada de signals:
-> solo lectura en salida, métodos en entrada, cero reducers. Mantienes la disciplina de un store
-> sin pagar su ceremonial.
+> El SignalStore es una fachada de signals: solo lectura en la salida, métodos en la entrada, cero
+> reducers. Mantienes la disciplina de un store sin el ceremonial del NgRx «actions en todas
+> partes» de antes.

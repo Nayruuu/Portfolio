@@ -7,10 +7,10 @@ nécessaire au runtime.
 
 Un `Dockerfile` multi-stage déclare plusieurs `FROM`. Chaque `FROM` ouvre un stage isolé ; seul
 le **dernier** stage devient l'image livrée. On copie sélectivement les artefacts d'un stage de
-build vers un stage de runtime, et tout le reste — SDK, sources, caches — est abandonné.
+build vers un stage de runtime, et tout le reste (SDK, sources, caches) est abandonné.
 
 ```bash
-# Stage 1 : build de l'API .NET
+# Stage 1: build the .NET API
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY *.csproj ./
@@ -18,7 +18,7 @@ RUN dotnet restore
 COPY . ./
 RUN dotnet publish -c Release -o /app/publish
 
-# Stage 2 : runtime seul (pas de SDK)
+# Stage 2: runtime only (no SDK)
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-noble-chiseled AS final
 WORKDIR /app
 COPY --from=build /app/publish ./
@@ -30,21 +30,26 @@ ENTRYPOINT ["dotnet", "Api.dll"]
 ## Cache de layers : ordonner pour ne pas tout reconstruire
 
 Docker met chaque instruction en cache et l'invalide dès qu'une couche en amont change. D'où la
-règle d'or : **copier les fichiers de dépendances avant le code source**. En faisant `COPY
-*.csproj` puis `dotnet restore` **avant** de copier le reste, le `restore` n'est rejoué que si
-le `.csproj` change — pas à chaque modification d'un fichier C#. Même logique côté Angular avec
-`package.json` et `npm ci` avant le `COPY` des sources : un changement de code ne réinvalide
-jamais l'install des dépendances, ce qui divise les temps de build par dix.
+règle : **copier les fichiers de dépendances avant le code source**.
+
+En faisant `COPY *.csproj` puis `dotnet restore` **avant** de copier le reste, le `restore`
+n'est rejoué que si le `.csproj` change, pas à chaque modification d'un fichier C#.
+
+Même logique côté Angular avec `package.json` et `npm ci` avant le `COPY` des sources : un
+changement de code ne réinvalide jamais l'install des dépendances, ce qui divise les temps de
+build par dix.
 
 ## Une image finale minuscule
 
-Le choix de l'image de base de runtime fait toute la différence. Les images **chiseled** de
+Le poids final dépend surtout de l'image de base de runtime. Les images **chiseled** de
 Microsoft (`aspnet:9.0-noble-chiseled`) suppriment shell, gestionnaire de paquets et binaires
 superflus : surface d'attaque réduite, image souvent sous les 110 Mo, exécution en utilisateur
-non-root par défaut. Pour servir le front Angular, **nginx alpine** joue le rôle de stage final.
+non-root par défaut.
+
+Pour servir le front Angular, **nginx alpine** joue le rôle de stage final.
 
 ```bash
-# Build Angular puis service par nginx
+# Build Angular then serve with nginx
 FROM node:22-alpine AS web
 WORKDIR /app
 COPY package*.json ./

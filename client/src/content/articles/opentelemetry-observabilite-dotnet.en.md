@@ -1,15 +1,17 @@
-When a request crosses three services and turns slow, logs alone don't tell you **where**.
-Modern observability rests on three correlated signals — traces, metrics, logs — and
-**OpenTelemetry** is its vendor-neutral standard: you instrument once and export to any backend
-(Jaeger, Prometheus, Azure Monitor) without rewriting code.
+When a request crosses three services and it's slow, logs alone don't say
+**where**. Modern observability relies on three correlated signals (traces, metrics, logs),
+and **OpenTelemetry** is the vendor-neutral standard for it: you instrument once, and export
+to any backend (Jaeger, Prometheus, Azure Monitor) without rewriting the code.
 
 ## Three signals, one API
 
-OpenTelemetry unifies the three pillars of observability. **Traces** follow a request end to
-end through a series of spans correlated by a `trace_id`. **Metrics** aggregate counters and
-histograms (request rate, p95 latency). **Logs** add the textual context, now attached to the
-current `trace_id`. .NET exposes these concepts natively through `System.Diagnostics.Activity`
-(the spans) and `System.Diagnostics.Metrics`.
+OpenTelemetry unifies the three pillars of observability. **Traces** follow a request
+end to end via a series of spans correlated by a `trace_id`. **Metrics** aggregate
+counters and histograms (request rate, p95 latency). **Logs** provide textual
+context, now tied to the current `trace_id`.
+
+.NET natively exposes these concepts via `System.Diagnostics.Activity` (spans) and
+`System.Diagnostics.Metrics`.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -28,11 +30,13 @@ builder.Services.AddOpenTelemetry()
 
 ## Auto-instrumentation vs manual spans
 
-**Auto-instrumentation** covers the essentials for free: `AddAspNetCoreInstrumentation` creates
-a span per incoming request, and `AddHttpClientInstrumentation` propagates the context on
-outbound calls — cross-service correlation happens on its own through the W3C standard
-`traceparent` headers. For business logic, you add **manual spans** to measure a precise
-operation and attach domain attributes to it.
+**Auto-instrumentation** covers the essentials for free: `AddAspNetCoreInstrumentation`
+creates a span per incoming request, `AddHttpClientInstrumentation` propagates context on
+outgoing calls. Cross-service correlation happens on its own via the W3C standard's
+`traceparent` headers.
+
+For business logic, you add **manual spans** to measure a specific operation
+and attach business attributes to it.
 
 ```csharp
 private static readonly ActivitySource Source = new("SuperDev.Orders");
@@ -50,16 +54,18 @@ public async Task<Order> PlaceOrderAsync(Cart cart)
 }
 ```
 
-Attributes (`SetTag`) turn a trace into a debugging tool: you filter by `order.total > 1000` or
-pinpoint the exact span whose latency blew up.
+The attributes (`SetTag`) turn a trace into a debugging tool: you filter by
+`order.total > 1000` or pinpoint the exact span that spiked in latency.
 
 ## The OTLP exporter and the Collector
 
-**OTLP** (OpenTelemetry Protocol) is the common transport format. Instead of exporting straight
-to a backend, you send everything to the **Collector**: an intermediate process that receives,
-transforms (batching, sampling, scrubbing sensitive attributes) and redistributes to one or
-more destinations. The app knows only **one** endpoint; switching backends becomes a config
-change on the Collector side, not a redeploy.
+**OTLP** (OpenTelemetry Protocol) is the common transport format. Rather than exporting
+directly to a backend, everything is sent to the **Collector**: an intermediary process that
+receives, transforms (batching, sampling, filtering sensitive attributes), and redistributes
+to one or more destinations.
+
+The app only knows about **one** endpoint; switching backends becomes a config change
+on the Collector side, not a redeployment.
 
 ```yaml
 receivers:
@@ -87,11 +93,11 @@ service:
       exporters: [prometheus]
 ```
 
-The app points at the Collector via `OTEL_EXPORTER_OTLP_ENDPOINT`, a standard environment
-variable. The [OpenTelemetry documentation](https://opentelemetry.io/docs/languages/net/)
-covers the sampling (`ParentBased`, `TraceIdRatioBased`) that is essential in production so you
-don't drown under trace volume.
+The app points to the Collector via `OTEL_EXPORTER_OTLP_ENDPOINT`, a standard
+environment variable. The [OpenTelemetry documentation](https://opentelemetry.io/docs/languages/net/)
+covers sampling (`ParentBased`, `TraceIdRatioBased`), essential in production so you don't
+buckle under the volume of traces.
 
-> Instrumenting with OpenTelemetry decouples your code from your monitoring tool. The day you
-> migrate from Jaeger to Azure Monitor, **you don't touch a single line of the app**: you just
-> swap the Collector's exporter.
+> Instrumenting with OpenTelemetry decouples your code from your monitoring tool. The day
+> you migrate from Jaeger to Azure Monitor, **you don't touch a single line of app code**: you
+> change the Collector's exporter.

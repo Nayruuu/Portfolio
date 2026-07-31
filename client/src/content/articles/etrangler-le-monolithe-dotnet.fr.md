@@ -4,9 +4,10 @@ de le remplacer **morceau par morceau**, sans big-bang et sans fenêtre de coupu
 
 ## Le principe
 
-On place une façade devant le monolithe, puis on **réachemine** une route à la fois vers
+On place une façade devant le monolithe, puis on réachemine une route à la fois vers
 un nouveau service. Tant qu'une fonctionnalité n'est pas réécrite, elle continue de passer
-par l'ancien code. Le jour où la dernière route bascule, le monolithe est mort — étranglé.
+par l'ancien code. Le jour où la dernière route bascule, plus rien ne transite par le
+monolithe : on peut l'éteindre.
 
 ### Une anti-corruption layer
 
@@ -26,7 +27,7 @@ public sealed class LegacyOrderTranslator
 ## Router au bon niveau
 
 La bascule se fait idéalement au niveau du **reverse proxy** (YARP, Nginx) plutôt que dans
-le code, pour garder les deux mondes parfaitement isolés. Avec [YARP](https://microsoft.github.io/reverse-proxy/),
+le code, pour garder les deux mondes isolés. Avec [YARP](https://microsoft.github.io/reverse-proxy/),
 une simple route de configuration suffit à dévier un chemin vers le nouveau service.
 
 - une route migrée → nouveau service
@@ -37,7 +38,7 @@ une simple route de configuration suffit à dévier un chemin vers le nouveau se
 
 Chaque route migrée est doublée d'un **shadow traffic** comparé à l'ancienne réponse avant
 de couper pour de bon. On ne supprime l'ancien code que **mort prouvé** : tant qu'un appel
-y transite encore, il reste. La télémétrie devient alors le juge de paix de la migration.
+y transite encore, il reste. La télémétrie arbitre la migration.
 
-> Étrangler, ce n'est pas réécrire plus vite. C'est réécrire de façon **réversible** :
-> à chaque étape, on peut revenir en arrière en une ligne de configuration.
+> Le strangler n'accélère pas la réécriture, il la rend **réversible** : à chaque étape,
+> on peut revenir en arrière en une ligne de configuration.

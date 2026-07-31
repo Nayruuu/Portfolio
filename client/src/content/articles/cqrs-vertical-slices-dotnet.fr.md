@@ -1,7 +1,6 @@
-Dès qu'on prononce **CQRS**, beaucoup d'équipes sortent l'artillerie lourde : event sourcing,
-bus de messages, deux bases de données. Pourtant CQRS, c'est d'abord une idée modeste —
-**séparer les lectures des écritures** — qu'on peut appliquer sans aucune usine à gaz, en
-organisant le code par **vertical slices**.
+Beaucoup d'équipes associent **CQRS** à l'event sourcing, aux bus de messages, aux bases de
+données séparées. L'idée de départ est pourtant modeste : **séparer les lectures des
+écritures**. Elle s'applique sans usine à gaz, en organisant le code par **vertical slices**.
 
 ## Découper par fonctionnalité, pas par couche
 
@@ -13,13 +12,13 @@ fonctionnalité, tout ce qui la concerne au même endroit.
 ```bash
 Features/
   Orders/
-    CreateOrder.cs      # commande + handler + validateur
-    GetOrderById.cs     # requête + handler
+    CreateOrder.cs      # command + handler + validator
+    GetOrderById.cs     # query + handler
     ListOrders.cs
 ```
 
-Chaque slice est autonome. On la lit de haut en bas, on la supprime sans effet de bord, et
-deux slices ne partagent que le domaine — jamais un « service » fourre-tout.
+Chaque slice est autonome : elle se lit de haut en bas et se supprime sans effet de bord.
+Deux slices ne partagent que le domaine, jamais un « service » fourre-tout.
 
 ## Commande et requête, deux intentions distinctes
 
@@ -45,8 +44,8 @@ public sealed class CreateOrderHandler(AppDbContext db)
 }
 ```
 
-Le handler reste **mince** : il orchestre, il ne raisonne pas. La logique métier vit dans
-`Order.Create`, pas dans le handler — sinon on a juste déplacé le « service » dans un autre
+Le handler reste **mince** : il orchestre, sans raisonner. La logique métier vit dans
+`Order.Create`, pas dans le handler. Sinon on a juste déplacé le « service » dans un autre
 fichier.
 
 ## Le médiateur, optionnel
@@ -66,16 +65,18 @@ group.MapPost("/", async (CreateOrder command, ISender sender) =>
 ```
 
 Si l'application est petite, sauter le médiateur et appeler le handler à la main reste
-parfaitement légitime — moins d'indirection, moins de magie.
+légitime : on retire une couche d'indirection et la magie qui va avec.
 
 ## Ne pas sur-concevoir
 
 La question à se poser à chaque slice : **ai-je vraiment besoin de ça ?** Bases séparées,
-projections asynchrones, event sourcing — ce sont des réponses à des problèmes d'échelle
-précis (lectures massivement supérieures aux écritures, audit immuable). Sans ce problème,
-ils n'ajoutent que de la latence et des bugs de cohérence. Le bon CQRS, dans 90 % des cas,
-c'est : commandes et requêtes distinctes, un seul `DbContext`, des slices lisibles.
+projections asynchrones, event sourcing répondent à des problèmes d'échelle précis (lectures
+massivement supérieures aux écritures, audit immuable). Sans ce problème, ils n'ajoutent que
+de la latence et des bugs de cohérence.
 
-> CQRS n'est pas une architecture, c'est une **discipline de nommage**. Séparez les
+Le bon CQRS, dans 90 % des cas : des commandes et des requêtes distinctes, un seul
+`DbContext`, des slices lisibles.
+
+> CQRS est une **discipline de nommage** avant d'être une architecture. Séparez les
 > intentions, gardez les handlers minces, et n'ajoutez un bus de messages que le jour où une
 > métrique vous y force.

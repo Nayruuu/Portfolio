@@ -70,10 +70,10 @@ Dans le template, on consomme les états directement, sans pipe `async` :
 ### Les états et leurs pièges
 
 `status()` renvoie une valeur parmi `idle`, `loading`, `reloading`, `resolved`, `error` et
-`local`. Deux subtilités méritent l'attention :
+`local`. Deux subtilités :
 
 - pendant un **rechargement**, `value()` garde l'ancienne donnée (`reloading`), ce qui évite
-  un écran blanc — pratique pour un pattern stale-while-revalidate.
+  un écran blanc. Pratique pour un pattern stale-while-revalidate.
 - `httpResource` est pensé pour la **lecture** (GET). Pour un POST/PUT, on reste sur
   `HttpClient` classique : un resource se relance dès que sa requête change, ce qui n'a pas
   de sens pour une mutation.
@@ -81,11 +81,13 @@ Dans le template, on consomme les états directement, sans pipe `async` :
 ## Pourquoi abandonner les souscriptions manuelles
 
 Le code RxJS impératif mélange trois préoccupations : déclencher l'appel, mapper le flux,
-et nettoyer. Avec `resource`, la **dépendance** devient déclarative — le loader se relance
-parce qu'un signal a changé, point. On supprime les `BehaviorSubject` de pagination, les
-`switchMap` défensifs et les `finalize` pour remettre `loading` à `false`. La doc officielle
-détaille l'API dans le [guide async avec resource](https://angular.dev/guide/signals/resource).
+et nettoyer.
 
-> `resource()` ne remplace pas RxJS : il remplace la **plomberie**. Tu décris quoi charger et
-> de quoi ça dépend ; Angular s'occupe du quand, de l'annulation et de l'état. Le composant
-> redevient une simple lecture de signals.
+Avec `resource`, la **dépendance** devient déclarative : le loader se relance parce qu'un
+signal a changé. On supprime les `BehaviorSubject` de pagination, les `switchMap` défensifs
+et les `finalize` pour remettre `loading` à `false`. La doc officielle détaille l'API dans le
+[guide async avec resource](https://angular.dev/guide/signals/resource).
+
+> `resource()` remplace la **plomberie**, pas RxJS. Tu décris quoi charger et de quoi ça
+> dépend ; Angular s'occupe du quand, de l'annulation et de l'état. Le composant redevient
+> une simple lecture de signals.

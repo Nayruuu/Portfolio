@@ -1,11 +1,11 @@
-Desplegar manualmente es desplegar un viernes por la noche con el estómago encogido. Un pipeline
-**CI/CD** en GitHub Actions transforma cada `git push` en una build testeada y luego en un
-despliegue reproducible hacia Azure — sin tocar jamás un portal.
+Un despliegue manual nunca es dos veces igual. Un pipeline **CI/CD** en
+GitHub Actions elimina esta variable: cada `git push` se convierte en un build probado, y luego en un
+despliegue reproducible hacia Azure, sin tener que tocar nunca un portal.
 
 ## Un workflow declarativo
 
-Todo vive en `.github/workflows/`. Un workflow se dispara con un evento (`push`,
-`pull_request`), encadena **jobs**, y cada job es una serie de `steps`:
+Todo vive en `.github/workflows/`. Un workflow se dispara ante un evento (`push`,
+`pull_request`), encadena **jobs**, y cada job es una sucesión de `steps`:
 
 ```yaml
 name: deploy
@@ -25,11 +25,11 @@ jobs:
       - run: npm run build:ssg
 ```
 
-### Secretos sin secretos: OIDC
+### La autenticación por OIDC
 
 En lugar de un secreto de larga duración copiado en GitHub, se utiliza la **federated identity**
-(OIDC): Azure confía en el token efímero que GitHub emite para ese repositorio. Ninguna clave que
-rotar, nada que filtrar.
+(OIDC): Azure confía en el token efímero que GitHub emite para ese repositorio. Así, no
+hay ninguna clave que rotar, y nada que pueda filtrarse.
 
 ```yaml
 permissions:
@@ -39,20 +39,20 @@ permissions:
 
 ## Desplegar hacia Azure
 
-Una vez artefactada la build, la acción oficial empuja la carpeta estática hacia Azure
+Una vez generado el artefacto del build, la acción oficial empuja la carpeta estática hacia Azure
 Static Web Apps (o App Service para una API .NET):
 
 - `azure/login@v2` con las credenciales federadas
 - `Azure/static-web-apps-deploy@v1` para el front prerenderizado
-- un paso de smoke test que hace `curl` a la URL de prod justo después
+- un paso de smoke test que hace `curl` a la URL de producción justo después
 
 ## Salvaguardas
 
-Un pipeline que despliega sin red es una pistola cargada. Se protege la rama `main`
-(revisión obligatoria, CI verde requerida) y se sitúa el despliegue detrás de un **Environment**
-de GitHub con **required reviewers** para producción. La documentación de los
+Un pipeline que despliega solo necesita límites explícitos. Se protege la rama `main`
+(revisión obligatoria, CI en verde requerida) y se coloca el despliegue detrás de un **Environment**
+de GitHub con **required reviewers** para producción. La documentación de
 [environments de GitHub](https://docs.github.com/actions/deployment/targeting-different-environments)
 detalla las aprobaciones manuales.
 
-> Un buen pipeline no es el que despliega más rápido, sino aquel en el que se tiene **suficiente
-> confianza** para desplegar un martes a las 17 h sin reunión de crisis.
+> Un buen pipeline se mide por la **confianza** que se le otorga, no por su velocidad: suficiente
+> como para desplegar un martes a las 17 h sin reunión de crisis.

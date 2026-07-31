@@ -1,8 +1,14 @@
-Nicht der gesamte Zustand einer App gehört in ein `signal()`, das tief unten in einer Komponente vergraben ist. Sobald ein Zustand von mehreren Stellen aus geteilt, abgeleitet und mutiert wird, möchte man eine klare Grenze: schreibgeschützte Selektoren, Methoden, um ihn weiterzuentwickeln. **NgRx SignalStore** (`@ngrx/signals`) bietet genau das, ohne das Actions/Reducer-Boilerplate des klassischen NgRx.
+Nicht der gesamte Zustand einer App passt in ein einzelnes `signal()`, das irgendwo tief in einer
+Komponente vergraben ist. Sobald ein Zustand von mehreren Stellen aus geteilt, abgeleitet und
+verändert wird, braucht man eine klare Grenze: schreibgeschützte Selektoren zum Lesen, Methoden,
+um ihn weiterzuentwickeln. **NgRx SignalStore** (`@ngrx/signals`) bietet genau das, ohne das
+Boilerplate der Actions/Reducer des klassischen NgRx.
 
 ## Anatomie eines signalStore
 
-Ein Store setzt sich aus verketteten **Features** zusammen. `withState` deklariert den initialen Zustand, `withComputed` die abgeleiteten Werte, `withMethods` die Operationen. Jedes Zustandsfeld wird automatisch zu einem Signal, das auf der Instanz verfügbar ist.
+Ein Store besteht aus verketteten **Features**. `withState` deklariert den initialen Zustand,
+`withComputed` die abgeleiteten Werte, `withMethods` die Operationen. Jedes Zustandsfeld wird
+automatisch zu einem Signal, das auf der Instanz exponiert wird.
 
 ```typescript
 import { signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -26,11 +32,14 @@ export const CartStore = signalStore(
 );
 ```
 
-Der Zustand wird niemals direkt mutiert: Man verwendet `patchState`, das ein unveränderliches Update anwendet und die betroffenen Signals benachrichtigt.
+Der Zustand wird nie direkt verändert: Man geht über `patchState`, das ein unveränderliches
+Update anwendet und die betroffenen Signals benachrichtigt.
 
-## Selektoren als Signals
+## Selektoren, die Signals sind
 
-`store.total` und `store.count` sind keine Funktionen, die im Service aufgerufen werden: Sie sind `computed`, also vollwertige Signals. In einer Komponente liest man sie wie jedes andere Signal, und die zoneless Change Detection rendert nur das neu, was von ihnen abhängt.
+`store.total` und `store.count` sind `computed`, also vollwertige Signals, keine
+Service-Funktionen, die man aufrufen muss. In einer Komponente liest man sie wie jedes andere
+Signal, und die zonenlose Change Detection rendert nur das neu, was davon abhängt.
 
 ```typescript
 export class CartBadge {
@@ -45,20 +54,27 @@ export class CartBadge {
 }
 ```
 
-### Komposition mit asynchronen Aufrufen
+### Mit asynchronen Aufrufen komponieren
 
-`withMethods` kann `rxMethod` (aus `@ngrx/signals/rxjs-interop`) einbinden, um einen RxJS-Stream anzubinden, oder einfach `async`/`await` für einen `fetch`. Die Orchestrierungslogik bleibt im Store, die Komponente bleibt eine View. Hier platziert man auch einen `loading`-Zustand für ein Stale-While-Revalidate-Pattern.
+`withMethods` kann `rxMethod` (aus `@ngrx/signals/rxjs-interop`) einbinden, um einen RxJS-Flow
+anzuschließen, oder einfach `async`/`await` für einen `fetch`. Man behält die
+Orchestrierungslogik im Store, die Komponente bleibt eine View. Hier setzt man auch einen
+`loading`-Zustand für ein Stale-while-revalidate-Pattern.
 
 ## Store oder einfaches Signal?
 
-Nicht alles braucht einen Store. Ein **lokaler** Zustand einer Komponente — ein aktiver Tab, das Öffnen eines Menüs — bleibt ein privates `signal()`: Ein Store würde hier nur unnötige Indirektion hinzufügen. Der SignalStore ist sinnvoll, wenn der Zustand:
+Nicht alles braucht einen Store. Ein **lokaler** Zustand einer Komponente (ein aktiver Tab, das
+Öffnen eines Menüs) bleibt ein privates `signal()`: Ein Store würde hier nur unnötige
+Indirektion hinzufügen. Der SignalStore rechtfertigt sich, wenn der Zustand:
 
-- zwischen mehreren Komponenten oder Routen **geteilt** wird;
-- von mehreren `computed` **abgeleitet** wird, die man zentralisieren möchte;
-- durch Operationen **mutiert** wird, die man isoliert testen möchte.
+- **geteilt** wird zwischen mehreren Komponenten oder Routen;
+- **abgeleitet** wird von mehreren `computed`, die man zentralisieren will;
+- **verändert** wird durch Operationen, die man isoliert testen will.
 
-Die praktische Regel: Beginne mit lokalen Signals, extrahiere einen Store, wenn du denselben Zustand in eine zweite Komponente kopierst. Die Dokumentation behandelt jedes Feature im [SignalStore-Leitfaden](https://ngrx.io/guide/signals/signal-store).
+Die praktische Regel: Beginne mit lokalen Signals, extrahiere einen Store an dem Tag, an dem du
+denselben Zustand in eine zweite Komponente kopierst. Die Doku deckt jedes Feature im
+[SignalStore-Guide](https://ngrx.io/guide/signals/signal-store) ab.
 
-> Der SignalStore ist nicht das NgRx „Actions überall" von gestern. Es ist eine Signal-Fassade:
-> schreibgeschützt als Ausgabe, Methoden als Eingabe, kein Reducer. Man behält die Disziplin
-> eines Stores, ohne dessen Zeremoniell zu bezahlen.
+> Der SignalStore ist eine Fassade aus Signals: schreibgeschützt beim Auslesen, Methoden beim
+> Verändern, null Reducer. Man behält die Disziplin eines Stores ohne das Zeremoniell des
+> „Actions überall“-NgRx von gestern.

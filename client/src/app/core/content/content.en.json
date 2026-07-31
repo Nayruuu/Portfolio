@@ -181,6 +181,30 @@
   ],
   "articles": [
     {
+      "slug": "universe-map-moteur-eclipses",
+      "tag": "ANGULAR",
+      "title": "A 3D map of the Universe, checked against the August 12, 2026 eclipse",
+      "reads": "612 reads",
+      "ago": "3 hours ago",
+      "readTime": "10 min",
+      "accentColor": "#a2261c",
+      "symbol": "◐",
+      "date": "2026-07-30",
+      "description": "Angular 21 + Three.js: continuous zoom across five orders of magnitude, 10,000 HYG stars in a single draw call, locally computed ephemerides, and an eclipse engine whose August 12, 2026 central point is checked against the NASA GSFC Besselian elements."
+    },
+    {
+      "slug": "ngsharp-moteur-templates-interprete",
+      "tag": ".NET",
+      "title": "Interpret, don't compile: a template engine for .NET",
+      "reads": "1.1k reads",
+      "ago": "1 day ago",
+      "readTime": "9 min",
+      "accentColor": "#b4451c",
+      "symbol": "{{ }}",
+      "date": "2026-07-30",
+      "description": "An Angular-style template engine for .NET, interpreted and dependency-free: first render in microseconds, Native AOT compatible, benchmarks with byte-identical output."
+    },
+    {
       "slug": "moteur-doom-software-webgpu",
       "tag": "ANGULAR",
       "title": "A DOOM-style engine in the browser, with three backends",
@@ -258,7 +282,7 @@
       "accentColor": "#1c7e4a",
       "symbol": ">_",
       "date": "2026-03-12",
-      "description": "Continuous build, test, and deployment to Azure from GitHub Actions — secrets, environments and guardrails included.",
+      "description": "Continuous build, test, and deployment to Azure from GitHub Actions: secrets, environments and guardrails included.",
       "series": "azure-devops-de-zero",
       "seriesOrder": 2
     },

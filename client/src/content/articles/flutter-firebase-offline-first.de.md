@@ -1,12 +1,11 @@
-Auf Mobilgeräten ist Konnektivität nie selbstverständlich: U-Bahn, Aufzug, Flugzeug. Eine
-**Offline-First**-App behandelt den Offline-Zustand nicht als Fehler, sondern als Normalzustand —
-das Netzwerk ist nur eine Optimierung. Mit Flutter und Firebase gibt es das fast geschenkt.
+Auf Mobilgeräten ist Konnektivität nie garantiert: U-Bahn, Aufzug, Flugzeug. Eine
+**Offline-First**-App behandelt das Offline-Sein als Normalzustand, nicht als Fehler: Das Netzwerk
+ist nur eine Optimierung. Mit Flutter und Firebase ist das fast geschenkt.
 
-## Firestore ist standardmäßig Offline-First
+## Firestore ist standardmäßig offline-first
 
-Das Firestore-SDK pflegt einen persistenten lokalen Cache und **bedient Lesezugriffe aus diesem Cache**,
-wenn kein Netzwerk verfügbar ist. Auf Mobilgeräten ist das standardmäßig aktiviert; es lässt sich
-explizit konfigurieren:
+Das Firestore-SDK hält einen lokalen persistenten Cache und **bedient Lesevorgänge aus diesem Cache**,
+wenn das Netzwerk fehlt. Auf Mobilgeräten ist das standardmäßig aktiviert; man kann es explizit konfigurieren:
 
 ```dart
 FirebaseFirestore.instance.settings = const Settings(
@@ -15,39 +14,33 @@ FirebaseFirestore.instance.settings = const Settings(
 );
 ```
 
-### Schreibvorgänge werden in eine Warteschlange eingereiht
+### Schreibvorgänge werden in eine Warteschlange gestellt
 
-Ein Schreibvorgang im Offline-Modus schlägt nicht fehl: Er wird in eine lokale **Warteschlange**
-eingereiht und bei Netzwiederkehr erneut ausgeführt. Die UI kann die Daten sofort anzeigen
-(optimistisches Lesen) dank des Flags `hasPendingWrites`, das in den Metadaten des Snapshots
-verfügbar ist:
+Ein Schreibvorgang im Offline-Modus schlägt nicht fehl: Er reiht sich in eine lokale **Warteschlange**
+ein, die bei Rückkehr des Netzwerks erneut abgespielt wird. Die UI kann die Daten sofort anzeigen (optimistisches Lesen) dank
+des Flags `hasPendingWrites`, das in den Metadaten des Snapshots verfügbar ist:
 
 ```dart
 stream.listen((snapshot) {
-  final source = snapshot.metadata.hasPendingWrites ? 'local' : 'serveur';
-  // afficher un badge « synchro en cours » tant que source == 'local'
+  final source = snapshot.metadata.hasPendingWrites ? 'local' : 'server';
+  // show a "syncing" badge while source == 'local'
 });
 ```
 
 ## Konflikte auflösen
 
-Zwei Geräte ändern dasselbe Dokument offline: Wer gewinnt? Standardmäßig gilt
-**Last-Write-Wins**, was Daten überschreiben kann. Für einen Zähler bevorzugt man `FieldValue.increment()`
-(kommutativ, also konfliktfrei); für alles andere entscheidet ein `updatedAt` mit
-`FieldValue.serverTimestamp()` zum Zeitpunkt der Synchronisierung.
-
-- Zähler → `increment()`
-- Server-Zeitstempel → `serverTimestamp()`
-- Komplexe Geschäftsregel → eine Transaktion in einer Cloud Function
+Zwei Geräte können dasselbe Dokument offline ändern. Standardmäßig gilt **last-write-wins**,
+was Daten überschreiben kann. Für einen Zähler bevorzugt man `FieldValue.increment()`
+(kommutativ, also konfliktfrei); für den Rest entscheidet ein `updatedAt` mit
+`FieldValue.serverTimestamp()` zum Zeitpunkt der Synchronisierung. Wenn die Geschäftsregel
+komplexer ist, übernimmt eine Transaktion in einer Cloud Function die Entscheidung serverseitig.
 
 ## Offline testen
 
-Offline wird nicht „nach Gefühl" getestet: `firestore.disableNetwork()` erzwingt den
-Offline-Modus in einem Integrationstest, `enableNetwork()` spielt anschließend die Warteschlange
-erneut ab. Der
-[Firestore-Offline-Leitfaden](https://firebase.google.com/docs/firestore/manage-data/enable-offline)
+Der Offline-Modus wird im Integrationstest geprüft: `firestore.disableNetwork()` erzwingt die
+Trennung vom Netzwerk, dann spielt `enableNetwork()` die Warteschlange erneut ab. Der
+[Firestore-Offline-Guide](https://firebase.google.com/docs/firestore/manage-data/enable-offline)
 dokumentiert jede API.
 
-> Offline-First bedeutet nicht, einen Netzwerkausfall zu behandeln. Es bedeutet, die App so zu
-> gestalten, als würde das Netzwerk **nicht existieren**, und die Synchronisierung zu einem bloßen
-> Implementierungsdetail werden zu lassen.
+> Eine Offline-First-App wird so konzipiert, als ob das Netzwerk **nicht existieren würde**. Die Synchronisierung ist
+> dann nur ein Implementierungsdetail, keine Behandlung eines Ausfalls.

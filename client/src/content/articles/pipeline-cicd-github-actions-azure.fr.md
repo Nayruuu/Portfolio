@@ -1,6 +1,6 @@
-Déployer à la main, c'est déployer le vendredi soir avec la peur au ventre. Un pipeline
-**CI/CD** sur GitHub Actions transforme chaque `git push` en build testé, puis en
-déploiement reproductible vers Azure — sans jamais toucher à un portail.
+Un déploiement à la main n'est jamais deux fois le même. Un pipeline **CI/CD** sur
+GitHub Actions retire cette variable : chaque `git push` devient un build testé, puis un
+déploiement reproductible vers Azure, sans jamais toucher à un portail.
 
 ## Un workflow déclaratif
 
@@ -25,11 +25,11 @@ jobs:
       - run: npm run build:ssg
 ```
 
-### Des secrets sans secrets : OIDC
+### L'authentification par OIDC
 
 Plutôt qu'un secret de longue durée copié dans GitHub, on utilise le **federated identity**
-(OIDC) : Azure fait confiance au token éphémère que GitHub émet pour ce dépôt. Aucune clé à
-faire tourner, rien à fuiter.
+(OIDC) : Azure fait confiance au token éphémère que GitHub émet pour ce dépôt. Il n'y a
+donc aucune clé à faire tourner, et rien qui puisse fuiter.
 
 ```yaml
 permissions:
@@ -48,11 +48,11 @@ Static Web Apps (ou App Service pour une API .NET) :
 
 ## Garde-fous
 
-Un pipeline qui déploie sans filet est un pistolet chargé. On protège la branche `main`
+Un pipeline qui déploie seul a besoin de limites explicites. On protège la branche `main`
 (revue obligatoire, CI verte requise) et on place le déploiement derrière un **Environment**
 GitHub avec **required reviewers** pour la prod. La doc des
 [environments GitHub](https://docs.github.com/actions/deployment/targeting-different-environments)
 détaille les approbations manuelles.
 
-> Un bon pipeline n'est pas celui qui déploie le plus vite, c'est celui en qui on a **assez
-> confiance** pour déployer un mardi à 17 h sans réunion de crise.
+> Un bon pipeline se mesure à la **confiance** qu'on lui accorde, pas à sa vitesse : assez
+> pour déployer un mardi à 17 h sans réunion de crise.

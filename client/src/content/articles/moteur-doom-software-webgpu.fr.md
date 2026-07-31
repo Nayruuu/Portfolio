@@ -1,16 +1,20 @@
-Ce portfolio cache un FPS façon DOOM — un vrai moteur 3D, dans le navigateur, **sans Three.js
+Ce portfolio cache un FPS façon DOOM, un vrai moteur 3D dans le navigateur, **sans Three.js
 ni WebGL**. Pas de bibliothèque graphique : un *software renderer* écrit à la main qui calcule
-chaque pixel en TypeScript, exactement comme le faisait id Software en 1993. Le twist moderne :
-le même pixel sort de **trois backends** interchangeables — un CPU mono-thread, un pool de
-workers, et un shader de calcul WebGPU — et un test prouve qu'ils rendent tous **la même image**.
+chaque pixel en TypeScript, exactement comme le faisait id Software en 1993.
+
+La partie moderne : le même pixel sort de **trois backends** interchangeables (un CPU
+mono-thread, un pool de workers, un shader de calcul WebGPU), et un test prouve qu'ils rendent
+tous **la même image**.
 
 ## Le rendu BSP, façon 1993
 
 La carte est compilée en un arbre **BSP** (Binary Space Partitioning) : un découpage récursif du
 plan qui donne, pour n'importe quelle position de caméra, l'ordre exact des murs du plus proche
-au plus lointain. Le rendu est un simple parcours *front-to-back* : on traverse l'arbre, on
-projette chaque segment de mur en une colonne verticale de l'écran, on la texture, et un
-**z-buffer** par colonne arrête tout ce qui est déjà caché. Zéro over-draw, zéro tri d'objets.
+au plus lointain.
+
+Le rendu est un simple parcours *front-to-back* : on traverse l'arbre, on projette chaque
+segment de mur en une colonne verticale de l'écran, on la texture, et un **z-buffer** par
+colonne arrête tout ce qui est déjà caché. Il n'y a ni over-draw ni tri d'objets.
 
 ```typescript
 // one wall wins per screen column x — the nearest unoccluded one
@@ -33,7 +37,7 @@ se remplissent par bandes horizontales, chaque ligne portant son échelle monde-
 ## Un backend ne suffit pas
 
 Ce `renderFrame` est **pur** : des données en entrée, un tampon de pixels en sortie, aucune API
-navigateur. C'est la référence — et le dernier recours. Au-dessus, deux accélérateurs.
+navigateur. C'est la référence, et aussi le dernier recours. Au-dessus, deux accélérateurs.
 
 Le premier découpe l'écran en bandes de lignes réparties sur un **pool de workers**, tous branchés
 sur le **même** `SharedArrayBuffer` : le framebuffer est partagé sans copie. Huit threads, ~4,5 ms
@@ -48,12 +52,13 @@ renderFrame(map, camera, shared, zbuffer, band.rowStart, band.rowEnd);
 Le second pousse tout sur le **GPU en compute**. Le CPU n'y rasterise plus : il *enregistre* le
 parcours BSP sous forme de tampons de commandes par colonne (spans de mur, couches de verre,
 sprites), et un shader **WGSL** les exécute en parallèle avant de relire le résultat dans le
-framebuffer. Pas de swap-chain, pas de canvas WebGL : du calcul pur, une image en retour.
+framebuffer. Pas de swap-chain ni de canvas WebGL : du calcul pur, et une image en retour.
 
 ## Le même pixel, prouvé
 
-Trois chemins de rendu, c'est trois occasions de diverger. La garantie tient à un test : rendre
-**une même scène** via le renderer CPU et le backend WebGPU, dans deux tampons, puis les comparer.
+Trois chemins de rendu, c'est aussi trois implémentations qui peuvent diverger. La garantie
+tient à un test : rendre **une même scène** via le renderer CPU et le backend WebGPU, dans deux
+tampons, puis les comparer.
 
 ```typescript
 export function diffFrames(a: Uint8ClampedArray, b: Uint8ClampedArray, tol: number): FrameDiff {
@@ -76,19 +81,22 @@ export function diffFrames(a: Uint8ClampedArray, b: Uint8ClampedArray, tol: numb
 ```
 
 Le GPU calcule en `f32`, le CPU mêle entiers et flottants : l'accord est *à une tolérance près*,
-pas au bit. Un test Playwright pilote ce diff sur un vrai navigateur et exige moins de **2 %** de
-pixels hors tolérance. Là où `navigator.gpu` n'existe pas — tout navigateur *headless* de CI — il
-se **saute** plutôt que de comparer bêtement le CPU à lui-même. La parité n'est pas un vœu ; c'est
-une assertion qui tourne.
+pas au bit.
+
+Un test Playwright pilote ce diff sur un vrai navigateur et exige moins de **2 %** de pixels
+hors tolérance. Là où `navigator.gpu` n'existe pas (tout navigateur *headless* de CI), il se
+**saute** plutôt que de comparer bêtement le CPU à lui-même. La parité est une assertion qui
+tourne.
 
 ## Dégrader sans jamais d'écran noir
 
-L'empilement est une cascade de repli. WebGPU disponible ? On rend sur le GPU. Sinon, le pool de
-workers. Pas de COOP/COEP, donc pas de `SharedArrayBuffer` ? Le `renderFrame` mono-thread sur le
-thread principal — plus lent, mais universel. Chaque navigateur obtient une image ; le plus
-capable obtient 120 fps. Le renderer software n'est jamais un lot de consolation : c'est à la fois
-le socle qui tourne partout **et** l'oracle qui garde le GPU honnête.
+L'empilement est une cascade de repli. Si WebGPU est disponible, le rendu part sur le GPU.
+Sinon, le pool de workers prend le relais. Et sans COOP/COEP, donc sans `SharedArrayBuffer`, il
+reste le `renderFrame` mono-thread sur le thread principal : plus lent, mais universel.
 
-> Réécrire un rasteriseur à la main en 2026 n'a rien de nostalgique : c'est ce qui rend les trois
-> backends **comparables au pixel**. Le CPU définit la vérité, le GPU l'accélère, et un test
-> refuse de les laisser diverger.
+Chaque navigateur obtient une image ; le plus capable tient 120 fps. Le renderer software cumule
+deux rôles : le socle qui tourne partout, et la référence que le test de parité oppose au GPU.
+
+> Réécrire un rasteriseur à la main en 2026 sert un objectif précis : rendre les trois backends
+> **comparables au pixel**. Le CPU définit la vérité, le GPU l'accélère, et un test refuse de
+> les laisser diverger.

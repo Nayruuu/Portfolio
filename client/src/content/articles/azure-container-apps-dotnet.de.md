@@ -1,8 +1,13 @@
-Einen Kubernetes-Cluster bereitzustellen, um eine einzige API zu hosten, heißt mit Kanonen auf Spatzen zu schießen. **Azure Container Apps** bietet serverlose Container: Man pusht ein Image, die Plattform übernimmt Orchestrierung, Scaling — bis auf **null** — und Routing, und das alles, ohne jemals ein Kubernetes-Manifest zu schreiben.
+Die Provisionierung eines Kubernetes-Clusters, um eine einzelne API zu hosten, ist unverhältnismäßig. **Azure
+Container Apps** bietet containerisiertes Serverless: Man pusht ein Image, die Plattform übernimmt
+die Orchestrierung, das Scaling (bis auf **null**) und das Routing, ohne je ein Kubernetes-Manifest
+zu schreiben.
 
 ## Ein Image mit einem einzigen Befehl deployen
 
-Container Apps basiert auf einer **Environment** (der gemeinsamen Netzwerk- und Log-Grenze mehrerer Apps) und darauf aufbauend auf einzelnen Apps. Die CLI `az containerapp up` übernimmt beim ersten Deployment die gesamte Bootstrap-Arbeit:
+Container Apps stützt sich auf ein **Environment** (die Netzwerk- und Log-Grenze, die von
+mehreren Apps gemeinsam genutzt wird) und darauf aufbauend auf individuelle Apps. Die CLI
+`az containerapp up` erledigt beim ersten Deployment die gesamte Bootstrap-Arbeit:
 
 ```bash
 az containerapp up \
@@ -15,11 +20,16 @@ az containerapp up \
   --query properties.configuration.ingress.fqdn
 ```
 
-Der `--target-port 8080` muss mit dem Port übereinstimmen, auf dem **Kestrel** im Container lauscht (`ASPNETCORE_URLS=http://+:8080`). Der Ingress `external` stellt einen öffentlichen HTTPS-FQDN mit verwaltetem Zertifikat bereit; `internal` beschränkt die App auf intra-Environment-Traffic — ideal für einen Dienst, der nur von anderen Apps aufgerufen wird.
+`--target-port 8080` muss dem Port entsprechen, auf dem **Kestrel** im Container lauscht
+(`ASPNETCORE_URLS=http://+:8080`). Der Ingress `external` exponiert einen öffentlichen HTTPS-FQDN mit
+verwaltetem Zertifikat; `internal` beschränkt die App auf Traffic innerhalb des Environments,
+die richtige Wahl für einen Service, der nur von anderen Apps aufgerufen wird.
 
-## Scale-to-zero und KEDA-Regeln
+## Scale-to-Zero und KEDA-Regeln
 
-Das entscheidende wirtschaftliche Argument: Mit `--min-replicas 0` **kostet eine inaktive App nichts**. Bei der ersten Anfrage startet die Plattform ein Replikat (Cold Start von einigen hundert Millisekunden). Das Scaling basiert auf **KEDA**: Man deklariert Regeln auf Basis von Metriken, nicht nur der CPU.
+Das wirtschaftliche Argument: Mit `--min-replicas 0` **kostet** eine inaktive App **nichts**. Bei der
+ersten Anfrage startet die Plattform ein Replica (Cold Start von einigen hundert Millisekunden).
+Das Scaling basiert auf **KEDA**: Man deklariert Regeln auf Basis von Metriken, nicht nur auf CPU.
 
 ```bash
 az containerapp update \
@@ -32,11 +42,18 @@ az containerapp update \
   --scale-rule-http-concurrency 50
 ```
 
-Hier wird pro 50 gleichzeitiger Anfragen ein neues Replikat hinzugefügt. Für einen Worker, der eine Queue verarbeitet, verwendet man einen `azure-servicebus`- oder `azure-queue`-Scaler: Die App schläft, solange die Queue leer ist, und skaliert dann entsprechend der Queue-Tiefe. Der [KEDA-Scaler-Katalog](https://keda.sh/docs/latest/scalers/) deckt Kafka, Redis, Prometheus und viele weitere ab.
+Hier wird pro 50 gleichzeitige Anfragen ein neues Replica hinzugefügt. Für einen Worker, der eine
+Queue konsumiert, verwendet man einen `azure-servicebus`- oder `azure-queue`-Scaler: Die App schläft,
+solange die Queue leer ist, und skaliert dann je nach Tiefe der Queue hoch. Der
+[Katalog der KEDA-Scaler](https://keda.sh/docs/latest/scalers/) deckt Kafka, Redis,
+Prometheus und viele weitere ab.
 
 ## Revisionen und Traffic-Split
 
-Jede Änderung der **Container-Konfiguration** (Image, Variablen, Ressourcen) erzeugt eine neue unveränderliche **Revision**. Im Modus `multiple` laufen mehrere Revisionen parallel und der Traffic wird aufgeteilt — die Grundlage eines Canary- oder Blue-Green-Deployments.
+Jede Änderung der **Container-Konfiguration** (Image, Variablen, Ressourcen) erzeugt eine neue,
+unveränderliche **Revision**. Im Modus `multiple` laufen mehrere Revisionen parallel, und man
+verteilt den Traffic zwischen ihnen, was als Grundlage für ein Canary- oder Blue-Green-Deployment
+dient.
 
 ```bash
 az containerapp ingress traffic set \
@@ -45,10 +62,20 @@ az containerapp ingress traffic set \
   --revision-weight api-super-dev--rev3=90 api-super-dev--rev4=10
 ```
 
-Hier werden **10 %** des Traffics an die neue Revision geleitet. Halten die Metriken stand, wechselt man auf `100`; andernfalls kehrt man sofort auf `0` zurück — ohne erneutes Deployment. Ein Rollback, der sich in Sekunden bemisst.
+Hier werden **10 %** des Traffics an die neue Revision gesendet. Wenn die Metriken stimmen, schaltet
+man auf `100`; andernfalls geht man sofort auf `0` zurück, ohne neu zu deployen. Der Rollback ist
+eine Frage von Sekunden.
 
 ## Konfiguration sauber verwalten
 
-Sensible Umgebungsvariablen werden über App-**Secrets** übergeben, referenziert über die Syntax `secretref:`. Noch besser: Aktivieren Sie die **verwaltete Identität** für die App und lassen Sie ein Secret direkt auf Azure Key Vault zeigen, ohne den Wert jemals zu materialisieren. Die [Container Apps-Dokumentation](https://learn.microsoft.com/azure/container-apps/overview) beschreibt Ingress, Dapr und die Gesundheitssonden (`liveness`/`readiness`), die für einen Produktionsdienst zu konfigurieren sind.
+Sensible Umgebungsvariablen laufen über App-**Secrets**, referenziert über die
+`secretref:`-Syntax. Mit aktivierter **Managed Identity** auf der App kann ein Secret direkt auf
+Azure Key Vault verweisen, ohne den Wert je zu materialisieren.
 
-> Container Apps ist Serverless ohne Verzicht auf Container: Man behält sein OCI-Image und sein `Dockerfile`, aber **vergisst den Cluster**. Scale-to-zero und Traffic-Split inklusive.
+Die [Container-Apps-Dokumentation](https://learn.microsoft.com/azure/container-apps/overview)
+beschreibt Ingress, Dapr und die Health-Probes (`liveness`/`readiness`), die für einen
+Produktions-Service eingerichtet werden müssen.
+
+> Container Apps überträgt das Serverless-Modell auf Container: Man behält sein OCI-Image und sein
+> `Dockerfile`, ohne einen Cluster zu verwalten. Scale-to-Zero und Traffic-Split werden von der
+> Plattform bereitgestellt.

@@ -1,17 +1,17 @@
-Man erbt selten ein **Greenfield**. Meistens ist es ein .NET-Monolith, der seit acht
-Jahren in Produktion läuft und den niemand anzufassen wagt. Das **Strangler-Fig**-Pattern
-erlaubt es, ihn **Stück für Stück** zu ersetzen, ohne Big-Bang und ohne Ausfallfenster.
+Man erbt selten ein **Greenfield**. Meistens ist es ein .NET-Monolith, der seit acht Jahren
+in Produktion läuft und den niemand anzufassen wagt. Das **Strangler-Fig**-Pattern erlaubt
+es, ihn **Stück für Stück** zu ersetzen, ohne Big Bang und ohne Wartungsfenster.
 
 ## Das Prinzip
 
-Man platziert eine Fassade vor dem Monolithen und **leitet** eine Route nach der anderen
-an einen neuen Service weiter. Solange eine Funktionalität nicht neu geschrieben ist,
-läuft sie weiterhin über den alten Code. An dem Tag, an dem die letzte Route umgestellt
-wird, ist der Monolith tot — erdrosselt.
+Man stellt eine Fassade vor den Monolithen und leitet dann eine Route nach der anderen auf
+einen neuen Service um. Solange eine Funktionalität nicht neu geschrieben ist, läuft sie
+weiter über den alten Code. An dem Tag, an dem die letzte Route umgestellt ist, läuft
+nichts mehr über den Monolithen: Man kann ihn abschalten.
 
 ### Eine Anti-Corruption Layer
 
-Der neue Code soll nie die Sprache des Legacysystems sprechen. Man schaltet eine
+Der neue Code darf nie die Sprache des Legacy-Systems sprechen. Man schaltet eine
 **Anti-Corruption Layer** dazwischen, die die Modelle der alten Welt in die neue übersetzt:
 
 ```csharp
@@ -24,23 +24,22 @@ public sealed class LegacyOrderTranslator
 }
 ```
 
-## Routing auf der richtigen Ebene
+## Auf der richtigen Ebene routen
 
-Die Umstellung erfolgt idealerweise auf Ebene des **Reverse-Proxys** (YARP, Nginx) statt
-im Code, um beide Welten vollständig isoliert zu halten. Mit [YARP](https://microsoft.github.io/reverse-proxy/)
-genügt eine einfache Konfigurationsroute, um einen Pfad zum neuen Service umzuleiten.
+Die Umstellung erfolgt idealerweise auf Ebene des **Reverse Proxy** (YARP, Nginx) statt im
+Code, damit die beiden Welten getrennt bleiben. Mit [YARP](https://microsoft.github.io/reverse-proxy/)
+genügt eine einfache Konfigurationsroute, um einen Pfad auf den neuen Service umzuleiten.
 
 - eine migrierte Route → neuer Service
-- eine noch nicht migrierte Route → Monolith
+- eine nicht migrierte Route → Monolith
 - ein Canary → 5 % des Traffics, dann 100 %
 
-## Messen vor dem Abschalten
+## Messen, bevor man kappt
 
-Jede migrierte Route wird mit einem **Shadow-Traffic** begleitet, der mit der alten Antwort
-verglichen wird, bevor endgültig umgestellt wird. Der alte Code wird erst entfernt, wenn er
-**nachweislich tot** ist: Solange noch ein Aufruf durch ihn hindurchläuft, bleibt er bestehen.
-Die Telemetrie wird damit zum Schiedsrichter der Migration.
+Jede migrierte Route wird mit **Shadow Traffic** doppelt gefahren und mit der alten Antwort
+verglichen, bevor endgültig gekappt wird. Der alte Code wird erst entfernt, wenn er
+**nachweislich tot** ist: Solange noch ein Aufruf darüber läuft, bleibt er. Die Telemetrie
+entscheidet über die Migration.
 
-> Erdrosseln bedeutet nicht, schneller neu zu schreiben. Es bedeutet, **reversibel** neu
-> zu schreiben: Auf jeder Stufe kann man mit einer einzigen Konfigurationszeile
-> zurückrudern.
+> Der Strangler beschleunigt das Neuschreiben nicht, er macht es **reversibel**: Jeder
+> Schritt lässt sich mit einer einzigen Konfigurationszeile rückgängig machen.

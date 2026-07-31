@@ -1,8 +1,14 @@
-Das Laden asynchroner Daten bedeutete lange manuelles `subscribe()`, händisches State-Management (`loading`, `error`, `data`) und Speicherlecks, wenn man ein `unsubscribe` vergaß. Seit Angular 21 kapseln `resource()` und `httpResource()` all das in einer reaktiven Primitive, die auf **Signals** aufbaut.
+Lange Zeit war das Laden asynchroner Daten gleichbedeutend mit manuellem `subscribe()`, händischem
+State-Management (`loading`, `error`, `data`) und Memory-Leaks, wenn man ein `unsubscribe` vergaß.
+Seit Angular 21 kapseln `resource()` und `httpResource()` all das in einer reaktiven Primitive, die
+auf **Signals** aufbaut.
 
 ## Das resource()-Modell
 
-Ein `resource()` verknüpft eine reaktive **Anfrage** mit einem asynchronen **Loader**. Wenn ein in `params` gelesenes Signal sich ändert, startet Angular den Loader automatisch neu und bricht die laufende Anfrage über ein `AbortSignal` ab. Das Ergebnis ist ein Signal-Objekt: `value()`, `error()`, `status()` sowie `isLoading()`.
+Ein `resource()` verknüpft eine reaktive **Anfrage** mit einem asynchronen **Loader**. Ändert sich
+ein in `params` gelesenes Signal, startet Angular den Loader automatisch neu und bricht die laufende
+Anfrage über ein `AbortSignal` ab. Das Ergebnis ist ein Objekt aus Signals: `value()`, `error()`,
+`status()`, plus `isLoading()`.
 
 ```typescript
 import { resource, signal } from '@angular/core';
@@ -24,11 +30,15 @@ export class UserCard {
 }
 ```
 
-Es genügt, `userId` zu ändern: kein `subscribe`, kein `takeUntilDestroyed`. Der `resource` lädt neu, gibt `isLoading()` während des Aufrufs aus und bricht die vorherige Anfrage ab.
+Es genügt, `userId` zu ändern: kein `subscribe`, kein `takeUntilDestroyed`. Die `resource` lädt neu,
+stellt `isLoading()` während des Aufrufs bereit und bricht die vorherige Anfrage ab.
 
 ## httpResource für REST-Aufrufe
 
-`httpResource()` ist die auf `HttpClient` zugeschnittene Variante: Sie durchläuft die Interceptoren, verwaltet die Typisierung der Antwort und reagiert auf URL-Änderungen. Man übergibt ihr eine Funktion, die die aus Signals abgeleitete URL (oder ein vollständiges Anfrage-Objekt) zurückgibt.
+`httpResource()` ist die Variante, die auf `HttpClient` zugeschnitten ist: Sie durchläuft die
+Interceptors, kümmert sich um die Typisierung der Antwort und reagiert auf Änderungen der URL. Man
+übergibt ihr eine Funktion, die die aus Signals abgeleitete URL (oder ein vollständiges
+Request-Objekt) liefert.
 
 ```typescript
 import { httpResource } from '@angular/common/http';
@@ -44,13 +54,13 @@ export class ArticleList {
 }
 ```
 
-Im Template werden die Zustände direkt konsumiert, ohne `async`-Pipe:
+Im Template konsumiert man die States direkt, ohne `async`-Pipe:
 
 ```typescript
 @if (articles.isLoading()) {
-  <p>Chargement…</p>
+  <p>Wird geladen…</p>
 } @else if (articles.error()) {
-  <p>Échec du chargement.</p>
+  <p>Laden fehlgeschlagen.</p>
 } @else {
   @for (article of articles.value(); track article.id) {
     <h3>{{ article.title }}</h3>
@@ -58,15 +68,27 @@ Im Template werden die Zustände direkt konsumiert, ohne `async`-Pipe:
 }
 ```
 
-### Die Zustände und ihre Tücken
+### Die States und ihre Fallstricke
 
-`status()` gibt einen der Werte `idle`, `loading`, `reloading`, `resolved`, `error` und `local` zurück. Zwei Feinheiten verdienen Beachtung:
+`status()` liefert einen Wert aus `idle`, `loading`, `reloading`, `resolved`, `error` und `local`.
+Zwei Feinheiten:
 
-- Während eines **Neuladens** behält `value()` die alten Daten (`reloading`), was einen weißen Bildschirm verhindert — praktisch für ein Stale-while-revalidate-Pattern.
-- `httpResource` ist für das **Lesen** (GET) gedacht. Für POST/PUT bleibt man beim klassischen `HttpClient`: Ein Resource startet neu, sobald sich seine Anfrage ändert, was bei einer Mutation keinen Sinn ergibt.
+- während eines **Reloads** behält `value()` den alten Wert (`reloading`), was einen leeren
+  Bildschirm vermeidet. Praktisch für ein Stale-while-revalidate-Pattern.
+- `httpResource` ist für das **Lesen** (GET) gedacht. Für POST/PUT bleibt man bei einem
+  klassischen `HttpClient`: Eine resource startet neu, sobald sich ihre Anfrage ändert, was bei
+  einer Mutation keinen Sinn ergibt.
 
-## Warum manuelle Subscriptions aufgeben
+## Warum man manuelle Subscriptions aufgibt
 
-Imperativer RxJS-Code vermischt drei Anliegen: den Aufruf auslösen, den Stream mappen und bereinigen. Mit `resource` wird die **Abhängigkeit** deklarativ — der Loader startet neu, weil sich ein Signal geändert hat, Punkt. Man entfernt die Paginierungs-`BehaviorSubject`s, die defensiven `switchMap`s und die `finalize`-Aufrufe, um `loading` wieder auf `false` zu setzen. Die offizielle Dokumentation beschreibt die API im [Async-Guide mit resource](https://angular.dev/guide/signals/resource).
+Der imperative RxJS-Code vermischt drei Anliegen: den Aufruf auslösen, den Stream mappen und
+aufräumen.
 
-> `resource()` ersetzt nicht RxJS: Es ersetzt den **Boilerplate**. Du beschreibst, was geladen werden soll und wovon es abhängt; Angular kümmert sich um das Wann, den Abbruch und den Zustand. Die Komponente wird wieder zu einer einfachen Signal-Lektüre.
+Mit `resource` wird die **Abhängigkeit** deklarativ: Der Loader startet neu, weil sich ein Signal
+geändert hat. Man entfernt die `BehaviorSubject` für Pagination, die defensiven `switchMap` und die
+`finalize`, um `loading` wieder auf `false` zu setzen. Die offizielle Doku beschreibt die API im
+[Async-Guide mit resource](https://angular.dev/guide/signals/resource).
+
+> `resource()` ersetzt die **Verkabelung**, nicht RxJS. Du beschreibst, was geladen werden soll und
+> wovon es abhängt; Angular kümmert sich um das Wann, den Abbruch und den State. Die Komponente wird
+> wieder zu einem einfachen Lesen von Signals.

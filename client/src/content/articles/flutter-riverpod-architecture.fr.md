@@ -33,8 +33,8 @@ remplace les `setState` manuels en cascade.
 
 ## Séparer l'UI de la logique
 
-La règle d'or : un widget ne contient **aucune** logique métier. Il lit l'état et appelle des
-méthodes. Toute la mécanique vit dans le notifier, testable sans `WidgetTester` :
+Un widget ne contient **aucune** logique métier : il lit l'état et appelle des méthodes.
+Toute la mécanique vit dans le notifier, testable sans `WidgetTester` :
 
 ```dart
 class CounterView extends ConsumerWidget {
@@ -79,12 +79,14 @@ listeners.
 
 ## Pourquoi pas setState ou InheritedWidget
 
-`setState` reconstruit tout le `State` et garde la logique soudée à l'UI — impossible à tester
+`setState` reconstruit tout le `State` et garde la logique soudée à l'UI : impossible à tester
 sans rendre le widget. `InheritedWidget` partage une valeur mais impose d'écrire à la main le
 `updateShouldNotify`, ne gère ni l'asynchrone ni le remplacement, et fuit dès qu'on touche au
-`BuildContext`. Riverpod déplace l'état **hors de l'arbre**, le rend paresseux, mémoïsé et
-auto-disposé (`autoDispose`), et fait de l'override la voie normale du test.
+`BuildContext`.
 
-> Une bonne architecture Flutter ne se mesure pas au nombre de providers, mais à ceci :
-> peut-on tester la logique **sans jamais monter un widget** ? Avec Riverpod, la réponse est
-> oui par construction.
+Riverpod déplace l'état **hors de l'arbre**, le rend paresseux, mémoïsé et auto-disposé
+(`autoDispose`), et fait de l'override la voie normale du test.
+
+> Peu importe le nombre de providers : une architecture Flutter se juge à la possibilité de
+> tester la logique **sans jamais monter un widget**. Avec Riverpod, c'est le cas par
+> construction.

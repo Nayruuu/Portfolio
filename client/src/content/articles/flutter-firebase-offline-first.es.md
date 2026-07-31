@@ -1,11 +1,11 @@
 En móvil, la conectividad nunca está garantizada: metro, ascensor, avión. Una app
-**offline-first** no trata la desconexión como un error, sino como el estado normal —
-la red no es más que una optimización. Con Flutter y Firebase, es casi gratis.
+**offline-first** trata el modo sin conexión como el estado normal, no como un error: la red
+es solo una optimización. Con Flutter y Firebase, esto es casi gratis.
 
 ## Firestore es offline-first por defecto
 
-El SDK de Firestore mantiene una caché local persistente y **sirve las lecturas desde esa caché**
-cuando no hay red. En móvil está activado por defecto; se puede configurar explícitamente:
+El SDK de Firestore mantiene una caché local persistente y **sirve las lecturas desde esta caché**
+cuando falta la red. En móvil está activado por defecto; se puede configurar explícitamente:
 
 ```dart
 FirebaseFirestore.instance.settings = const Settings(
@@ -16,34 +16,31 @@ FirebaseFirestore.instance.settings = const Settings(
 
 ### Las escrituras se ponen en cola
 
-Una escritura sin conexión no falla: se añade a una **cola** local, que se reproduce en cuanto
-vuelve la red. La UI puede mostrar el dato de inmediato (lectura optimista) gracias al indicador
-`hasPendingWrites` expuesto en los metadatos del snapshot:
+Una escritura sin conexión no falla: se une a una **cola** local, que se reproduce
+en cuanto vuelve la red. La UI puede mostrar el dato de inmediato (lectura optimista) gracias
+al indicador `hasPendingWrites` expuesto en los metadatos del snapshot:
 
 ```dart
 stream.listen((snapshot) {
-  final source = snapshot.metadata.hasPendingWrites ? 'local' : 'serveur';
-  // afficher un badge « synchro en cours » tant que source == 'local'
+  final source = snapshot.metadata.hasPendingWrites ? 'local' : 'servidor';
+  // show a "syncing" badge while source == 'local'
 });
 ```
 
 ## Resolver los conflictos
 
-Dos dispositivos modifican el mismo documento sin conexión: ¿quién gana? Por defecto,
-**last-write-wins**, lo que puede sobrescribir un dato. Para un contador, se prefiere `FieldValue.increment()`
-(conmutativo, por lo tanto sin conflicto); para el resto, un `updatedAt` con
-`FieldValue.serverTimestamp()` decide en el momento de la sincronización.
+Dos dispositivos pueden modificar el mismo documento sin conexión. Por defecto, **last-write-wins**,
+lo que puede sobrescribir un dato. Para un contador, se prefiere `FieldValue.increment()`
+(conmutativo, por lo tanto sin conflicto); para el resto, un `updatedAt` en
+`FieldValue.serverTimestamp()` decide en el momento de la sincronización. Cuando la regla de negocio es
+más compleja, una transacción en una Cloud Function arbitra del lado del servidor.
 
-- contadores → `increment()`
-- marca de tiempo del servidor → `serverTimestamp()`
-- regla de negocio compleja → una transacción en una Cloud Function
+## Probar el modo sin conexión
 
-## Probar la desconexión
-
-No se prueba el offline «a ojo»: `firestore.disableNetwork()` fuerza el modo desconectado en
-una prueba de integración, y luego `enableNetwork()` reproduce la cola. La
+El modo sin conexión se prueba en integración: `firestore.disableNetwork()` fuerza el modo
+desconectado, luego `enableNetwork()` reproduce la cola. La
 [guía offline de Firestore](https://firebase.google.com/docs/firestore/manage-data/enable-offline)
 documenta cada API.
 
-> El offline-first no consiste en gestionar un fallo de red. Consiste en concebir la app como si la
-> red **no existiera**, y dejar que la sincronización sea solo un detalle de implementación.
+> Una app offline-first se diseña como si la red **no existiera**. La sincronización
+> es entonces solo un detalle de implementación, no la gestión de un fallo de red.

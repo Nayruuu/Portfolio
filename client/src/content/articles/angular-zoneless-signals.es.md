@@ -1,23 +1,23 @@
-Durante años, Angular se apoyó en **zone.js** para saber cuándo volver a lanzar la
-detección de cambios: un monkey patch de todas las API asíncronas del navegador. Funciona,
-pero es una caja negra costosa. Desde Angular 21, se puede prescindir de él por completo con
-`provideZonelessChangeDetection()` y dejar que los **signals** dirijan la reactividad.
+Durante años, Angular se ha apoyado en **zone.js** para saber cuándo volver a disparar el
+change detection: un monkey-patch de todas las API asíncronas del navegador. Funciona,
+pero es una caja negra costosa. Desde Angular 21, se puede prescindir de ella por completo con
+`provideZonelessChangeDetection()` y dejar que las **signals** piloten la reactividad.
 
-## Por qué deshacerse de zone.js
+## Por qué eliminar zone.js
 
-zone.js intercepta `setTimeout`, las promesas, los eventos del DOM y desencadena un ciclo de
-detección **global** cada vez. En una app grande, se verifican miles de bindings cuando solo
-tres han cambiado. El modo zoneless invierte la lógica: **nada** se vuelve a pintar mientras
-un signal leído en el template no haya notificado su cambio.
+zone.js intercepta `setTimeout`, las promesas, los eventos DOM, y dispara un ciclo de
+detección **global** cada vez. En una app grande, se verifican miles de bindings
+cuando solo tres han cambiado. El modo zoneless invierte la lógica: **nada** se vuelve a renderizar
+mientras un signal leído en el template no haya notificado su cambio.
 
-- bundle más ligero: se elimina una dependencia de ~100 ko
-- trazas de pila legibles: sin más frames de `zone.run` por todas partes
-- detección dirigida: solo los componentes que dependen del signal modificado son marcados
+De paso, el bundle pierde una dependencia de ~100 kB. Los stack traces vuelven a ser
+legibles, sin frames `zone.run` intercalados en cada nivel. Y la detección se vuelve
+específica: solo se marcan los componentes que dependen del signal modificado.
 
 ## Activar el modo zoneless
 
-Todo ocurre en la configuración de la aplicación. Se elimina `provideZoneChangeDetection`
-y se conecta el provider zoneless:
+La activación se hace en la configuración de la aplicación. Se retira
+`provideZoneChangeDetection` y se conecta el provider zoneless:
 
 ```typescript
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -33,9 +33,9 @@ bootstrapApplication(AppComponent, {
 
 ### Pensar en reactividad fina
 
-Una vez en modo zoneless, **todo el estado debe ser un signal**, de lo contrario el template
-deja de actualizarse. Se reemplazan los campos mutables por `signal()`, los valores derivados
-por `computed()`, y los efectos secundarios por `effect()`:
+Una vez en zoneless, **todo el estado debe ser un signal**, o el template ya no se
+actualizará. Se reemplazan los campos mutables por `signal()`, los valores derivados por `computed()`,
+y los efectos secundarios por `effect()`:
 
 ```typescript
 @Component({
@@ -51,14 +51,16 @@ export class CartComponent {
 }
 ```
 
-## Las trampas que hay que conocer
+## Las trampas a conocer
 
-El código legacy que hace `setTimeout(() => this.value = x)` **sin** pasar por un signal ya
-no refrescará la vista. Lo mismo ocurre con las suscripciones RxJS: hay que usar `toSignal()` o
-llamar a `signal.set()` dentro del `subscribe`. En cuanto a los tests, se cambia Vitest a modo
-zoneless y se reemplazan los `fakeAsync`/`tick` por `await fixture.whenStable()`. La documentación
-oficial detalla cada caso en la [guide zoneless](https://angular.dev/guide/zoneless).
+El código legacy que hace `setTimeout(() => this.value = x)` **sin** pasar por un signal ya no
+refrescará la vista. Lo mismo para las suscripciones RxJS: hay que usar `toSignal()`, o bien
+llamar a `signal.set()` dentro del `subscribe`.
 
-> El zoneless no hace que una app sea mágicamente más rápida. Hace que la reactividad sea
-> **explícita**: sabes exactamente por qué algo se vuelve a pintar, y eso es lo que lo cambia
-> todo al depurar.
+En cuanto a los tests, se cambia Vitest a zoneless y se reemplazan los `fakeAsync`/`tick` por
+`await fixture.whenStable()`. La documentación oficial detalla cada caso en la
+[guía zoneless](https://angular.dev/guide/zoneless).
+
+> El zoneless no acelera una app por arte de magia. La ganancia se ve al depurar: la reactividad
+> se ha vuelto **explícita**, y se sabe exactamente qué signal provocó cada redibujado
+> de la vista.

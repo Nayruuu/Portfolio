@@ -1,7 +1,7 @@
-Provisionner un cluster Kubernetes pour héberger une seule API, c'est sortir l'artillerie
-lourde pour une mouche. **Azure Container Apps** offre le serverless conteneurisé : on pousse
-une image, la plateforme gère l'orchestration, le scaling — jusqu'à **zéro** — et le routage,
-le tout sans jamais écrire un manifeste Kubernetes.
+Provisionner un cluster Kubernetes pour héberger une seule API est disproportionné. **Azure
+Container Apps** offre le serverless conteneurisé : on pousse une image, la plateforme gère
+l'orchestration, le scaling (jusqu'à **zéro**) et le routage, sans jamais écrire un manifeste
+Kubernetes.
 
 ## Déployer une image en une commande
 
@@ -22,13 +22,13 @@ az containerapp up \
 
 Le `--target-port 8080` doit correspondre au port que **Kestrel** écoute dans le conteneur
 (`ASPNETCORE_URLS=http://+:8080`). L'ingress `external` expose un FQDN HTTPS public avec
-certificat géré ; `internal` réserve l'app au trafic intra-environment, idéal pour un service
-appelé seulement par d'autres apps.
+certificat géré ; `internal` réserve l'app au trafic intra-environment, le bon choix pour un
+service appelé seulement par d'autres apps.
 
 ## Scale-to-zero et règles KEDA
 
-L'argument économique décisif : avec `--min-replicas 0`, une app inactive **ne coûte rien**.
-À la première requête, la plateforme démarre un réplica (cold start de quelques centaines de
+L'argument économique : avec `--min-replicas 0`, une app inactive **ne coûte rien**. À la
+première requête, la plateforme démarre un réplica (cold start de quelques centaines de
 millisecondes). Le scaling repose sur **KEDA** : on déclare des règles sur des métriques, pas
 seulement sur le CPU.
 
@@ -53,7 +53,8 @@ Prometheus et bien d'autres.
 
 Chaque modification de la **configuration de conteneur** (image, variables, ressources) crée
 une nouvelle **révision** immuable. En mode `multiple`, plusieurs révisions tournent en
-parallèle et on répartit le trafic — la base d'un déploiement canary ou blue-green.
+parallèle et on répartit le trafic entre elles, ce qui sert de base à un déploiement canary
+ou blue-green.
 
 ```bash
 az containerapp ingress traffic set \
@@ -63,17 +64,19 @@ az containerapp ingress traffic set \
 ```
 
 On envoie ici **10 %** du trafic vers la nouvelle révision. Si les métriques tiennent, on
-bascule à `100`, sinon on revient à `0` instantanément — sans redéployer. C'est un rollback
-qui se mesure en secondes.
+bascule à `100` ; sinon on revient à `0` instantanément, sans redéployer. Le rollback se
+mesure en secondes.
 
 ## Gérer la configuration proprement
 
 Les variables d'environnement sensibles passent par des **secrets** d'app, référencés via la
-syntaxe `secretref:`. Mieux : activez l'**identité managée** sur l'app et faites pointer un
-secret directement vers Azure Key Vault, sans jamais matérialiser la valeur. La
-[documentation Container Apps](https://learn.microsoft.com/azure/container-apps/overview)
+syntaxe `secretref:`. Avec l'**identité managée** activée sur l'app, un secret peut pointer
+directement vers Azure Key Vault, sans jamais matérialiser la valeur.
+
+La [documentation Container Apps](https://learn.microsoft.com/azure/container-apps/overview)
 détaille ingress, Dapr et les sondes de santé (`liveness`/`readiness`) à câbler pour un
 service de production.
 
-> Container Apps, c'est le serverless sans renoncer aux conteneurs : on garde son image OCI
-> et son `Dockerfile`, mais on **oublie le cluster**. Scale-to-zero et traffic split offerts.
+> Container Apps applique le modèle serverless aux conteneurs : on garde son image OCI et son
+> `Dockerfile`, sans gérer de cluster. Scale-to-zero et traffic split sont fournis par la
+> plateforme.

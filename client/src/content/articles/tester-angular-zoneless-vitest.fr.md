@@ -1,6 +1,7 @@
-Une app Angular zoneless n'a plus `zone.js` pour savoir quand la vue est stable — et c'est
-tant mieux pour les tests. Fini les `fakeAsync`/`tick` ésotériques : on attend explicitement
-que le rendu se stabilise. Voici comment tester un composant zoneless avec **Vitest**.
+Une app Angular zoneless n'a plus `zone.js` pour savoir quand la vue est stable, et c'est
+tant mieux pour les tests. Plus besoin des `fakeAsync`/`tick` ésotériques : on attend
+explicitement que le rendu se stabilise. Voici comment tester un composant zoneless avec
+**Vitest**.
 
 ## Configurer Vitest
 
@@ -35,8 +36,8 @@ it('rend le total', async () => {
 ## Remplacer fakeAsync par whenStable
 
 Sans zone, `fakeAsync`/`tick()` n'ont plus de sens. La règle est simple : **toute** attente
-asynchrone se résout par `await fixture.whenStable()`, qui rend la main quand le change
-detection s'est stabilisé. C'est plus lisible et plus proche du vrai cycle de vie.
+asynchrone se résout par `await fixture.whenStable()`, qui rend la main quand la change
+detection s'est stabilisée. C'est plus lisible et plus proche du vrai cycle de vie.
 
 - avant : `tick(); fixture.detectChanges();`
 - après : `await fixture.whenStable();`
@@ -47,5 +48,6 @@ Un `computed()` ou une fonction pure n'a pas besoin de `TestBed` du tout : on l'
 directement, et le test est instantané. On réserve `TestBed` au rendu réel du template. Le
 [guide de test Angular](https://angular.dev/guide/testing) couvre les deux approches.
 
-> Le zoneless simplifie les tests : on n'attend plus une magie invisible, on attend une
-> **stabilité explicite**. Un test qui passe veut alors dire ce qu'il prétend dire.
+> Le zoneless simplifie les tests : au lieu de dépendre du mécanisme implicite de `zone.js`,
+> chaque test demande une **stabilité explicite**. Un test qui passe veut alors dire ce
+> qu'il prétend dire.

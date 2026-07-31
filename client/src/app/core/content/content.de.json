@@ -181,6 +181,30 @@
   ],
   "articles": [
     {
+      "slug": "universe-map-moteur-eclipses",
+      "tag": "ANGULAR",
+      "title": "Eine 3D-Karte des Universums, geprüft an der Sonnenfinsternis vom 12. August 2026",
+      "reads": "612 Aufrufe",
+      "ago": "vor 3 Stunden",
+      "readTime": "10 min",
+      "accentColor": "#a2261c",
+      "symbol": "◐",
+      "date": "2026-07-30",
+      "description": "Angular 21 + Three.js: kontinuierlicher Zoom über fünf Größenordnungen, 10.000 HYG-Sterne in einem einzigen Draw Call, lokal berechnete Ephemeriden und eine Finsternis-Engine, deren Zentralpunkt vom 12. August 2026 gegen die Bessel-Elemente des NASA GSFC geprüft wird."
+    },
+    {
+      "slug": "ngsharp-moteur-templates-interprete",
+      "tag": ".NET",
+      "title": "Interpretieren statt kompilieren: eine Template-Engine für .NET",
+      "reads": "1,1k Aufrufe",
+      "ago": "vor 1 Tag",
+      "readTime": "9 min",
+      "accentColor": "#b4451c",
+      "symbol": "{{ }}",
+      "date": "2026-07-30",
+      "description": "Eine Template-Engine im Angular-Stil für .NET, interpretiert und ohne Abhängigkeiten: erstes Rendering in Mikrosekunden, Native-AOT-kompatibel, Benchmarks mit byte-identischer Ausgabe."
+    },
+    {
       "slug": "moteur-doom-software-webgpu",
       "tag": "ANGULAR",
       "title": "Eine DOOM-artige Engine im Browser, mit drei Backends",
@@ -244,7 +268,7 @@
       "accentColor": "#a2261c",
       "symbol": "⟐",
       "date": "2026-03-28",
-      "description": "Die reaktiven Primitives von Angular 21 für Async — ohne manuelles subscribe.",
+      "description": "Die reaktiven Primitives von Angular 21 für Async, ohne manuelles subscribe.",
       "series": "angular-21-en-pratique",
       "seriesOrder": 2
     },
@@ -258,7 +282,7 @@
       "accentColor": "#1c7e4a",
       "symbol": ">_",
       "date": "2026-03-12",
-      "description": "Build, Tests und kontinuierliches Deployment nach Azure über GitHub Actions — Secrets, Umgebungen und Leitplanken inklusive.",
+      "description": "Build, Tests und kontinuierliches Deployment nach Azure über GitHub Actions: Secrets, Umgebungen und Leitplanken inklusive.",
       "series": "azure-devops-de-zero",
       "seriesOrder": 2
     },

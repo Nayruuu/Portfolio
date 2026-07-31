@@ -1,23 +1,23 @@
-For years, Angular relied on **zone.js** to know when to re-run change detection: a monkey
-patch over every async browser API. It works, but it's an expensive black box. Since Angular
-21, you can drop it entirely with `provideZonelessChangeDetection()` and let **signals**
-drive reactivity instead.
+For years, Angular relied on **zone.js** to know when to re-trigger change detection: a
+monkey-patch of every asynchronous browser API. It works, but it's an expensive black box.
+Since Angular 21, you can do without it entirely with `provideZonelessChangeDetection()` and
+let **signals** drive reactivity.
 
-## Why ditch zone.js
+## Why get rid of zone.js
 
 zone.js intercepts `setTimeout`, promises, DOM events, and triggers a **global** detection
-cycle every time. On a large app, you re-check thousands of bindings when only three
-changed. Zoneless flips the logic: **nothing** re-renders until a signal read in the template
-has notified its change.
+cycle every time. On a large app, you end up checking thousands of bindings when only three
+actually changed. Zoneless mode flips the logic: **nothing** re-renders until a signal read
+in the template has notified its change.
 
-- lighter bundle: you remove a ~100 kB dependency
-- readable stack traces: no more `zone.run` frames everywhere
-- targeted detection: only the components that depend on the changed signal get marked
+Along the way, the bundle loses a ~100 KB dependency. Stack traces become readable again,
+without `zone.run` frames interleaved at every level. And detection becomes targeted: only
+the components that depend on the modified signal get marked.
 
-## Enabling zoneless
+## Enabling zoneless mode
 
-It all happens in the application config. You remove `provideZoneChangeDetection` and wire
-the zoneless provider:
+Activation happens in the application configuration. You remove
+`provideZoneChangeDetection` and wire in the zoneless provider:
 
 ```typescript
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -33,9 +33,9 @@ bootstrapApplication(AppComponent, {
 
 ### Thinking in fine-grained reactivity
 
-Once zoneless, **all state must be a signal** or the template stops updating. You replace
-mutable fields with `signal()`, derived values with `computed()`, and side effects with
-`effect()`:
+Once zoneless, **all state must be a signal** or the template will stop updating. You
+replace mutable fields with `signal()`, derived values with `computed()`, and side effects
+with `effect()`:
 
 ```typescript
 @Component({
@@ -51,13 +51,16 @@ export class CartComponent {
 }
 ```
 
-## Gotchas to know
+## Pitfalls to know about
 
 Legacy code that does `setTimeout(() => this.value = x)` **without** going through a signal
-will no longer refresh the view. Same for RxJS subscriptions: you either use `toSignal()` or
-call `signal.set()` inside the `subscribe`. On the test side, switch Vitest to zoneless and
-replace `fakeAsync`/`tick` with `await fixture.whenStable()`. The official docs cover each
-case in the [zoneless guide](https://angular.dev/guide/zoneless).
+will no longer refresh the view. Same for RxJS subscriptions: you need either `toSignal()`,
+or to call `signal.set()` inside the `subscribe`.
 
-> Zoneless doesn't magically make an app faster. It makes reactivity **explicit**: you know
-> exactly why something re-renders, and that's what changes everything when debugging.
+On the testing side, you switch Vitest to zoneless and replace `fakeAsync`/`tick` with
+`await fixture.whenStable()`. The official docs cover every case in the
+[zoneless guide](https://angular.dev/guide/zoneless).
+
+> Zoneless doesn't magically speed up an app. The gain shows up when debugging: reactivity
+> has become **explicit**, and you know exactly which signal triggered each re-render of the
+> view.

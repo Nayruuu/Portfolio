@@ -1,7 +1,7 @@
-Un historique Git propre n'est pas de la coquetterie : c'est ce qui rend une revue lisible et
-un `git bisect` efficace. Le rebase interactif (`git rebase -i`) est l'outil pour réécrire une
-branche avant de la pousser — fusionner, renommer, réordonner, supprimer des commits. Voici
-comment le manier sans se brûler.
+Un historique Git propre rend une revue lisible et un `git bisect` efficace. Le rebase
+interactif (`git rebase -i`) est l'outil pour réécrire une branche avant de la pousser :
+fusionner, renommer, réordonner, supprimer des commits. Voici comment le manier sans casser
+de branche partagée.
 
 ## Ouvrir le todo
 
@@ -9,10 +9,10 @@ comment le manier sans se brûler.
 éditables. On vise généralement les N derniers commits de la branche courante.
 
 ```bash
-# Réécrire les 4 derniers commits
+# Rewrite the last 4 commits
 git rebase -i HEAD~4
 
-# Ou : tout ce qui sépare ma branche de main
+# Or: everything between my branch and main
 git rebase -i main
 ```
 
@@ -30,12 +30,12 @@ pick 1j2k3l4 wip
 
 - `reword` (`r`) : garder le commit mais réécrire son message.
 - `squash` (`s`) : fusionner dans le commit précédent en **conservant** les deux messages.
-- `fixup` (`f`) : comme squash, mais **jeter** le message du commit fusionné — parfait pour
+- `fixup` (`f`) : comme squash, mais **jeter** le message du commit fusionné, parfait pour
   un « wip » ou une correction de typo.
 - `edit` (`e`) : s'arrêter sur le commit pour modifier le code ou le découper.
 - `drop` (`d`) : supprimer le commit entièrement.
 
-Réordonner se fait simplement en **déplaçant les lignes**. Voici le todo précédent nettoyé :
+Réordonner se fait en **déplaçant les lignes**. Voici le todo précédent nettoyé :
 
 ```bash
 pick a1b2c3d Ajoute le service de panier
@@ -61,11 +61,14 @@ git rebase -i --autosquash main
 ## La règle d'or
 
 **Ne jamais rebaser un historique partagé.** Le rebase **réécrit** les commits : leurs SHA
-changent. Si la branche est déjà sur le dépôt distant et que des collègues l'ont récupérée,
-votre `git push --force` divergera de leur copie et provoquera des conflits désagréables. On
-rebase donc uniquement une branche **locale**, pas encore poussée — ou une branche dont on est
-le seul propriétaire, avec un `git push --force-with-lease` qui refuse d'écraser un travail
-inattendu.
+changent.
+
+Si la branche est déjà sur le dépôt distant et que des collègues l'ont récupérée, votre
+`git push --force` divergera de leur copie et provoquera des conflits désagréables.
+
+On rebase donc uniquement une branche **locale**, pas encore poussée. Ou une branche dont on
+est le seul propriétaire, avec un `git push --force-with-lease` qui refuse d'écraser un
+travail inattendu.
 
 ## Récupérer après une erreur
 
@@ -82,5 +85,5 @@ On retrouve la branche exactement telle qu'elle était avant le rebase. La doc d
 le [manuel git-rebase](https://git-scm.com/docs/git-rebase).
 
 > Le rebase interactif réécrit l'histoire pour la rendre **racontable** : un commit = une idée,
-> un message clair. Garde-le pour le local, sécurise tes pushs avec `--force-with-lease`, et
-> souviens-toi que le reflog est ton filet.
+> un message clair. Gardez-le pour le local, sécurisez vos pushs avec `--force-with-lease`, et
+> souvenez-vous que le reflog est votre filet de sécurité.

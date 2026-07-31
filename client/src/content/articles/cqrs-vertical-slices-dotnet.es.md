@@ -1,32 +1,31 @@
-En cuanto alguien pronuncia **CQRS**, muchos equipos sacan la artillería pesada: event
-sourcing, un bus de mensajes, dos bases de datos. Sin embargo, CQRS es ante todo una idea
-modesta — **separar las lecturas de las escrituras** — que se puede aplicar sin ninguna
-parafernalia, organizando el código por **vertical slices**.
+Muchos equipos asocian **CQRS** con el event sourcing, los buses de mensajes, las bases de
+datos separadas. La idea de partida es, sin embargo, modesta: **separar las lecturas de las
+escrituras**. Se aplica sin complicaciones innecesarias, organizando el código por
+**vertical slices**.
 
 ## Dividir por funcionalidad, no por capa
 
 La arquitectura en capas fragmenta una funcionalidad en cinco carpetas: `Controllers`,
-`Services`, `Repositories`, `DTOs`, `Validators`. Para entender «crear una orden», hay que
+`Services`, `Repositories`, `DTOs`, `Validators`. Para entender «crear un pedido», hay que
 saltar de archivo en archivo. La **vertical slice** invierte la lógica: una carpeta por
-funcionalidad, todo lo que la concierne en el mismo lugar.
+funcionalidad, todo lo relacionado con ella en el mismo lugar.
 
 ```bash
 Features/
   Orders/
-    CreateOrder.cs      # commande + handler + validateur
-    GetOrderById.cs     # requête + handler
+    CreateOrder.cs      # command + handler + validator
+    GetOrderById.cs     # query + handler
     ListOrders.cs
 ```
 
-Cada slice es autónoma. Se lee de arriba a abajo, se elimina sin efectos secundarios, y dos
-slices solo comparten el dominio — nunca un «servicio» cajón de sastre.
+Cada slice es autónoma: se lee de arriba abajo y se elimina sin efectos secundarios.
+Dos slices solo comparten el dominio, nunca un «servicio» genérico.
 
 ## Comando y consulta, dos intenciones distintas
 
-Un **comando** modifica el estado y devuelve (idealmente) solo un identificador. Una
-**consulta** no lee nada más que lo que la vista necesita, a menudo cortocircuitando el
-dominio para proyectar directamente hacia un DTO. Modelarlos por separado clarifica la
-intención:
+Un **comando** modifica el estado y devuelve (idealmente) solo un identificador. Una **consulta**
+no lee nada más que lo que la vista necesita, a menudo evitando el dominio para
+proyectar directamente hacia un DTO. Modelarlos por separado clarifica la intención:
 
 ```csharp
 public sealed record CreateOrder(Guid CustomerId, IReadOnlyList<LineItem> Items)
@@ -46,13 +45,13 @@ public sealed class CreateOrderHandler(AppDbContext db)
 }
 ```
 
-El handler permanece **delgado**: orquesta, no razona. La lógica de negocio vive en
-`Order.Create`, no en el handler — de lo contrario, simplemente habremos movido el «servicio»
-a otro archivo.
+El handler se mantiene **delgado**: orquesta, sin razonar. La lógica de negocio vive en
+`Order.Create`, no en el handler. De lo contrario, solo hemos trasladado el «servicio» a otro
+archivo.
 
 ## El mediador, opcional
 
-A menudo se ve CQRS asociado a [MediatR](https://github.com/jbogard/MediatR). El mediador
+A menudo se ve CQRS pegado a [MediatR](https://github.com/jbogard/MediatR). El mediador
 desacopla el endpoint del handler y ofrece un punto de enganche para los **pipeline behaviors**
 (validación, logging, transacción). Es práctico, pero **no** es CQRS: se puede perfectamente
 inyectar el handler directamente.
@@ -66,17 +65,19 @@ group.MapPost("/", async (CreateOrder command, ISender sender) =>
 });
 ```
 
-Si la aplicación es pequeña, omitir el mediador y llamar al handler directamente sigue siendo
-perfectamente legítimo — menos indirección, menos magia.
+Si la aplicación es pequeña, saltarse el mediador y llamar al handler a mano sigue siendo
+legítimo: se elimina una capa de indirección y la magia que la acompaña.
 
 ## No sobrediseñar
 
-La pregunta que hay que hacerse en cada slice: **¿realmente necesito esto?** Bases de datos
-separadas, proyecciones asíncronas, event sourcing — son respuestas a problemas de escala
-precisos (lecturas masivamente superiores a las escrituras, auditoría inmutable). Sin ese
-problema, solo añaden latencia y bugs de coherencia. El buen CQRS, en el 90 % de los casos,
-es: comandos y consultas distintos, un único `DbContext`, slices legibles.
+La pregunta que hay que hacerse en cada slice: **¿realmente necesito esto?** Bases separadas,
+proyecciones asíncronas, event sourcing responden a problemas de escala precisos (lecturas
+muy superiores a las escrituras, auditoría inmutable). Sin ese problema, solo añaden
+latencia y bugs de coherencia.
 
-> CQRS no es una arquitectura, es una **disciplina de nomenclatura**. Separa las intenciones,
-> mantén los handlers delgados, y no añadas un bus de mensajes hasta el día en que una métrica
-> te obligue a ello.
+El buen CQRS, en el 90 % de los casos: comandos y consultas distintos, un solo
+`DbContext`, slices legibles.
+
+> CQRS es una **disciplina de nomenclatura** antes que una arquitectura. Separa las
+> intenciones, mantén los handlers delgados, y añade un bus de mensajes solo el día en que una
+> métrica te obligue a ello.

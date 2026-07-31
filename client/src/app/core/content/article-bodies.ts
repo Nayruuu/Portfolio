@@ -70,6 +70,10 @@ import moteurDoomSoftwareWebgpuDe from '../../../content/articles/moteur-doom-so
 import moteurDoomSoftwareWebgpuEn from '../../../content/articles/moteur-doom-software-webgpu.en.md';
 import moteurDoomSoftwareWebgpuEs from '../../../content/articles/moteur-doom-software-webgpu.es.md';
 import moteurDoomSoftwareWebgpuFr from '../../../content/articles/moteur-doom-software-webgpu.fr.md';
+import ngsharpMoteurTemplatesInterpreteDe from '../../../content/articles/ngsharp-moteur-templates-interprete.de.md';
+import ngsharpMoteurTemplatesInterpreteEn from '../../../content/articles/ngsharp-moteur-templates-interprete.en.md';
+import ngsharpMoteurTemplatesInterpreteEs from '../../../content/articles/ngsharp-moteur-templates-interprete.es.md';
+import ngsharpMoteurTemplatesInterpreteFr from '../../../content/articles/ngsharp-moteur-templates-interprete.fr.md';
 import opentelemetryObservabiliteDotnetDe from '../../../content/articles/opentelemetry-observabilite-dotnet.de.md';
 import opentelemetryObservabiliteDotnetEn from '../../../content/articles/opentelemetry-observabilite-dotnet.en.md';
 import opentelemetryObservabiliteDotnetEs from '../../../content/articles/opentelemetry-observabilite-dotnet.es.md';
@@ -86,133 +90,34 @@ import tutoGitRebaseInteractifDe from '../../../content/articles/tuto-git-rebase
 import tutoGitRebaseInteractifEn from '../../../content/articles/tuto-git-rebase-interactif.en.md';
 import tutoGitRebaseInteractifEs from '../../../content/articles/tuto-git-rebase-interactif.es.md';
 import tutoGitRebaseInteractifFr from '../../../content/articles/tuto-git-rebase-interactif.fr.md';
+import universeMapMoteurEclipsesDe from '../../../content/articles/universe-map-moteur-eclipses.de.md';
+import universeMapMoteurEclipsesEn from '../../../content/articles/universe-map-moteur-eclipses.en.md';
+import universeMapMoteurEclipsesEs from '../../../content/articles/universe-map-moteur-eclipses.es.md';
+import universeMapMoteurEclipsesFr from '../../../content/articles/universe-map-moteur-eclipses.fr.md';
 
 /** slug → raw Markdown body per language. Single source for render + prerender. */
 export const ARTICLE_BODIES: Record<string, Record<Lang, string>> = {
-  'angular-defer-control-flow': {
-    de: angularDeferControlFlowDe,
-    en: angularDeferControlFlowEn,
-    es: angularDeferControlFlowEs,
-    fr: angularDeferControlFlowFr,
-  },
-  'angular-resource-httpresource': {
-    de: angularResourceHttpresourceDe,
-    en: angularResourceHttpresourceEn,
-    es: angularResourceHttpresourceEs,
-    fr: angularResourceHttpresourceFr,
-  },
-  'angular-signalstore-ngrx': {
-    de: angularSignalstoreNgrxDe,
-    en: angularSignalstoreNgrxEn,
-    es: angularSignalstoreNgrxEs,
-    fr: angularSignalstoreNgrxFr,
-  },
-  'angular-ssg-azure-static-web-apps': {
-    de: angularSsgAzureStaticWebAppsDe,
-    en: angularSsgAzureStaticWebAppsEn,
-    es: angularSsgAzureStaticWebAppsEs,
-    fr: angularSsgAzureStaticWebAppsFr,
-  },
-  'angular-zoneless-signals': {
-    de: angularZonelessSignalsDe,
-    en: angularZonelessSignalsEn,
-    es: angularZonelessSignalsEs,
-    fr: angularZonelessSignalsFr,
-  },
-  'azure-container-apps-dotnet': {
-    de: azureContainerAppsDotnetDe,
-    en: azureContainerAppsDotnetEn,
-    es: azureContainerAppsDotnetEs,
-    fr: azureContainerAppsDotnetFr,
-  },
-  'azure-key-vault-managed-identity': {
-    de: azureKeyVaultManagedIdentityDe,
-    en: azureKeyVaultManagedIdentityEn,
-    es: azureKeyVaultManagedIdentityEs,
-    fr: azureKeyVaultManagedIdentityFr,
-  },
-  'cqrs-vertical-slices-dotnet': {
-    de: cqrsVerticalSlicesDotnetDe,
-    en: cqrsVerticalSlicesDotnetEn,
-    es: cqrsVerticalSlicesDotnetEs,
-    fr: cqrsVerticalSlicesDotnetFr,
-  },
-  'docker-multistage-dotnet-angular': {
-    de: dockerMultistageDotnetAngularDe,
-    en: dockerMultistageDotnetAngularEn,
-    es: dockerMultistageDotnetAngularEs,
-    fr: dockerMultistageDotnetAngularFr,
-  },
-  'dotnet-grpc-microservices': {
-    de: dotnetGrpcMicroservicesDe,
-    en: dotnetGrpcMicroservicesEn,
-    es: dotnetGrpcMicroservicesEs,
-    fr: dotnetGrpcMicroservicesFr,
-  },
-  'dotnet-source-generators': {
-    de: dotnetSourceGeneratorsDe,
-    en: dotnetSourceGeneratorsEn,
-    es: dotnetSourceGeneratorsEs,
-    fr: dotnetSourceGeneratorsFr,
-  },
-  'etrangler-le-monolithe-dotnet': {
-    de: etranglerLeMonolitheDotnetDe,
-    en: etranglerLeMonolitheDotnetEn,
-    es: etranglerLeMonolitheDotnetEs,
-    fr: etranglerLeMonolitheDotnetFr,
-  },
-  'flutter-firebase-offline-first': {
-    de: flutterFirebaseOfflineFirstDe,
-    en: flutterFirebaseOfflineFirstEn,
-    es: flutterFirebaseOfflineFirstEs,
-    fr: flutterFirebaseOfflineFirstFr,
-  },
-  'flutter-melos-monorepo': {
-    de: flutterMelosMonorepoDe,
-    en: flutterMelosMonorepoEn,
-    es: flutterMelosMonorepoEs,
-    fr: flutterMelosMonorepoFr,
-  },
-  'flutter-riverpod-architecture': {
-    de: flutterRiverpodArchitectureDe,
-    en: flutterRiverpodArchitectureEn,
-    es: flutterRiverpodArchitectureEs,
-    fr: flutterRiverpodArchitectureFr,
-  },
-  'minimal-api-ef-core-dotnet8': {
-    de: minimalApiEfCoreDotnet8De,
-    en: minimalApiEfCoreDotnet8En,
-    es: minimalApiEfCoreDotnet8Es,
-    fr: minimalApiEfCoreDotnet8Fr,
-  },
-  'moteur-doom-software-webgpu': {
-    de: moteurDoomSoftwareWebgpuDe,
-    en: moteurDoomSoftwareWebgpuEn,
-    es: moteurDoomSoftwareWebgpuEs,
-    fr: moteurDoomSoftwareWebgpuFr,
-  },
-  'opentelemetry-observabilite-dotnet': {
-    de: opentelemetryObservabiliteDotnetDe,
-    en: opentelemetryObservabiliteDotnetEn,
-    es: opentelemetryObservabiliteDotnetEs,
-    fr: opentelemetryObservabiliteDotnetFr,
-  },
-  'pipeline-cicd-github-actions-azure': {
-    de: pipelineCicdGithubActionsAzureDe,
-    en: pipelineCicdGithubActionsAzureEn,
-    es: pipelineCicdGithubActionsAzureEs,
-    fr: pipelineCicdGithubActionsAzureFr,
-  },
-  'tester-angular-zoneless-vitest': {
-    de: testerAngularZonelessVitestDe,
-    en: testerAngularZonelessVitestEn,
-    es: testerAngularZonelessVitestEs,
-    fr: testerAngularZonelessVitestFr,
-  },
-  'tuto-git-rebase-interactif': {
-    de: tutoGitRebaseInteractifDe,
-    en: tutoGitRebaseInteractifEn,
-    es: tutoGitRebaseInteractifEs,
-    fr: tutoGitRebaseInteractifFr,
-  },
+  'angular-defer-control-flow': { de: angularDeferControlFlowDe, en: angularDeferControlFlowEn, es: angularDeferControlFlowEs, fr: angularDeferControlFlowFr },
+  'angular-resource-httpresource': { de: angularResourceHttpresourceDe, en: angularResourceHttpresourceEn, es: angularResourceHttpresourceEs, fr: angularResourceHttpresourceFr },
+  'angular-signalstore-ngrx': { de: angularSignalstoreNgrxDe, en: angularSignalstoreNgrxEn, es: angularSignalstoreNgrxEs, fr: angularSignalstoreNgrxFr },
+  'angular-ssg-azure-static-web-apps': { de: angularSsgAzureStaticWebAppsDe, en: angularSsgAzureStaticWebAppsEn, es: angularSsgAzureStaticWebAppsEs, fr: angularSsgAzureStaticWebAppsFr },
+  'angular-zoneless-signals': { de: angularZonelessSignalsDe, en: angularZonelessSignalsEn, es: angularZonelessSignalsEs, fr: angularZonelessSignalsFr },
+  'azure-container-apps-dotnet': { de: azureContainerAppsDotnetDe, en: azureContainerAppsDotnetEn, es: azureContainerAppsDotnetEs, fr: azureContainerAppsDotnetFr },
+  'azure-key-vault-managed-identity': { de: azureKeyVaultManagedIdentityDe, en: azureKeyVaultManagedIdentityEn, es: azureKeyVaultManagedIdentityEs, fr: azureKeyVaultManagedIdentityFr },
+  'cqrs-vertical-slices-dotnet': { de: cqrsVerticalSlicesDotnetDe, en: cqrsVerticalSlicesDotnetEn, es: cqrsVerticalSlicesDotnetEs, fr: cqrsVerticalSlicesDotnetFr },
+  'docker-multistage-dotnet-angular': { de: dockerMultistageDotnetAngularDe, en: dockerMultistageDotnetAngularEn, es: dockerMultistageDotnetAngularEs, fr: dockerMultistageDotnetAngularFr },
+  'dotnet-grpc-microservices': { de: dotnetGrpcMicroservicesDe, en: dotnetGrpcMicroservicesEn, es: dotnetGrpcMicroservicesEs, fr: dotnetGrpcMicroservicesFr },
+  'dotnet-source-generators': { de: dotnetSourceGeneratorsDe, en: dotnetSourceGeneratorsEn, es: dotnetSourceGeneratorsEs, fr: dotnetSourceGeneratorsFr },
+  'etrangler-le-monolithe-dotnet': { de: etranglerLeMonolitheDotnetDe, en: etranglerLeMonolitheDotnetEn, es: etranglerLeMonolitheDotnetEs, fr: etranglerLeMonolitheDotnetFr },
+  'flutter-firebase-offline-first': { de: flutterFirebaseOfflineFirstDe, en: flutterFirebaseOfflineFirstEn, es: flutterFirebaseOfflineFirstEs, fr: flutterFirebaseOfflineFirstFr },
+  'flutter-melos-monorepo': { de: flutterMelosMonorepoDe, en: flutterMelosMonorepoEn, es: flutterMelosMonorepoEs, fr: flutterMelosMonorepoFr },
+  'flutter-riverpod-architecture': { de: flutterRiverpodArchitectureDe, en: flutterRiverpodArchitectureEn, es: flutterRiverpodArchitectureEs, fr: flutterRiverpodArchitectureFr },
+  'minimal-api-ef-core-dotnet8': { de: minimalApiEfCoreDotnet8De, en: minimalApiEfCoreDotnet8En, es: minimalApiEfCoreDotnet8Es, fr: minimalApiEfCoreDotnet8Fr },
+  'moteur-doom-software-webgpu': { de: moteurDoomSoftwareWebgpuDe, en: moteurDoomSoftwareWebgpuEn, es: moteurDoomSoftwareWebgpuEs, fr: moteurDoomSoftwareWebgpuFr },
+  'ngsharp-moteur-templates-interprete': { de: ngsharpMoteurTemplatesInterpreteDe, en: ngsharpMoteurTemplatesInterpreteEn, es: ngsharpMoteurTemplatesInterpreteEs, fr: ngsharpMoteurTemplatesInterpreteFr },
+  'opentelemetry-observabilite-dotnet': { de: opentelemetryObservabiliteDotnetDe, en: opentelemetryObservabiliteDotnetEn, es: opentelemetryObservabiliteDotnetEs, fr: opentelemetryObservabiliteDotnetFr },
+  'pipeline-cicd-github-actions-azure': { de: pipelineCicdGithubActionsAzureDe, en: pipelineCicdGithubActionsAzureEn, es: pipelineCicdGithubActionsAzureEs, fr: pipelineCicdGithubActionsAzureFr },
+  'tester-angular-zoneless-vitest': { de: testerAngularZonelessVitestDe, en: testerAngularZonelessVitestEn, es: testerAngularZonelessVitestEs, fr: testerAngularZonelessVitestFr },
+  'tuto-git-rebase-interactif': { de: tutoGitRebaseInteractifDe, en: tutoGitRebaseInteractifEn, es: tutoGitRebaseInteractifEs, fr: tutoGitRebaseInteractifFr },
+  'universe-map-moteur-eclipses': { de: universeMapMoteurEclipsesDe, en: universeMapMoteurEclipsesEn, es: universeMapMoteurEclipsesEs, fr: universeMapMoteurEclipsesFr },
 };

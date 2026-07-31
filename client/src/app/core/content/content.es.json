@@ -181,6 +181,30 @@
   ],
   "articles": [
     {
+      "slug": "universe-map-moteur-eclipses",
+      "tag": "ANGULAR",
+      "title": "Un mapa 3D del Universo, verificado con el eclipse del 12 de agosto de 2026",
+      "reads": "612 lecturas",
+      "ago": "hace 3 horas",
+      "readTime": "10 min",
+      "accentColor": "#a2261c",
+      "symbol": "◐",
+      "date": "2026-07-30",
+      "description": "Angular 21 + Three.js: zoom continuo sobre cinco órdenes de magnitud, 10 000 estrellas HYG en una sola draw call, efemérides calculadas localmente y un motor de eclipses cuyo punto central del 12 de agosto de 2026 se contrasta con los elementos besselianos del NASA GSFC."
+    },
+    {
+      "slug": "ngsharp-moteur-templates-interprete",
+      "tag": ".NET",
+      "title": "Interpretar en vez de compilar: un motor de plantillas para .NET",
+      "reads": "1,1k lecturas",
+      "ago": "hace 1 día",
+      "readTime": "9 min",
+      "accentColor": "#b4451c",
+      "symbol": "{{ }}",
+      "date": "2026-07-30",
+      "description": "Un motor de plantillas al estilo Angular para .NET, interpretado y sin dependencias: primer renderizado en microsegundos, compatible con Native AOT, benchmarks con salida idéntica byte a byte."
+    },
+    {
       "slug": "moteur-doom-software-webgpu",
       "tag": "ANGULAR",
       "title": "Un motor estilo DOOM en el navegador, con tres backends",
@@ -258,7 +282,7 @@
       "accentColor": "#1c7e4a",
       "symbol": ">_",
       "date": "2026-03-12",
-      "description": "Build, tests y despliegue continuo hacia Azure desde GitHub Actions — secrets, entornos y salvaguardas incluidos.",
+      "description": "Build, tests y despliegue continuo hacia Azure desde GitHub Actions: secrets, entornos y salvaguardas incluidos.",
       "series": "azure-devops-de-zero",
       "seriesOrder": 2
     },

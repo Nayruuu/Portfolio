@@ -1,5 +1,5 @@
 Quand une requête traverse trois services et qu'elle est lente, les logs seuls ne disent pas
-**où**. L'observabilité moderne repose sur trois signaux corrélés — traces, métriques, logs —
+**où**. L'observabilité moderne repose sur trois signaux corrélés (traces, métriques, logs),
 et **OpenTelemetry** en est le standard vendor-neutral : on instrumente une fois, on exporte
 vers n'importe quel backend (Jaeger, Prometheus, Azure Monitor) sans réécrire le code.
 
@@ -8,8 +8,10 @@ vers n'importe quel backend (Jaeger, Prometheus, Azure Monitor) sans réécrire 
 OpenTelemetry unifie les trois piliers de l'observabilité. Les **traces** suivent une requête
 de bout en bout via une suite de spans corrélés par un `trace_id`. Les **métriques** agrègent
 des compteurs et histogrammes (taux de requêtes, latence p95). Les **logs** apportent le
-contexte textuel, désormais rattaché au `trace_id` courant. .NET expose nativement ces
-concepts via `System.Diagnostics.Activity` (les spans) et `System.Diagnostics.Metrics`.
+contexte textuel, désormais rattaché au `trace_id` courant.
+
+.NET expose nativement ces concepts via `System.Diagnostics.Activity` (les spans) et
+`System.Diagnostics.Metrics`.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -30,9 +32,11 @@ builder.Services.AddOpenTelemetry()
 
 L'**auto-instrumentation** couvre gratuitement l'essentiel : `AddAspNetCoreInstrumentation`
 crée un span par requête entrante, `AddHttpClientInstrumentation` propage le contexte sur les
-appels sortants — la corrélation inter-services se fait toute seule via les en-têtes
-`traceparent` du standard W3C. Pour la logique métier, on ajoute des **spans manuels** afin de
-mesurer une opération précise et d'y attacher des attributs métier.
+appels sortants. La corrélation inter-services se fait toute seule via les en-têtes
+`traceparent` du standard W3C.
+
+Pour la logique métier, on ajoute des **spans manuels** afin de mesurer une opération précise
+et d'y attacher des attributs métier.
 
 ```csharp
 private static readonly ActivitySource Source = new("SuperDev.Orders");
@@ -58,8 +62,10 @@ Les attributs (`SetTag`) transforment une trace en outil de debug : on filtre pa
 **OTLP** (OpenTelemetry Protocol) est le format de transport commun. Plutôt que d'exporter
 directement vers un backend, on envoie tout au **Collector** : un processus intermédiaire qui
 reçoit, transforme (batching, échantillonnage, filtrage des attributs sensibles) et redistribue
-vers une ou plusieurs destinations. L'app ne connaît qu'**un** endpoint ; changer de backend
-devient une modification de config côté Collector, pas un redéploiement.
+vers une ou plusieurs destinations.
+
+L'app ne connaît qu'**un** endpoint ; changer de backend devient une modification de config
+côté Collector, pas un redéploiement.
 
 ```yaml
 receivers:

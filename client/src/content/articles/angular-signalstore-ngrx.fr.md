@@ -37,9 +37,9 @@ immuable et notifie les signals concernés.
 
 ## Des sélecteurs qui sont des signals
 
-`store.total` et `store.count` ne sont pas des fonctions à appeler dans le service : ce sont
-des `computed`, donc des signals à part entière. Dans un composant, on les lit comme
-n'importe quel signal, et le change detection zoneless ne re-rend que ce qui en dépend.
+`store.total` et `store.count` sont des `computed`, donc des signals à part entière, pas des
+fonctions de service à appeler. Dans un composant, on les lit comme n'importe quel signal, et
+le change detection zoneless ne re-rend que ce qui en dépend.
 
 ```typescript
 export class CartBadge {
@@ -63,8 +63,8 @@ pattern stale-while-revalidate.
 
 ## Store ou simple signal ?
 
-Tout n'a pas besoin d'un store. Un état **local** à un composant — un onglet actif, l'ouverture
-d'un menu — reste un `signal()` privé : un store y ajouterait de l'indirection inutile. Le
+Tout n'a pas besoin d'un store. Un état **local** à un composant (un onglet actif, l'ouverture
+d'un menu) reste un `signal()` privé : un store y ajouterait de l'indirection inutile. Le
 SignalStore se justifie quand l'état est :
 
 - **partagé** entre plusieurs composants ou routes ;
@@ -75,6 +75,6 @@ La règle pratique : commence avec des signals locaux, extrais un store le jour 
 même état dans un deuxième composant. La doc couvre chaque feature dans le
 [guide SignalStore](https://ngrx.io/guide/signals/signal-store).
 
-> Le SignalStore n'est pas le NgRx « actions partout » d'hier. C'est une façade de signals :
-> lecture seule en sortie, méthodes en entrée, zéro reducer. Tu gardes la discipline d'un store
-> sans payer son cérémonial.
+> Le SignalStore est une façade de signals : lecture seule en sortie, méthodes en entrée, zéro
+> reducer. Tu gardes la discipline d'un store sans le cérémonial du NgRx « actions partout »
+> d'hier.

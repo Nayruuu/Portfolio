@@ -1,12 +1,12 @@
 **Minimal APIs** haben einen schlechten Ruf: Man hält sie für reine Wegwerf-Demos.
-Tatsächlich liefern sie mit etwas Disziplin eine .NET 8-API, die lesbarer und testbarer
-ist als ein klassischer Controller — sofern man nicht alles in `Program.cs` stopft.
+Tatsächlich liefern sie mit etwas Disziplin eine .NET-8-API, die lesbarer und testbarer
+ist als ein klassischer Controller, sofern man nicht alles in `Program.cs` stopft.
 
 ## Strukturierung mit Route Groups
 
 Die Anfängerfalle besteht darin, dreißig `app.MapGet`-Aufrufe in `Program.cs` zu stapeln. Die
-Lösung lässt sich in einem Wort zusammenfassen: **`MapGroup`**. Jede Ressource erhält ihre eigene
-Gruppe mit Präfix, Filtern und Metadaten, definiert in einer dedizierten Extension-Methode:
+Lösung heißt **`MapGroup`**. Jede Ressource erhält ihre eigene Gruppe mit Präfix, Filtern
+und Metadaten, definiert in einer dedizierten Extension-Methode:
 
 ```csharp
 public static class TodoEndpoints
@@ -29,13 +29,13 @@ public static class TodoEndpoints
 }
 ```
 
-Das `Program.cs` reduziert sich dann auf `app.MapTodos();` — ein Einstiegspunkt pro Ressource,
+Das `Program.cs` reduziert sich dann auf `app.MapTodos();`: ein Einstiegspunkt pro Ressource,
 der Rest lebt in kohärenten Dateien.
 
 ## DbContext und Migrationen
 
 EF Core bleibt das Rückgrat des Datenzugriffs. Der `DbContext` wird über `AddDbContext`
-registriert, das Modell in `OnModelCreating` definiert, und **vor allem** lässt man das Schema
+registriert, das Modell in `OnModelCreating` definiert, und vor allem lässt man das Schema
 niemals manuell driften: Jede Änderung durchläuft eine versionierte Migration.
 
 ```csharp
@@ -44,9 +44,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 ```
 
 Die Migration wird anschließend mit `dotnet ef migrations add InitialCreate` generiert und
-beim Start mit `db.Database.MigrateAsync()` angewendet — niemals `EnsureCreated`, das die
-gesamte History umgeht. Die offizielle Dokumentation beschreibt den Workflow im
-[guide EF Core migrations](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/).
+beim Start mit `db.Database.MigrateAsync()` angewendet, niemals mit `EnsureCreated`, das die
+gesamte Historie umgeht. Die offizielle Dokumentation beschreibt den Workflow im
+[Leitfaden zu EF-Core-Migrationen](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/).
 
 ## Typisierte Ergebnisse und Validierung
 
@@ -62,7 +62,7 @@ private static async Task<Results<Created<Todo>, ValidationProblem>> CreateAsync
     {
         return TypedResults.ValidationProblem(new Dictionary<string, string[]>
         {
-            ["title"] = ["Le titre est obligatoire."],
+            ["title"] = ["Der Titel ist erforderlich."],
         });
     }
 
@@ -75,17 +75,19 @@ private static async Task<Results<Created<Todo>, ValidationProblem>> CreateAsync
 }
 ```
 
-Der Rückgabetyp `Results<Created<Todo>, ValidationProblem>` ist **selbstdokumentierend**: Keine
-redundanten `[ProducesResponseType]`-Attribute erforderlich.
+Der Rückgabetyp `Results<Created<Todo>, ValidationProblem>` ist **selbstdokumentierend**: keine
+redundanten `[ProducesResponseType]`-Attribute nötig.
 
 ## Alles testbar halten
 
 Sobald die Handler als statische Methoden extrahiert sind, die ihre Abhängigkeiten als Parameter
 erhalten, lassen sie sich trivial **ohne HTTP-Server** testen: Man instanziiert einen
 `AppDbContext` mit dem In-Memory- oder SQLite-Provider, ruft den Handler auf und inspiziert das
-`TypedResults`. Für End-to-End-Integrationstests lädt `WebApplicationFactory<T>` die vollständige
-Anwendung im Speicher und ermöglicht das Aufrufen der echten Endpunkte.
+`TypedResults`.
+
+Für End-to-End-Integrationstests lädt `WebApplicationFactory<T>` die vollständige Anwendung im
+Speicher und ermöglicht das Aufrufen der echten Endpunkte.
 
 > Eine Minimal API ist keine minderwertige API. Gut in Gruppen und typisierte Ergebnisse
-> aufgeteilt, bietet sie **weniger Boilerplate für mehr Garantien** — und genau das erwartet man
+> aufgeteilt, bietet sie **weniger Boilerplate für mehr Garantien**, und das erwartet man
 > von einem modernen Framework.

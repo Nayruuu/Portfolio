@@ -1,10 +1,19 @@
-Un secreto en un `appsettings.json` es un secreto en Git, y por tanto un secreto comprometido. La respuesta idiomática en Azure: **Key Vault** para almacenar los secretos, **Managed Identity** para acceder a ellos sin la más mínima contraseña. Al final, su configuración ya no contiene ninguna cadena sensible.
+Un secreto escrito en `appsettings.json` termina en el historial de Git, por lo tanto comprometido. La
+solución idiomática en Azure: **Key Vault** para almacenar los secretos, **Managed Identity**
+para acceder a ellos sin contraseña. Una vez conectados ambos, tu configuración ya no
+contiene ninguna cadena sensible.
 
-## El muro de autenticación… que desaparece
+## El muro de autenticación que desaparece
 
-El problema clásico: para leer un secreto en Key Vault, la API debe autenticarse — pero ¿dónde guardar el identificador que sirve para leer los identificadores? La **Managed Identity** rompe este círculo. Azure asigna una identidad a su recurso (Container App, App Service, VM); la plataforma inyecta y rota los tokens. No existe ninguna clave en el código.
+El problema clásico: para leer un secreto en Key Vault, la API debe autenticarse, y
+el identificador que sirve para leer los identificadores debe estar guardado en algún sitio. La
+**Managed Identity** rompe este círculo. Azure asigna una identidad a tu recurso
+(Container App, App Service, VM); la plataforma inyecta y rota los tokens. No existe
+ninguna clave del lado del código.
 
-En el lado .NET, `DefaultAzureCredential` encadena varias fuentes de autenticación y selecciona la primera que responde — de ahí la portabilidad entre el equipo local de desarrollo y la nube.
+Del lado de .NET, `DefaultAzureCredential` encadena varias fuentes de autenticación y
+selecciona la primera que responde. Esto es lo que hace que el mismo código sea portable entre
+la máquina de desarrollo y la nube.
 
 ```csharp
 using Azure.Identity;
@@ -20,7 +29,9 @@ KeyVaultSecret secret = await client.GetSecretAsync("Db--ConnectionString");
 
 ## Key Vault como proveedor de configuración
 
-En lugar de llamar al `SecretClient` manualmente, conecte Key Vault directamente al sistema de configuración de ASP.NET Core. Todos los secretos se convierten en entradas de configuración ordinarias, fusionadas con `appsettings.json` y las variables de entorno.
+En lugar de llamar al `SecretClient` manualmente, conecta Key Vault directamente al
+sistema de configuración de ASP.NET Core. Todos los secretos se convierten en entradas de configuración
+ordinarias, fusionadas con `appsettings.json` y las variables de entorno.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -29,15 +40,19 @@ builder.Configuration.AddAzureKeyVault(
     new Uri("https://kv-super-dev.vault.azure.net/"),
     new DefaultAzureCredential());
 
-// El secreto "Db--ConnectionString" alimenta Db:ConnectionString
+// The "Db--ConnectionString" secret feeds Db:ConnectionString
 var cs = builder.Configuration["Db:ConnectionString"];
 ```
 
-La convención de nomenclatura importa: Key Vault prohíbe el `:`, por lo que se usa `--` en el nombre del secreto, traducido automáticamente al separador de sección. `Db--ConnectionString` se convierte en `Db:ConnectionString`, exactamente como en el resto de su configuración tipada.
+La convención de nomenclatura importa: Key Vault prohíbe los `:`, así que se usa `--` en el nombre
+del secreto, traducido automáticamente en separador de sección. `Db--ConnectionString` se convierte
+en `Db:ConnectionString`, exactamente igual que en el resto de tu configuración tipada.
 
 ## RBAC en lugar de las access policies
 
-Key Vault ofrece dos modelos de autorización. Prefiera el **RBAC de Azure**, más granular y auditable que las antiguas access policies. Otorgue a la identidad administrada el rol **Key Vault Secrets User** (solo lectura de secretos), nada más:
+Key Vault propone dos modelos de autorización. Prefiere el **RBAC de Azure**, más granular y
+auditable que las antiguas access policies. Otorga a la identidad administrada el rol
+**Key Vault Secrets User** (solo lectura de secretos), nada más:
 
 ```bash
 az role assignment create \
@@ -47,12 +62,20 @@ az role assignment create \
   --scope "/subscriptions/$SUB/resourceGroups/rg-super-dev/providers/Microsoft.KeyVault/vaults/kv-super-dev"
 ```
 
-El `$PRINCIPAL_ID` es el `objectId` de la identidad administrada, recuperable tras su activación en el recurso. El principio de **mínimo privilegio** se aplica: un servicio que solo lee secretos nunca debe poseer el rol `Key Vault Secrets Officer`.
+El `$PRINCIPAL_ID` es el `objectId` de la identidad administrada, recuperable tras su activación en
+el recurso. El principio del **mínimo privilegio** se aplica: un servicio que solo lee
+secretos nunca debe tener el rol `Key Vault Secrets Officer`.
 
-## Dev local vs nube, sin cambiar una línea
+## Desarrollo local vs nube, sin cambiar una línea
 
-Esta es la ventaja de `DefaultAzureCredential`: en producción obtiene el token de la identidad administrada; en su equipo local, cambia a la identidad de la **Azure CLI** (`az login`) o de Visual Studio. El **mismo código** funciona en todas partes, siempre que su cuenta también disponga del rol `Key Vault Secrets User`. La
+Esa es la ventaja de `DefaultAzureCredential`: en producción, obtiene el token de
+la identidad administrada; en tu máquina, cambia a la identidad de la **Azure CLI**
+(`az login`) o de Visual Studio.
+
+El **mismo código** funciona en todas partes, con una condición: tu cuenta también debe tener el
+rol `Key Vault Secrets User`. La
 [documentación de Key Vault + identidad administrada](https://learn.microsoft.com/azure/key-vault/general/authentication)
 detalla el orden exacto de la cadena de autenticación y su ajuste fino.
 
-> El mejor secreto es aquel que nunca hay que manipular. Con Managed Identity, la rotación la gestiona Azure, y su repositorio Git vuelve a ser lo que siempre debió haber sido: **público sin riesgo**.
+> El mejor secreto es el que nunca hay que manipular. Con Managed Identity, la rotación
+> la gestiona Azure, y tu repositorio Git puede ser **público sin peligro**.

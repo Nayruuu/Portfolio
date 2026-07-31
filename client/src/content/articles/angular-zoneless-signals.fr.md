@@ -1,5 +1,5 @@
 Pendant des années, Angular s'est appuyé sur **zone.js** pour savoir quand redéclencher le
-change detection : un patch monkey de toutes les API asynchrones du navigateur. Ça marche,
+change detection : un monkey-patch de toutes les API asynchrones du navigateur. Ça marche,
 mais c'est une boîte noire coûteuse. Depuis Angular 21, on peut s'en passer entièrement avec
 `provideZonelessChangeDetection()` et laisser les **signals** piloter la réactivité.
 
@@ -10,14 +10,14 @@ détection **global** à chaque fois. Sur une grosse app, on vérifie des millie
 alors que trois ont changé. Le mode zoneless inverse la logique : **rien** ne se redessine
 tant qu'un signal lu dans le template n'a pas notifié son changement.
 
-- bundle plus léger : on supprime une dépendance de ~100 ko
-- traces de pile lisibles : plus de frames `zone.run` partout
-- détection ciblée : seuls les composants qui dépendent du signal modifié sont marqués
+Au passage, le bundle perd une dépendance de ~100 ko. Les traces de pile redeviennent
+lisibles, sans frames `zone.run` intercalées à chaque niveau. Et la détection devient
+ciblée : seuls les composants qui dépendent du signal modifié sont marqués.
 
 ## Activer le mode zoneless
 
-Tout se joue dans la configuration de l'application. On retire `provideZoneChangeDetection`
-et on branche le provider zoneless :
+L'activation se fait dans la configuration de l'application. On retire
+`provideZoneChangeDetection` et on branche le provider zoneless :
 
 ```typescript
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -55,10 +55,12 @@ export class CartComponent {
 
 Le code legacy qui fait `setTimeout(() => this.value = x)` **sans** passer par un signal ne
 rafraîchira plus la vue. Idem pour les souscriptions RxJS : il faut soit `toSignal()`, soit
-appeler `signal.set()` dans le `subscribe`. Côté tests, on bascule Vitest en zoneless et on
-remplace les `fakeAsync`/`tick` par `await fixture.whenStable()`. La doc officielle détaille
-chaque cas dans le [guide zoneless](https://angular.dev/guide/zoneless).
+appeler `signal.set()` dans le `subscribe`.
 
-> Le zoneless ne rend pas une app magiquement plus rapide. Il rend la réactivité
-> **explicite** : tu sais exactement pourquoi quelque chose se redessine, et c'est ça
-> qui change tout en debug.
+Côté tests, on bascule Vitest en zoneless et on remplace les `fakeAsync`/`tick` par
+`await fixture.whenStable()`. La doc officielle détaille chaque cas dans le
+[guide zoneless](https://angular.dev/guide/zoneless).
+
+> Le zoneless n'accélère pas une app par magie. Le gain se voit en debug : la réactivité
+> est devenue **explicite**, et on sait exactement quel signal a provoqué chaque redessin
+> de la vue.

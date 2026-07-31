@@ -1,8 +1,9 @@
-Der neue Control Flow von Angular ersetzt nicht einfach nur `*ngIf` und `*ngFor` durch eine schönere Syntax. In Kombination mit `@defer` verändert er, was im initialen Bundle landet: Beim Start wird nur das JavaScript ausgeliefert, das für das erste Rendering tatsächlich benötigt wird, der Rest kommt bei Bedarf.
+Angular hat `*ngIf` und `*ngFor` durch einen neuen Control Flow ersetzt, der zusammen mit `@defer` ausgeliefert wird.
+Diese Kombination ändert, was im initialen Bundle landet: Beim Start wird nur das JavaScript ausgeliefert, das für den ersten Render tatsächlich benötigt wird, der Rest kommt bei Bedarf nach.
 
 ## @if, @for, @switch
 
-Die `@`-Syntax ist in den Compiler integriert: kein Direktiven-Import erforderlich, und ein **obligatorisches** `track` bei `@for`, das dazu zwingt, über die Identität der Elemente nachzudenken. Dieses `track` verhindert, dass das DOM bei jeder Listenänderung komplett neu erstellt wird.
+Die `@`-Syntax ist in den Compiler integriert: kein Directive-Import, und ein **verpflichtendes** `track` bei `@for`, das dazu zwingt, über die Identität der Elemente nachzudenken. Genau dieses `track` verhindert, dass bei jeder Listenänderung alles im DOM neu erzeugt wird.
 
 ```typescript
 @if (user(); as currentUser) {
@@ -24,11 +25,11 @@ Die `@`-Syntax ist in den Compiler integriert: kein Direktiven-Import erforderli
 }
 ```
 
-Der `@empty`-Block von `@for` und das erschöpfende `@case` von `@switch` decken Fälle ab, die bei strukturellen Direktiven oft vergessen wurden.
+Der `@empty`-Block von `@for` und der erschöpfende `@case` von `@switch` decken Fälle ab, die man bei den strukturellen Directives häufig vergaß.
 
-## @defer : Später laden
+## @defer: später laden
 
-`@defer` umschließt einen Template-Abschnitt, dessen Code aus dem Haupt-Bundle herausgelöst und als **separater Chunk** geladen wird, wenn es an der Zeit ist. Der Auslöser entscheidet wann: `on viewport` lädt, wenn der Block in den sichtbaren Bereich eintritt, `on interaction` beim ersten Klick/Fokus, `on idle` wenn der Browser inaktiv ist, `on hover` oder `on timer`.
+`@defer` umschließt einen Template-Ausschnitt, dessen Code aus dem Hauptbundle herausgelöst und als **separater Chunk** zum gewünschten Zeitpunkt geladen wird. Der Trigger entscheidet, wann: `on viewport` lädt, wenn der Block ins Bild scrollt, `on interaction` beim ersten Klick/Fokus, `on idle`, wenn der Browser untätig ist, `on hover` oder `on timer`.
 
 ```typescript
 @defer (on viewport) {
@@ -42,18 +43,23 @@ Der `@empty`-Block von `@for` und das erschöpfende `@case` von `@switch` decken
 }
 ```
 
-### Die Hilfsblöcke
+### Die Nebenblöcke
 
-- `@placeholder` : wird **vor** jeder Auslösung gerendert; er kann den Trigger `on viewport`/`on interaction` tragen. Das `minimum` verhindert ein zu kurzes Aufblitzen.
-- `@loading` : während des Chunk-Ladevorgangs; `after` verzögert die Anzeige, um auf schnellen Verbindungen kein Flackern zu erzeugen.
-- `@error` : wenn der Chunk nicht geladen werden kann (z. B. bei unterbrochener Verbindung).
+- `@placeholder`: wird **vor** jeder Auslösung gerendert, er kann den Trigger `on viewport`/`on interaction` tragen. Das `minimum` verhindert ein zu kurzes Aufflackern.
+- `@loading`: während des Ladens des Chunks; `after` verzögert dessen Anzeige, damit es bei einer schnellen Verbindung nicht flackert.
+- `@error`: falls der Chunk nicht lädt (z. B. bei unterbrochenem Netzwerk).
 
-Mit `prefetch on hover` kann man außerdem vorladen, ohne etwas anzuzeigen, damit der Klick sofort reagiert, ohne den Start zu belasten.
+Man kann auch vorab laden, ohne anzuzeigen, mit `prefetch on hover`, damit der Klick sofort wirkt, ohne den Start zu belasten.
 
 ## Die Auswirkung auf das Bundle
 
-Jede Komponente, Direktive oder Pipe, die **ausschließlich** in einem `@defer`-Block verwendet wird, wird in einen eigenen Chunk extrahiert. Eine schwere Seite – Code-Editor, Diagramme, Karte – kann so 100 bis 200 KB aus dem initialen Bundle herauslösen, die nur heruntergeladen werden, wenn der Nutzer bis dorthin scrollt. Der Gewinn ist direkt am **Largest Contentful Paint** und an der Time to Interactive messbar. Die Dokumentation beschreibt jeden Auslöser im Detail im [Leitfaden zum verzögerten Laden](https://angular.dev/guide/templates/defer).
+Jede Komponente, Directive oder Pipe, die **ausschließlich** in einem `@defer`-Block verwendet wird, wird in ihren eigenen Chunk extrahiert.
 
-Achtung jedoch: Ein `@defer (on viewport)`, der oberhalb der Falz platziert ist, wird sofort ausgelöst und bringt nichts. Verzögertes Laden ergibt nur Sinn für Inhalte, die **außerhalb des sichtbaren Bereichs** oder bedingt sind.
+Eine schwergewichtige Seite (Code-Editor, Diagramme, Karte) kann so 100 bis 200 kB aus dem initialen Bundle herausnehmen, die nur heruntergeladen werden, wenn der Nutzer bis dorthin scrollt. Der Gewinn zeigt sich direkt am **Largest Contentful Paint** und an der Zeit bis zur Interaktivität.
 
-> Der Control Flow macht die Absicht lesbar, `@defer` macht die Kosten explizit. Anstatt alles „auf Verdacht" zu laden, deklarierst du, wann jedes Stück sein JavaScript verdient – und der Start wird von selbst leichter.
+Die Doku beschreibt jeden Trigger im Detail im
+[Guide zum verzögerten Laden](https://angular.dev/guide/templates/defer).
+
+Vorsicht jedoch: Ein `@defer (on viewport)`, der oberhalb der Sichtbarkeitsgrenze platziert ist, löst sofort aus und bringt nichts. Das verzögerte Laden ergibt nur Sinn für das, was **außerhalb des Bildschirms** oder bedingt ist.
+
+> Der Control Flow macht die Absicht lesbar, und `@defer` hängt jedem Template-Stück explizite Kosten an. Statt alles „sicherheitshalber“ zu laden, legt man fest, wann jeder Block sein JavaScript verdient, und der Start wird leichter.

@@ -1,8 +1,17 @@
-Reflexion hat einen Preis, den man im schlechtesten Moment zahlt: beim Start und im heißen Pfad, im Produktionscode. **Source Generators** verlagern diese Arbeit ans andere Ende des Zyklus — in die **Kompilierung**. Der Generator liest Ihren Code, erzeugt weiteren, und der Compiler bindet ihn in die Assembly ein, als hätten Sie ihn von Hand geschrieben.
+Reflection hat einen Preis, den man im ungünstigsten Moment bezahlt: beim Start und im
+laufenden Betrieb, im Produktionscode. **Source Generators** verlagern diese Arbeit ans andere
+Ende des Zyklus, zur **Kompilierzeit**. Der Generator liest Ihren Code, erzeugt daraus neuen,
+und der Compiler nimmt ihn in die Assembly auf, als hätten Sie ihn von Hand geschrieben.
 
-## Inkrementell, nicht die alte API
+## Incremental, nicht die alte API
 
-Die erste Generation von Generatoren (`ISourceGenerator`) lief bei jedem Tastendruck vollständig durch und ruinierte die IDE-Erfahrung. Die richtige API heute ist **`IIncrementalGenerator`**: Sie baut eine gecachte Pipeline auf, in der nur geänderte Eingaben neu berechnet werden. Die Kompilierung wird in zwei Schritten gefiltert — ein schnelles **syntaktisches** Prädikat, dann eine aufwändigere **semantische** Transformation.
+Die erste Welle von Generatoren (`ISourceGenerator`) lief bei jedem Tastendruck komplett neu
+durch und ruinierte das Arbeiten in der IDE.
+
+Die richtige API ist heute **`IIncrementalGenerator`**: Sie baut eine gecachte Pipeline auf, in
+der nur geänderte Eingaben neu berechnet werden. Die Kompilierung wird in zwei Schritten
+gefiltert, zuerst mit einem schnellen **syntaktischen** Prädikat, dann mit einer teureren
+**semantischen** Transformation.
 
 ```csharp
 [Generator]
@@ -20,11 +29,13 @@ public sealed class ServiceRegistrationGenerator : IIncrementalGenerator
 }
 ```
 
-Das `static` auf den Lambdas ist kein Stilmittel: Es stellt sicher, dass keine Capture das Pipeline-Caching unterbricht.
+Das `static` auf den Lambdas garantiert, dass kein Capture das Caching der Pipeline aushebelt.
 
-## Ein konkretes Beispiel: DI-Registrierung
+## Ein konkreter Fall: DI-Registrierung
 
-Das klassische Szenario: Eine Klasse mit einem `[RegisterScoped]`-Attribut markieren und den Generator den entsprechenden `AddScoped`-Aufruf erzeugen lassen. Kein `Program.cs`, das mit jedem Service länger wird, kein Assembly-Scan per Reflexion beim Start.
+Das klassische Szenario: eine Klasse mit dem Attribut `[RegisterScoped]` markieren und den
+Generator den passenden `AddScoped`-Aufruf erzeugen lassen. Die `Program.cs` wächst nicht mehr
+mit jedem Service, und der Assembly-Scan per Reflection beim Start entfällt.
 
 ```csharp
 private static void Emit(SourceProductionContext context, ImmutableArray<string> types)
@@ -48,26 +59,43 @@ private static void Emit(SourceProductionContext context, ImmutableArray<string>
 }
 ```
 
-`Program.cs` beschränkt sich dann auf ein `builder.Services.AddGenerated();`. Der Code ist **sichtbar**, debuggbar, und der Compiler validiert ihn wie alles andere.
+Die `Program.cs` beschränkt sich dann auf ein `builder.Services.AddGenerated();`. Der Code ist
+**sichtbar**, lässt sich debuggen, und der Compiler validiert ihn wie den Rest.
 
-## Diagnostics: Warnen, nicht abstürzen
+## Diagnosen zurückmelden
 
-Ein guter Generator beschränkt sich nicht darauf, Code auszugeben: Er **leitet** den Autor an. Anstatt ungültiges C# zu erzeugen, wenn das Attribut falsch platziert ist, wird ein **Diagnostic** ausgegeben, das die IDE als nativen Warning oder Fehler genau an der richtigen Stelle in der Quelldatei anzeigt.
+Ein guter Generator leitet auch den Autor an. Statt ungültiges C# zu erzeugen, wenn das
+Attribut falsch gesetzt ist, meldet man eine **Diagnose** zurück, die die IDE wie eine native
+Warnung oder einen nativen Fehler anzeigt, genau an der richtigen Stelle der Quelldatei.
 
 ```csharp
 private static readonly DiagnosticDescriptor MustBeConcrete = new(
     id: "MYAPP001",
     title: "Type non instanciable",
-    messageFormat: "'{0}' est abstrait ou statique et ne peut pas être enregistré en DI",
+    messageFormat: "'{0}' ist abstrakt oder statisch und kann nicht registriert werden",
     category: "DependencyInjection",
     DiagnosticSeverity.Error,
     isEnabledByDefault: true);
 ```
 
-Dieses Diagnostic wird über `context.ReportDiagnostic(...)` ausgegeben, sobald der Fall erkannt wird, und der Fehler erscheint **im Editor**, unterstrichen unter dem fehlerhaften Typ — ohne jemals die Ausführung zu erreichen.
+Diese Diagnose wird über `context.ReportDiagnostic(...)` ausgegeben, sobald der Fall erkannt
+wird, und der Fehler erscheint **im Editor**, unterstrichen unter dem fehlerhaften Typ, ohne je
+die Ausführung zu erreichen.
 
-## Build-Zeit gegen Reflexion
+## Build-Time gegen Reflection
 
-Der Vorteil geht weit über Performance hinaus. Ein Fehler — ein vergessener Service, ein nicht aufgelöster Typ — taucht **zur Kompilierung** auf, nicht bei der ersten Anfrage in der Produktion. Der generierte Code liegt vor Ihren Augen (aktivieren Sie `EmitCompilerGeneratedFiles`, um ihn zu inspizieren), ist trimmbar und **AOT/Native**-kompatibel — genau dort, wo Reflexion den Linker stolpern lässt. Das ist exakt die Richtung, die das Ökosystem einschlägt: `System.Text.Json`, Logging und ASP.NET-Optionen migrieren zu Generatoren. Das offizielle Tutorial beschreibt die Pipeline in der [doc Roslyn source generators](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview).
+Der Nutzen geht weit über die Performance hinaus. Ein Fehler (ein vergessener Service, ein
+nicht aufgelöster Typ) taucht **beim Kompilieren** auf, nicht bei der ersten Anfrage in der
+Produktion.
 
-> Ein Source Generator ist **ehrliche** Metaprogrammierung: keine Magie zur Laufzeit, nur Code, den Sie von Hand geschrieben hätten — aber den der Compiler für Sie schreibt und dabei gleich überprüft.
+Der generierte Code liegt vor Ihren Augen: Aktivieren Sie `EmitCompilerGeneratedFiles`, um ihn
+zu inspizieren. Er ist trimmbar und **AOT/Native**-kompatibel, dort wo Reflection den Linker
+stolpern lässt.
+
+Genau diese Richtung schlägt das Ökosystem ein: `System.Text.Json`, das Logging und die
+ASP.NET-Optionen wandern zu Generatoren. Das offizielle Tutorial beschreibt die Pipeline in der
+[Roslyn-Doku zu Source Generators](https://learn.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview).
+
+> Ein Source Generator erzeugt den Code, den Sie von Hand geschrieben hätten, nur schreibt ihn
+> der Compiler und prüft ihn dabei: Die Metaprogrammierung findet beim Kompilieren statt, ohne
+> Magie zur Laufzeit.

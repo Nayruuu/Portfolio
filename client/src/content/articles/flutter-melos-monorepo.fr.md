@@ -1,8 +1,8 @@
 Un produit Flutter sérieux n'est jamais un seul package : il y a l'app mobile, un design
 system, un client API, peut-être un module de fonctionnalité par équipe. Les garder dans des
-dépôts séparés transforme chaque changement transverse en valse de `pub publish` et de bumps
-de version. **Melos** gère ce monorepo Dart/Flutter : un dépôt, plusieurs packages, des
-commandes qui s'exécutent partout d'un coup.
+dépôts séparés impose, pour chaque changement transverse, une suite de `pub publish` et de
+bumps de version dans le bon ordre. **Melos** gère ce monorepo Dart/Flutter : un dépôt,
+plusieurs packages, des commandes qui s'exécutent partout d'un coup.
 
 ## Découper en packages
 
@@ -48,16 +48,16 @@ scripts:
 ```
 
 `melos exec` lance une commande dans chaque package ; les filtres comme `--dir-exists=test` ou
-`--diff` ciblent un sous-ensemble — par exemple **uniquement les packages modifiés** depuis la
+`--diff` ciblent un sous-ensemble : par exemple **uniquement les packages modifiés** depuis la
 branche principale, ce qui accélère beaucoup la CI.
 
 ## Bootstrap et liaison
 
 `melos bootstrap` (ou `melos bs`) est la commande clé : elle installe les dépendances de tous
-les packages **et** résout les dépendances de chemin entre eux. Plus de `flutter pub get`
-manuel package par package, plus de versions désynchronisées. On l'exécute après chaque
-`git clone` et après tout changement de `pubspec.yaml`. La [documentation de
-Melos](https://melos.invertase.dev/) décrit chaque filtre et chaque hook.
+les packages **et** résout les dépendances de chemin entre eux. Plus besoin de lancer
+`flutter pub get` package par package ni de resynchroniser les versions à la main. On
+l'exécute après chaque `git clone` et après tout changement de `pubspec.yaml`. La
+[documentation de Melos](https://melos.invertase.dev/) décrit chaque filtre et chaque hook.
 
 ## Versioning et CI
 
@@ -71,9 +71,8 @@ ce qui en dépend, de façon cohérente.
 - `melos run test` → tests sur tout le graphe
 - `melos version` → bumps + changelogs depuis les commits
 
-En CI, l'enchaînement type est `bootstrap`, puis `analyze`, puis `test` — souvent restreint aux
+En CI, l'enchaînement type est `bootstrap`, puis `analyze`, puis `test`, souvent restreint aux
 packages modifiés via `--diff=origin/main` pour ne pas rejouer l'ensemble à chaque push.
 
-> Un monorepo n'est pas qu'un rangement de dossiers : c'est la promesse qu'un changement
-> transverse reste **un seul commit, un seul build, une seule revue**. Melos fait tenir cette
-> promesse pour Flutter.
+> L'intérêt d'un monorepo se mesure sur un changement transverse : **un seul commit, un seul
+> build, une seule revue**. Melos rend ce fonctionnement tenable pour Flutter.

@@ -1,8 +1,14 @@
-Ein ernstzunehmendes Flutter-Produkt ist nie ein einzelnes Package: Da ist die mobile App, ein Design System, ein API-Client, vielleicht ein Feature-Modul pro Team. Sie in getrennten Repos zu halten, verwandelt jede übergreifende Änderung in einen Reigen aus `pub publish` und Versions-Bumps. **Melos** verwaltet dieses Dart/Flutter-Monorepo: ein Repo, mehrere Packages, Befehle, die überall auf einmal laufen.
+Ein ernsthaftes Flutter-Produkt ist nie ein einziges Package: Es gibt die Mobile-App, ein Design
+System, einen API-Client, vielleicht ein Feature-Modul pro Team. Sie in separaten
+Repositories zu halten, erzwingt bei jeder übergreifenden Änderung eine Abfolge von `pub publish` und
+Versions-Bumps in der richtigen Reihenfolge. **Melos** verwaltet dieses Dart/Flutter-Monorepo: ein Repository,
+mehrere Packages, Befehle, die überall auf einmal ausgeführt werden.
 
 ## In Packages aufteilen
 
-Die Packages werden in einem Ordner (oft `packages/`) abgelegt und im Root deklariert. Jedes behält seine eigene `pubspec.yaml`; die App referenziert die anderen als **Pfadabhängigkeiten**, und Melos verknüpft alles lokal:
+Man ordnet die Packages unter einem Ordner an (oft `packages/`) und deklariert sie im Root.
+Jedes behält seine eigene `pubspec.yaml`; die App referenziert die anderen als
+**Path-Dependencies**, und Melos verknüpft alles lokal:
 
 ```dart
 // packages/feature_auth/lib/feature_auth.dart
@@ -18,11 +24,14 @@ class AuthRepository {
 }
 ```
 
-Die Grenze zwischen Packages wird zur **Architekturgrenze**: `feature_auth` hängt von `core_api` ab, nie umgekehrt. Der Abhängigkeitsgraph ist explizit, überprüfbar und bricht die Kompilierung, sobald er verletzt wird.
+Die Grenze zwischen Packages wird zu einer **Architekturgrenze**: `feature_auth` hängt
+von `core_api` ab, niemals umgekehrt. Der Abhängigkeitsgraph ist explizit, überprüfbar und
+bricht den Build, sobald man dagegen verstößt.
 
-## Die melos.yaml-Datei
+## Die Datei melos.yaml
 
-Der Kern der Konfiguration deklariert die Packages und wiederverwendbare **Scripts**, die über den gesamten Graphen ausgeführt werden:
+Der Kern der Konfiguration deklariert die Packages und wiederverwendbare **Scripts**, die auf
+dem gesamten Graphen ausgeführt werden:
 
 ```yaml
 name: my_app
@@ -35,24 +44,36 @@ scripts:
     run: melos exec -- dart analyze .
   test:
     run: melos exec --dir-exists=test -- flutter test
-    description: Lance les tests de chaque package qui en a.
+    description: Führt die Tests jedes Packages aus, das welche hat.
 ```
 
-`melos exec` führt einen Befehl in jedem Package aus; Filter wie `--dir-exists=test` oder `--diff` zielen auf eine Teilmenge ab — beispielsweise **nur die seit dem Hauptbranch geänderten Packages**, was die CI erheblich beschleunigt.
+`melos exec` führt einen Befehl in jedem Package aus; Filter wie `--dir-exists=test` oder
+`--diff` zielen auf eine Teilmenge ab: zum Beispiel **nur die geänderten Packages** seit dem
+Hauptbranch, was die CI erheblich beschleunigt.
 
 ## Bootstrap und Verknüpfung
 
-`melos bootstrap` (oder `melos bs`) ist der Schlüsselbefehl: Er installiert die Abhängigkeiten aller Packages **und** löst die Pfadabhängigkeiten zwischen ihnen auf. Kein manuelles `flutter pub get` Package für Package, keine desynchronisierten Versionen mehr. Man führt ihn nach jedem `git clone` und nach jeder Änderung an `pubspec.yaml` aus. Die [Melos-Dokumentation](https://melos.invertase.dev/) beschreibt jeden Filter und jeden Hook.
+`melos bootstrap` (oder `melos bs`) ist der Schlüsselbefehl: Er installiert die Abhängigkeiten aller
+Packages **und** löst die Path-Dependencies zwischen ihnen auf. Man muss `flutter pub get`
+nicht mehr Package für Package ausführen und die Versionen nicht mehr von Hand
+resynchronisieren. Man führt ihn nach jedem `git clone` und nach jeder Änderung einer
+`pubspec.yaml` aus. Die
+[Dokumentation von Melos](https://melos.invertase.dev/) beschreibt jeden Filter und jeden Hook.
 
 ## Versionierung und CI
 
-Melos setzt auf **Conventional Commits**: `melos version` liest die Historie, berechnet den Bump für jedes betroffene Package, aktualisiert die `CHANGELOG.md` und propagiert die neuen Versionen an abhängige Packages. Ein `fix:` in `core_api` erhöht `core_api` **und** alles, was davon abhängt, konsistent.
+Melos stützt sich auf **Conventional Commits**: `melos version` liest die Historie, berechnet
+den Bump jedes betroffenen Packages, aktualisiert die `CHANGELOG.md` und propagiert die neuen
+Versionen an die abhängigen Packages. Ein `fix:` in `core_api` erhöht `core_api` **und** alles,
+was davon abhängt, konsistent.
 
 - `melos bootstrap` → installiert und verknüpft alles
 - `melos run analyze` → statische Analyse überall
 - `melos run test` → Tests über den gesamten Graphen
 - `melos version` → Bumps + Changelogs aus den Commits
 
-In der CI ist die typische Abfolge `bootstrap`, dann `analyze`, dann `test` — oft auf die geänderten Packages via `--diff=origin/main` beschränkt, um nicht bei jedem Push alles erneut durchzuführen.
+In der CI ist die typische Abfolge `bootstrap`, dann `analyze`, dann `test`, oft beschränkt auf die
+geänderten Packages via `--diff=origin/main`, um nicht bei jedem Push alles neu durchzuspielen.
 
-> Ein Monorepo ist nicht nur eine Ordnerstruktur: Es ist das Versprechen, dass eine übergreifende Änderung **ein einziger Commit, ein einziger Build, ein einziges Review** bleibt. Melos hält dieses Versprechen für Flutter.
+> Der Nutzen eines Monorepos zeigt sich bei einer übergreifenden Änderung: **ein einziger Commit, ein
+> einziger Build, ein einziges Review**. Melos macht diese Arbeitsweise für Flutter tragfähig.

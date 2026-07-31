@@ -1,14 +1,13 @@
-The moment someone says **CQRS**, many teams roll out the heavy artillery: event sourcing,
-a message bus, two databases. Yet CQRS starts as a modest idea — **separate reads from
-writes** — that you can apply without any ceremony at all, by organizing code into
-**vertical slices**.
+Many teams associate **CQRS** with event sourcing, message buses, separate databases. Yet the
+original idea is modest: **separate reads from writes**. It applies without over-engineering,
+by organizing code into **vertical slices**.
 
-## Slice by feature, not by layer
+## Split by feature, not by layer
 
-Layered architecture scatters a single feature across five folders: `Controllers`,
-`Services`, `Repositories`, `DTOs`, `Validators`. To understand "create an order" you hop
-from file to file. The **vertical slice** flips it: one folder per feature, everything it
-touches in one place.
+Layered architecture scatters a feature across five folders: `Controllers`,
+`Services`, `Repositories`, `DTOs`, `Validators`. To understand "create an order," you
+jump from file to file. The **vertical slice** flips the logic: one folder per
+feature, everything related to it in the same place.
 
 ```bash
 Features/
@@ -18,14 +17,14 @@ Features/
     ListOrders.cs
 ```
 
-Each slice is self-contained. You read it top to bottom, you delete it without side effects,
-and two slices share only the domain — never a catch-all "service".
+Each slice is self-contained: it reads top to bottom and can be deleted without side effects.
+Two slices share only the domain, never a catch-all "service."
 
-## Command and query, two distinct intents
+## Command and query, two distinct intentions
 
-A **command** changes state and (ideally) returns nothing but an identifier. A **query**
-reads only what the view needs, often bypassing the domain to project straight into a DTO.
-Modeling them separately clarifies intent:
+A **command** changes state and (ideally) returns only an identifier. A **query**
+reads nothing beyond what the view needs, often bypassing the domain to
+project directly into a DTO. Modeling them separately clarifies intent:
 
 ```csharp
 public sealed record CreateOrder(Guid CustomerId, IReadOnlyList<LineItem> Items)
@@ -45,16 +44,16 @@ public sealed class CreateOrderHandler(AppDbContext db)
 }
 ```
 
-The handler stays **thin**: it orchestrates, it doesn't reason. The business logic lives in
-`Order.Create`, not in the handler — otherwise you've just moved the "service" into another
+The handler stays **thin**: it orchestrates, without reasoning. The business logic lives in
+`Order.Create`, not in the handler. Otherwise you've just moved the "service" into another
 file.
 
 ## The mediator, optional
 
-CQRS is often glued to [MediatR](https://github.com/jbogard/MediatR). The mediator decouples
-the endpoint from the handler and offers a hook for **pipeline behaviors** (validation,
-logging, transactions). It's handy, but it is **not** CQRS: you can inject the handler
-directly just as well.
+CQRS is often seen glued to [MediatR](https://github.com/jbogard/MediatR). The mediator
+decouples the endpoint from the handler and offers a hook point for **pipeline behaviors**
+(validation, logging, transaction). It's convenient, but it's **not** CQRS: you can perfectly
+well inject the handler directly.
 
 ```csharp
 group.MapPost("/", async (CreateOrder command, ISender sender) =>
@@ -65,16 +64,19 @@ group.MapPost("/", async (CreateOrder command, ISender sender) =>
 });
 ```
 
-If the application is small, skipping the mediator and calling the handler by hand is
-perfectly legitimate — less indirection, less magic.
+If the application is small, skipping the mediator and calling the handler by hand remains
+legitimate: you remove a layer of indirection and the magic that comes with it.
 
 ## Don't over-engineer
 
-The question to ask on every slice: **do I actually need this?** Separate databases, async
-projections, event sourcing — these are answers to specific scaling problems (reads vastly
-outnumbering writes, an immutable audit trail). Without that problem, they only add latency
-and consistency bugs. Good CQRS, in 90% of cases, is: distinct commands and queries, a single
+The question to ask for every slice: **do I really need this?** Separate databases,
+asynchronous projections, event sourcing address specific scale problems (reads
+massively outnumbering writes, immutable audit trails). Without that problem, they only add
+latency and consistency bugs.
+
+Good CQRS, in 90% of cases: distinct commands and queries, a single
 `DbContext`, readable slices.
 
-> CQRS isn't an architecture, it's a **naming discipline**. Separate the intents, keep the
-> handlers thin, and add a message bus only the day a metric forces your hand.
+> CQRS is a **naming discipline** before it's an architecture. Separate the
+> intentions, keep the handlers thin, and only add a message bus the day a
+> metric forces you to.

@@ -1,14 +1,13 @@
-Shipping the .NET SDK and `node_modules` inside the image you deploy to production means
-shipping 800 MB of tooling that will never run at execution time. **Multi-stage builds**
-separate what compiles from what runs: you end up with a tiny final image containing only what
-the runtime strictly needs.
+Embedding the .NET SDK and `node_modules` in the image you deploy to prod means shipping
+800 MB of tooling that will never be used at runtime. The **multi-stage build** separates what
+compiles from what runs: you get a tiny final image, containing only what's strictly
+necessary at runtime.
 
-## The principle: compile, then throw away
+## The principle: compile then discard
 
-A multi-stage `Dockerfile` declares several `FROM` lines. Each `FROM` opens an isolated stage;
-only the **last** stage becomes the shipped image. You selectively copy the build artefacts
-from a build stage into a runtime stage, and everything else — SDK, sources, caches — is
-discarded.
+A multi-stage `Dockerfile` declares several `FROM`. Each `FROM` opens an isolated stage; only
+the **last** stage becomes the shipped image. You selectively copy artifacts from a build
+stage into a runtime stage, and everything else (SDK, sources, caches) is discarded.
 
 ```bash
 # Stage 1: build the .NET API
@@ -28,24 +27,28 @@ EXPOSE 8080
 ENTRYPOINT ["dotnet", "Api.dll"]
 ```
 
-## Layer caching: order to avoid rebuilding everything
+## Layer cache: ordering to avoid rebuilding everything
 
-Docker caches each instruction and invalidates it the moment an upstream layer changes. Hence
-the golden rule: **copy the dependency files before the source code**. By running `COPY
-*.csproj` then `dotnet restore` **before** copying the rest, the `restore` only re-runs when the
-`.csproj` changes — not on every C# edit. The same logic applies on the Angular side, with
-`package.json` and `npm ci` before the source `COPY`: a code change never re-invalidates the
-dependency install, which cuts build times tenfold.
+Docker caches each instruction and invalidates it as soon as an upstream layer changes. Hence
+the rule: **copy dependency files before source code**.
+
+By doing `COPY *.csproj` then `dotnet restore` **before** copying the rest, the `restore` is
+only replayed if the `.csproj` changes, not on every modification of a C# file.
+
+Same logic on the Angular side with `package.json` and `npm ci` before the `COPY` of the
+sources: a code change never re-invalidates the dependency install, which cuts build times by
+a factor of ten.
 
 ## A tiny final image
 
-The choice of runtime base image makes all the difference. Microsoft's **chiseled** images
-(`aspnet:9.0-noble-chiseled`) strip out the shell, package manager and superfluous binaries:
-smaller attack surface, images often under 110 MB, and execution as a non-root user by default.
-To serve the Angular front end, **nginx alpine** plays the role of the final stage.
+The final weight depends mostly on the runtime base image. Microsoft's **chiseled** images
+(`aspnet:9.0-noble-chiseled`) strip out the shell, package manager, and superfluous binaries:
+reduced attack surface, image often under 110 MB, running as a non-root user by default.
+
+To serve the Angular front end, **nginx alpine** plays the role of final stage.
 
 ```bash
-# Build Angular, then serve it with nginx
+# Build Angular then serve with nginx
 FROM node:22-alpine AS web
 WORKDIR /app
 COPY package*.json ./
@@ -58,13 +61,13 @@ COPY --from=web /app/dist/browser /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 ```
 
-The Angular build produces only static files: no Node runtime is needed in production. You copy
-the `dist/browser` folder into the nginx root and add a `try_files $uri /index.html` to the
-config for the **SPA fallback**.
+The Angular build only produces static files: no Node runtime is needed in prod. You copy
+the `dist/browser` folder into the nginx root and add a `try_files
+$uri /index.html` in the config for the **SPA fallback**.
 
-## Orchestrate locally with Compose
+## Orchestrating locally with Compose
 
-To run the API and front end together during development, a `docker-compose.yml` wires up both
+To run API and front end together during dev, a `docker-compose.yml` wires the two
 services and their network:
 
 ```yaml
@@ -82,8 +85,8 @@ services:
 ```
 
 The [multi-stage build documentation](https://docs.docker.com/build/building/multi-stage/)
-covers targeted builds (`--target build`) and stage sharing, both handy for isolating a test
-stage in the CI pipeline.
+covers targeted builds (`--target build`) and stage sharing, useful for isolating a
+test step in the CI pipeline.
 
-> A production image should contain only what runs. Multi-stage builds make that discipline
-> free: **the SDK stays in the build stage, never in what you deploy**.
+> A prod image should contain only what runs. Multi-stage makes this discipline free:
+> **the SDK stays in the build stage, never in what you deploy**.

@@ -1,6 +1,6 @@
 Sur mobile, la connectivité n'est jamais acquise : métro, ascenseur, avion. Une app
-**offline-first** ne traite pas le hors-ligne comme une erreur, mais comme l'état normal —
-le réseau n'est qu'une optimisation. Avec Flutter et Firebase, c'est presque gratuit.
+**offline-first** traite le hors-ligne comme l'état normal, pas comme une erreur : le réseau
+n'est qu'une optimisation. Avec Flutter et Firebase, c'est presque gratuit.
 
 ## Firestore est offline-first par défaut
 
@@ -23,27 +23,24 @@ au drapeau `hasPendingWrites` exposé dans les métadonnées du snapshot :
 ```dart
 stream.listen((snapshot) {
   final source = snapshot.metadata.hasPendingWrites ? 'local' : 'serveur';
-  // afficher un badge « synchro en cours » tant que source == 'local'
+  // show a "syncing" badge while source == 'local'
 });
 ```
 
 ## Résoudre les conflits
 
-Deux appareils modifient le même document hors-ligne : qui gagne ? Par défaut,
-**last-write-wins**, ce qui peut écraser une donnée. Pour un compteur, on préfère `FieldValue.increment()`
+Deux appareils peuvent modifier le même document hors-ligne. Par défaut, **last-write-wins**,
+ce qui peut écraser une donnée. Pour un compteur, on préfère `FieldValue.increment()`
 (commutatif, donc sans conflit) ; pour le reste, un `updatedAt` en
-`FieldValue.serverTimestamp()` tranche au moment de la synchro.
-
-- compteurs → `increment()`
-- horodatage serveur → `serverTimestamp()`
-- règle métier complexe → une transaction dans une Cloud Function
+`FieldValue.serverTimestamp()` tranche au moment de la synchro. Quand la règle métier est
+plus complexe, une transaction dans une Cloud Function fait l'arbitrage côté serveur.
 
 ## Tester le hors-ligne
 
-On ne teste pas l'offline « au feeling » : `firestore.disableNetwork()` force le mode
-déconnecté dans un test d'intégration, puis `enableNetwork()` rejoue la file. Le
+Le hors-ligne se teste en intégration : `firestore.disableNetwork()` force le mode
+déconnecté, puis `enableNetwork()` rejoue la file. Le
 [guide offline Firestore](https://firebase.google.com/docs/firestore/manage-data/enable-offline)
 documente chaque API.
 
-> L'offline-first, ce n'est pas gérer une panne réseau. C'est concevoir l'app comme si le
-> réseau **n'existait pas**, et laisser la synchro n'être qu'un détail d'implémentation.
+> Une app offline-first est conçue comme si le réseau **n'existait pas**. La synchro n'est
+> alors qu'un détail d'implémentation, pas la gestion d'une panne.

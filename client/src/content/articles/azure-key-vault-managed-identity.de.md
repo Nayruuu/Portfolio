@@ -1,10 +1,19 @@
-Ein Secret in einer `appsettings.json` ist ein Secret in Git und somit ein kompromittiertes Secret. Die idiomatische Antwort auf Azure: **Key Vault** zum Speichern der Secrets, **Managed Identity** für den Zugriff darauf ohne jegliches Passwort. Am Ende enthält Ihre Konfiguration keine einzige sensible Zeichenkette mehr.
+Ein Secret, das in `appsettings.json` geschrieben steht, landet in der Git-Historie und ist damit kompromittiert. Die
+idiomatische Lösung auf Azure: **Key Vault** zum Speichern der Secrets, **Managed Identity**,
+um darauf ohne Passwort zuzugreifen. Sind beide einmal angebunden, enthält Ihre Konfiguration
+keine sensible Zeichenfolge mehr.
 
-## Die Authentifizierungsbarriere… die verschwindet
+## Die Authentifizierungsmauer, die verschwindet
 
-Das klassische Problem: Um ein Secret aus Key Vault zu lesen, muss sich die API authentifizieren – aber wo bewahrt man den Bezeichner auf, der zum Lesen der Bezeichner dient? Die **Managed Identity** durchbricht diesen Kreislauf. Azure weist Ihrer Ressource (Container App, App Service, VM) eine Identität zu; die Plattform injiziert und rotiert die Tokens. Auf der Codeseite existiert kein einziger Schlüssel.
+Das klassische Problem: Um ein Secret in Key Vault zu lesen, muss sich die API authentifizieren, und
+die Zugangsdaten, die zum Lesen der Zugangsdaten dienen, müssen ja auch irgendwo abgelegt sein. Die
+**Managed Identity** durchbricht diesen Kreis. Azure weist Ihrer Ressource eine Identität zu
+(Container App, App Service, VM); die Plattform injiziert und rotiert die Tokens. Auf Code-Seite
+existiert kein einziger Schlüssel.
 
-Auf .NET-Seite verkettet `DefaultAzureCredential` mehrere Authentifizierungsquellen und wählt die erste aus, die antwortet – daher die Portabilität zwischen Entwicklungsrechner und Cloud.
+Auf .NET-Seite verkettet `DefaultAzureCredential` mehrere Authentifizierungsquellen und
+wählt die erste aus, die antwortet. Das macht denselben Code zwischen Dev-Rechner und Cloud
+portabel.
 
 ```csharp
 using Azure.Identity;
@@ -18,9 +27,11 @@ var client = new SecretClient(
 KeyVaultSecret secret = await client.GetSecretAsync("Db--ConnectionString");
 ```
 
-## Key Vault als Konfigurationsprovider
+## Key Vault als Konfigurations-Provider
 
-Anstatt den `SecretClient` manuell aufzurufen, binden Sie Key Vault direkt in das ASP.NET Core-Konfigurationssystem ein. Alle Secrets werden zu gewöhnlichen Konfigurationseinträgen, zusammengeführt mit `appsettings.json` und den Umgebungsvariablen.
+Statt den `SecretClient` manuell aufzurufen, binden Sie Key Vault direkt an das
+ASP.NET-Core-Konfigurationssystem an. Alle Secrets werden zu gewöhnlichen Konfigurationseinträgen,
+zusammengeführt mit `appsettings.json` und den Umgebungsvariablen.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -29,15 +40,19 @@ builder.Configuration.AddAzureKeyVault(
     new Uri("https://kv-super-dev.vault.azure.net/"),
     new DefaultAzureCredential());
 
-// Le secret "Db--ConnectionString" alimente Db:ConnectionString
+// The "Db--ConnectionString" secret feeds Db:ConnectionString
 var cs = builder.Configuration["Db:ConnectionString"];
 ```
 
-Die Namenskonvention ist wichtig: Key Vault verbietet `:`, daher verwendet man `--` im Secret-Namen, das automatisch in ein Abschnittstrennzeichen übersetzt wird. `Db--ConnectionString` wird zu `Db:ConnectionString`, genau wie im Rest Ihrer typisierten Konfiguration.
+Die Namenskonvention ist entscheidend: Key Vault verbietet `:`, daher verwendet man `--` im
+Secret-Namen, was automatisch in einen Abschnittstrenner übersetzt wird. `Db--ConnectionString` wird zu
+`Db:ConnectionString`, genau wie im Rest Ihrer typisierten Konfiguration.
 
 ## RBAC statt Access Policies
 
-Key Vault bietet zwei Autorisierungsmodelle. Bevorzugen Sie **Azure RBAC**, das granularer und revisionssicherer ist als die alten Access Policies. Weisen Sie der Managed Identity die Rolle **Key Vault Secrets User** (Nur-Lesen der Secrets) zu, nicht mehr:
+Key Vault bietet zwei Autorisierungsmodelle. Bevorzugen Sie **Azure RBAC**, das granularer und
+auditierbarer ist als die alten Access Policies. Weisen Sie der Managed Identity die Rolle
+**Key Vault Secrets User** zu (nur Lesezugriff auf Secrets), nicht mehr:
 
 ```bash
 az role assignment create \
@@ -47,12 +62,20 @@ az role assignment create \
   --scope "/subscriptions/$SUB/resourceGroups/rg-super-dev/providers/Microsoft.KeyVault/vaults/kv-super-dev"
 ```
 
-Die `$PRINCIPAL_ID` ist die `objectId` der Managed Identity, abrufbar nach deren Aktivierung auf der Ressource. Das Prinzip des **geringsten Privilegs** gilt: Ein Dienst, der nur Secrets liest, darf niemals die Rolle `Key Vault Secrets Officer` besitzen.
+`$PRINCIPAL_ID` ist die `objectId` der Managed Identity, abrufbar nach ihrer Aktivierung auf
+der Ressource. Das Prinzip der **geringsten Rechte** gilt: Ein Dienst, der nur Secrets liest,
+darf niemals die Rolle `Key Vault Secrets Officer` besitzen.
 
 ## Lokale Entwicklung vs. Cloud, ohne eine Zeile zu ändern
 
-Genau das ist der Vorteil von `DefaultAzureCredential`: In der Produktion bezieht es das Token der Managed Identity; auf Ihrem Entwicklungsrechner wechselt es zur Identität der **Azure CLI** (`az login`) oder von Visual Studio. **Derselbe Code** funktioniert überall, vorausgesetzt, Ihr Konto verfügt ebenfalls über die Rolle `Key Vault Secrets User`. Die
-[Dokumentation zu Key Vault + Managed Identity](https://learn.microsoft.com/azure/key-vault/general/authentication)
+Das ist der ganze Sinn von `DefaultAzureCredential`: In der Produktion holt es sich das Token der
+Managed Identity; auf Ihrem Rechner wechselt es zur Identität der **Azure CLI**
+(`az login`) oder von Visual Studio.
+
+Der **gleiche Code** funktioniert überall, unter einer Bedingung: Ihr Konto muss ebenfalls die
+Rolle `Key Vault Secrets User` besitzen. Die
+[Key-Vault- und Managed-Identity-Dokumentation](https://learn.microsoft.com/azure/key-vault/general/authentication)
 beschreibt die genaue Reihenfolge der Authentifizierungskette und deren Feinabstimmung.
 
-> Das beste Secret ist eines, das man nie anfassen muss. Mit Managed Identity wird die Rotation von Azure verwaltet, und Ihr Git-Repository wird wieder das, was es immer hätte sein sollen: **bedenkenlos öffentlich**.
+> Das beste Secret ist das, mit dem man nie hantieren muss. Mit Managed Identity wird die Rotation
+> von Azure verwaltet, und Ihr Git-Repository kann **gefahrlos öffentlich** sein.

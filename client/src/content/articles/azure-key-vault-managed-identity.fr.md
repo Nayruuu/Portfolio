@@ -1,17 +1,19 @@
-Un secret dans un `appsettings.json`, c'est un secret dans Git, donc un secret compromis. La
+Un secret écrit dans `appsettings.json` finit dans l'historique Git, donc compromis. La
 parade idiomatique sur Azure : **Key Vault** pour stocker les secrets, **Managed Identity**
-pour y accéder sans le moindre mot de passe. Au bout du compte, votre configuration ne
+pour y accéder sans mot de passe. Une fois les deux branchés, votre configuration ne
 contient plus aucune chaîne sensible.
 
-## Le mur d'authentification… qui disparaît
+## Le mur d'authentification qui disparaît
 
-Le problème classique : pour lire un secret dans Key Vault, l'API doit s'authentifier — mais
-où ranger l'identifiant qui sert à lire les identifiants ? La **Managed Identity** brise ce
-cercle. Azure attribue une identité à votre ressource (Container App, App Service, VM) ; la
-plateforme injecte et fait tourner les tokens. Aucune clé n'existe côté code.
+Le problème classique : pour lire un secret dans Key Vault, l'API doit s'authentifier, et
+l'identifiant qui sert à lire les identifiants doit bien être rangé quelque part. La
+**Managed Identity** brise ce cercle. Azure attribue une identité à votre ressource
+(Container App, App Service, VM) ; la plateforme injecte et fait tourner les tokens. Aucune
+clé n'existe côté code.
 
 Côté .NET, `DefaultAzureCredential` enchaîne plusieurs sources d'authentification et
-sélectionne la première qui répond — d'où la portabilité entre poste de dev et cloud.
+sélectionne la première qui répond. C'est ce qui rend le même code portable entre poste de
+dev et cloud.
 
 ```csharp
 using Azure.Identity;
@@ -38,7 +40,7 @@ builder.Configuration.AddAzureKeyVault(
     new Uri("https://kv-super-dev.vault.azure.net/"),
     new DefaultAzureCredential());
 
-// Le secret "Db--ConnectionString" alimente Db:ConnectionString
+// The "Db--ConnectionString" secret feeds Db:ConnectionString
 var cs = builder.Configuration["Db:ConnectionString"];
 ```
 
@@ -66,13 +68,14 @@ des secrets ne doit jamais détenir le rôle `Key Vault Secrets Officer`.
 
 ## Dev local vs cloud, sans changer une ligne
 
-C'est tout l'intérêt de `DefaultAzureCredential` : en production il pioche le token de
+C'est tout l'intérêt de `DefaultAzureCredential` : en production, il pioche le token de
 l'identité managée ; sur votre poste, il bascule sur l'identité de l'**Azure CLI**
-(`az login`) ou de Visual Studio. Le **même code** fonctionne partout, à condition que votre
-compte dispose lui aussi du rôle `Key Vault Secrets User`. La
+(`az login`) ou de Visual Studio.
+
+Le **même code** fonctionne partout, à une condition : votre compte doit lui aussi détenir le
+rôle `Key Vault Secrets User`. La
 [documentation Key Vault + identité managée](https://learn.microsoft.com/azure/key-vault/general/authentication)
 détaille l'ordre exact de la chaîne d'authentification et son réglage fin.
 
 > Le meilleur secret est celui qu'on n'a jamais à manipuler. Avec Managed Identity, la rotation
-> est gérée par Azure, et votre dépôt Git redevient ce qu'il aurait toujours dû être : **public
-> sans danger**.
+> est gérée par Azure, et votre dépôt Git peut être **public sans danger**.

@@ -1,12 +1,12 @@
 **Minimal APIs** have a bad reputation: people think they're only good for throwaway demos.
 In reality, with a bit of discipline, they yield a .NET 8 API that's more readable and more
-testable than a classic controller — as long as you don't pile everything into `Program.cs`.
+testable than a classic controller, as long as you don't pile everything into `Program.cs`.
 
 ## Split with route groups
 
-The beginner trap is stacking thirty `app.MapGet` calls in `Program.cs`. The fix is one
-word: **`MapGroup`**. Each resource gets its own group, with its prefix, filters and
-metadata, defined in a dedicated extension method:
+The beginner trap is stacking thirty `app.MapGet` calls in `Program.cs`. The fix is called
+**`MapGroup`**. Each resource gets its own group, with its prefix, filters and metadata,
+defined in a dedicated extension method:
 
 ```csharp
 public static class TodoEndpoints
@@ -29,13 +29,13 @@ public static class TodoEndpoints
 }
 ```
 
-`Program.cs` then boils down to `app.MapTodos();` — one entry point per resource, everything
+`Program.cs` then boils down to `app.MapTodos();`: one entry point per resource, everything
 else lives in cohesive files.
 
 ## DbContext and migrations
 
 EF Core remains the backbone of data access. You register the `DbContext` via `AddDbContext`,
-model in `OnModelCreating`, and **above all** never let the schema drift by hand: every
+model in `OnModelCreating`, and above all never let the schema drift by hand: every
 change goes through a versioned migration.
 
 ```csharp
@@ -44,15 +44,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 ```
 
 You then generate the migration with `dotnet ef migrations add InitialCreate`, and apply it
-on startup with `db.Database.MigrateAsync()` — never `EnsureCreated`, which short-circuits
-the whole history. The official docs cover the workflow in the
+on startup with `db.Database.MigrateAsync()`, never with `EnsureCreated`, which
+short-circuits the whole history. The official docs cover the workflow in the
 [EF Core migrations guide](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/).
 
 ## Typed results and validation
 
 This is where Minimal APIs really shine. Rather than returning an opaque `IActionResult`,
-you return a **typed results union**: the signature documents the possible HTTP codes, and
-OpenAPI exposes them automatically.
+you return a **union of typed results**: the signature documents the possible HTTP codes,
+and OpenAPI exposes them automatically.
 
 ```csharp
 private static async Task<Results<Created<Todo>, ValidationProblem>> CreateAsync(
@@ -83,9 +83,11 @@ for redundant `[ProducesResponseType]` attributes.
 Once handlers are extracted into static methods that receive their dependencies as
 parameters, they become trivial to test **without an HTTP server**: you instantiate an
 `AppDbContext` on the in-memory or SQLite provider, call the handler, and inspect the
-`TypedResults`. For end-to-end integration tests, `WebApplicationFactory<T>` spins up the
-full application in memory and lets you hit the real endpoints.
+`TypedResults`.
+
+For end-to-end integration tests, `WebApplicationFactory<T>` spins up the full application
+in memory and lets you hit the real endpoints.
 
 > A Minimal API isn't a budget API. Well split into groups and typed results, it exposes
-> **less ceremony for more guarantees** — which is exactly what you want from a modern
+> **less ceremony for more guarantees**, and that's what you'd expect from a modern
 > framework.

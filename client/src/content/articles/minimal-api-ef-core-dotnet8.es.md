@@ -1,12 +1,12 @@
 Las **Minimal APIs** tienen mala reputación: se las cree reservadas a demos desechables.
 En realidad, con un poco de disciplina, ofrecen una API .NET 8 más legible y más testeable
-que un controlador clásico — siempre que no se amontone todo en `Program.cs`.
+que un controlador clásico, siempre que no se amontone todo en `Program.cs`.
 
 ## Estructurar con route groups
 
 La trampa del principiante es apilar treinta `app.MapGet` en el `Program.cs`. La solución
-se resume en una palabra: **`MapGroup`**. Cada recurso tiene su grupo, con su prefijo, sus
-filtros y sus metadatos, definido en un método de extensión dedicado:
+se llama **`MapGroup`**. Cada recurso tiene su grupo, con su prefijo, sus filtros y sus
+metadatos, definido en un método de extensión dedicado:
 
 ```csharp
 public static class TodoEndpoints
@@ -29,13 +29,13 @@ public static class TodoEndpoints
 }
 ```
 
-El `Program.cs` se reduce entonces a `app.MapTodos();` — un punto de entrada por recurso, el
+El `Program.cs` se reduce entonces a `app.MapTodos();`: un punto de entrada por recurso, el
 resto vive en archivos coherentes.
 
 ## DbContext y migraciones
 
 EF Core sigue siendo la columna vertebral del acceso a datos. Se registra el `DbContext` mediante
-`AddDbContext`, se modela en `OnModelCreating`, y **sobre todo** nunca se deja que el
+`AddDbContext`, se modela en `OnModelCreating` y, sobre todo, nunca se deja que el
 esquema derive manualmente: cada cambio pasa por una migración versionada.
 
 ```csharp
@@ -43,15 +43,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 ```
 
-Luego se genera la migración con `dotnet ef migrations add InitialCreate`, y se
-aplica al arranque con `db.Database.MigrateAsync()` — nunca `EnsureCreated`, que
+Luego se genera la migración con `dotnet ef migrations add InitialCreate`, y se aplica
+al arranque con `db.Database.MigrateAsync()`, nunca con `EnsureCreated`, que
 cortocircuita todo el historial. La documentación oficial detalla el flujo de trabajo en la
 [guía de migraciones de EF Core](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/).
 
 ## Resultados tipados y validación
 
-Aquí es donde las Minimal APIs realmente ganan terreno. En lugar de devolver un `IActionResult`
-opaco, se retorna una **unión de resultados tipados**: la firma documenta los códigos HTTP
+Aquí es donde las Minimal APIs realmente ganan. En lugar de devolver un `IActionResult`
+opaco, se devuelve una **unión de resultados tipados**: la firma documenta los códigos HTTP
 posibles, y OpenAPI los expone automáticamente.
 
 ```csharp
@@ -62,7 +62,7 @@ private static async Task<Results<Created<Todo>, ValidationProblem>> CreateAsync
     {
         return TypedResults.ValidationProblem(new Dictionary<string, string[]>
         {
-            ["title"] = ["Le titre est obligatoire."],
+            ["title"] = ["El título es obligatorio."],
         });
     }
 
@@ -82,10 +82,12 @@ hacen falta atributos `[ProducesResponseType]` redundantes.
 
 Una vez que los handlers se extraen en métodos estáticos que reciben sus dependencias como
 parámetros, se vuelven triviales de testear **sin servidor HTTP**: se instancia un
-`AppDbContext` sobre el proveedor in-memory o SQLite, se llama al handler y se inspecciona el
-`TypedResults`. Para los tests de integración de extremo a extremo, `WebApplicationFactory<T>`
-levanta la aplicación completa en memoria y permite invocar los endpoints reales.
+`AppDbContext` sobre el proveedor in-memory o SQLite, se llama al handler y se inspecciona
+el `TypedResults`.
 
-> Una Minimal API no es una API de segunda categoría. Bien estructurada en grupos y en resultados
-> tipados, expone **menos ceremonia para más garantías** — y eso es exactamente lo que se espera
-> de un framework moderno.
+Para los tests de integración de extremo a extremo, `WebApplicationFactory<T>` levanta la
+aplicación completa en memoria y permite invocar los endpoints reales.
+
+> Una Minimal API no es una API de segunda categoría. Bien estructurada en grupos y en
+> resultados tipados, expone **menos ceremonia para más garantías**, y eso es lo que se
+> espera de un framework moderno.

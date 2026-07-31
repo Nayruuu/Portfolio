@@ -1,16 +1,16 @@
 Un SPA Angular classique envoie une page blanche aux crawlers : tant que le JS n'a pas
 tourné, il n'y a rien à indexer. La **génération de site statique** (SSG) règle ça en
 prérendant chaque route en HTML au build. Couplée à **Azure Static Web Apps**, on obtient un
-site sans serveur, instantané, et parfaitement référencé.
+site sans serveur à héberger. Chaque page part en HTML complet, déjà indexable.
 
 ## Prerender natif, sans serveur Node
 
 Depuis `@angular/ssr`, le mode `outputMode: 'static'` prérend **toutes les routes** à la
-compilation et n'émet que des fichiers statiques — aucun serveur Node à héberger. C'est ce
-qui rend le déploiement sur Azure SWA trivial : on pousse un dossier `browser/`.
+compilation et n'émet que des fichiers statiques, sans aucun serveur Node à héberger. C'est
+ce qui rend le déploiement sur Azure SWA trivial : on pousse un dossier `browser/`.
 
 ```yaml
-# angular.json — extrait de la cible de build
+# angular.json — build target excerpt
 "outputMode": "static",
 "prerender": true,
 "ssr": {
@@ -45,9 +45,11 @@ mimeTypes:
 
 Un script post-build génère `sitemap.xml`, `robots.txt` et `llms.txt`, pendant que le
 `SeoService` pose les `<title>`, balises **Open Graph**, `canonical`, `hreflang` et le
-JSON-LD `BlogPosting` route par route. Comme tout est dans le HTML prérendu, crawlers et IA
-récupèrent le contenu **sans exécuter une ligne de JS**. La doc Azure détaille la config dans
-le guide [Static Web Apps configuration](https://learn.microsoft.com/azure/static-web-apps/configuration).
+JSON-LD `BlogPosting` route par route.
 
-> Le SSG n'est pas qu'une optimisation SEO : c'est un site qui s'affiche avant même que le
-> JS soit téléchargé. Le **time-to-content** devient indépendant de la connexion du visiteur.
+Comme tout est dans le HTML prérendu, crawlers et IA récupèrent le contenu **sans exécuter
+une ligne de JS**. La doc Azure détaille la config dans le guide
+[Static Web Apps configuration](https://learn.microsoft.com/azure/static-web-apps/configuration).
+
+> Le SSG fait plus que du SEO : la page s'affiche avant même que le JS soit téléchargé.
+> Le **time-to-content** devient indépendant de la connexion du visiteur.
