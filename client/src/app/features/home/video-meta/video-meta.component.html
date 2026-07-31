@@ -3,7 +3,7 @@
   <h2 class="video-meta__title">{{ content.featuredTitle }}</h2>
   <div class="video-meta__row">
     <div class="video-meta__author">
-      <div class="video-meta__author-av">S</div>
+      <div class="video-meta__author-av" role="img" [attr.aria-label]="content.author"></div>
       <div class="video-meta__author-meta">
         <span class="video-meta__author-name">{{ content.author }} <span>✓</span></span>
         <span class="video-meta__author-sub"

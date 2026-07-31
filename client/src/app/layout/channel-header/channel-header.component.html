@@ -13,7 +13,7 @@
   </div>
 
   <div class="profile">
-    <div class="profile__avatar" [title]="content().aria.dropPhoto">S</div>
+    <div class="profile__avatar" role="img" [attr.aria-label]="content().author"></div>
     <div class="profile__meta">
       <h1>{{ content().author }} — <span>full-stack</span></h1>
       <div class="profile__handle">

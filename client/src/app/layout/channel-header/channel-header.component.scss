@@ -73,18 +73,9 @@
 		width: 40px;
 		height: 40px;
 		border-radius: 999px;
-		background:
-			radial-gradient(circle at 30% 25%, oklch(72% 0.18 22deg), oklch(32% 0.12 22deg) 70%),
-			var(--surface);
+		background: var(--surface) url('/avatar.jpg') center / cover;
 		border: 2px solid var(--bg);
 		margin-top: 0;
-		display: grid;
-		place-items: center;
-		font-family: var(--f-mono);
-		font-size: 20px;
-		font-weight: 700;
-		color: #0a0a0b;
-		letter-spacing: -0.04em;
 		box-shadow: var(--sh-2);
 		position: relative;
 
@@ -178,15 +169,13 @@
 		display: grid;
 		grid-template-columns: 128px 1fr auto;
 		gap: 24px;
-		align-items: end;
+		align-items: center;
 		padding: 20px 8px 16px;
 	}
 
 	.profile__avatar {
 		width: 128px;
 		height: 128px;
-		margin-top: -64px;
-		font-size: 38px;
 		border-width: 4px;
 	}
 
