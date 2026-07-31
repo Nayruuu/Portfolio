@@ -58,8 +58,8 @@ Driven by the root **`Makefile`** (each target delegates to an `client/` npm scr
 |---|---|
 | `make dev` | dev server (`npm start`, http://localhost:4200) |
 | `make build` / `make build-prod` | production build / explicit prod build |
-| `make build-ssg` | prod build + native prerender + sitemap/robots/llms + SWA config (**what the `deploy-client` CI workflow runs**) |
-| `make og` | regenerate the `og:image` social card |
+| `make build-ssg` | prod build + native prerender + sitemap/robots/llms (**what the `deploy-client` CI workflow runs**; the SWA config + `404.html` ship as static `client/public/` assets) |
+| `make og` | regenerate the social cards (`og-default.png` + one per article × locale under `public/og/`, committed) |
 | `make gen-icons` | regenerate the typed icon set (`icon-set.ts`) from `icons/*.svg` |
 | `make i18n LANGS="es de"` | AI-translate `content.fr.json` + article bodies → `content.<lang>.json` / `<slug>.<lang>.md` via `claude -p` (committed) |
 | `make gen-article-bodies` | regenerate `article-bodies.ts` from `content/articles/*.md` |
@@ -120,6 +120,9 @@ These are the sharp edges a rebuild trips on. Each is owned in depth by a linked
   guard — it fails the build if an article page loses its JSON-LD or its rendered Markdown body, so the
   content stays discoverable without JS. (Guard assertions → `testing.md`, *Prerender guard*; SEO route
   content → `PRODUCT.md`.)
+- **Never re-export `./game` from the `core/lib` root barrel** — it compiles fine but silently drags
+  the whole engine graph (~190 kB raw) back into the initial bundle through every eager barrel
+  consumer, re-triggering the 500 kB budget warning. (→ `architecture.md` §3.)
 - **Before a big refactor**, run `make test` + `make e2e` to capture the green baseline — the
   Playwright visual regression is the net that guarantees a pixel-identical render. (→ `testing.md`.)
 - **Mobile-first responsive**: base SCSS targets the phone; the desktop layout lives in

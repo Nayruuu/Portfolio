@@ -18,4 +18,9 @@ export * from './lang-path';
 export * from './article-description';
 export * from './typing-schedule';
 export * from './focused-index';
-export * from './game';
+export * from './tab-segments';
+export * from './truncate-at-word';
+export * from './og-image';
+// `./game` is deliberately NOT re-exported: the engine is only ever imported via its own
+// subpath (`core/lib/game`, lazy routes/workers) — re-exporting it here drags the whole
+// engine graph into the initial bundle through every eager barrel consumer.

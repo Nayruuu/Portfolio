@@ -15,11 +15,31 @@ test('an article page exposes SEO metadata at runtime (title, OG, canonical, JSO
     /\/fr\/articles\/etrangler-le-monolithe-dotnet$/,
   );
   await expect(page.locator("link[rel='alternate'][hreflang='en']")).toHaveCount(1);
+  // One hreflang per Lang + x-default; one og:locale:alternate per OTHER language.
+  await expect(page.locator("link[rel='alternate'][hreflang]")).toHaveCount(5);
+  await expect(page.locator("meta[property='og:locale:alternate']")).toHaveCount(3);
 
   const jsonld = await page.locator('script#sd-jsonld').textContent();
-  const data = JSON.parse(jsonld ?? '{}');
+  const graph = JSON.parse(jsonld ?? '{}')['@graph'] ?? [];
+  const posting = graph.find((entity: { '@type': string }) => entity['@type'] === 'BlogPosting');
+  const breadcrumb = graph.find(
+    (entity: { '@type': string }) => entity['@type'] === 'BreadcrumbList',
+  );
 
-  expect(data['@type']).toBe('BlogPosting');
-  expect(data.inLanguage).toBe('fr');
-  expect(data.headline?.length ?? 0).toBeGreaterThan(0);
+  expect(posting?.inLanguage).toBe('fr');
+  expect(posting?.headline?.length ?? 0).toBeGreaterThan(0);
+  // The meta description is the human-written entry description, not "TAG · title · read time".
+  expect(posting?.description).not.toMatch(/·\s*\d+\s*min$/);
+  expect(breadcrumb?.itemListElement?.length).toBe(3);
+});
+
+test('the home exposes the WebSite + Person JSON-LD graph', async ({ page }) => {
+  await page.goto('/fr');
+  await page.waitForSelector('.channel');
+
+  const jsonld = await page.locator('script#sd-jsonld').textContent();
+  const graph = JSON.parse(jsonld ?? '{}')['@graph'] ?? [];
+  const types = graph.map((entity: { '@type': string }) => entity['@type']);
+
+  expect(types).toEqual(['WebSite', 'Person']);
 });

@@ -54,7 +54,9 @@ export interface Content {
   aria: Aria;
 
   bio: string;
+  metaTitle: string; // home <title> tail (`super-dev.app — {metaTitle}`), authored ≤ ~48 chars
   tabs: string[];
+  tabDescriptions: string[]; // per-tab meta description, index-aligned with `tabs`
 
   featuredTitle: string;
   featuredViews: string;

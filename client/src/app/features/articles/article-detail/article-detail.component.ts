@@ -16,9 +16,9 @@ import { IconComponent } from '../../../shared/icon/icon.component';
 import { CodeBlockComponent } from '../../../shared/code-block/code-block.component';
 import { InlineRunsComponent } from '../../../shared/inline-runs/inline-runs.component';
 import {
-  DEFAULT_OG_IMAGE,
   articleDescription,
   articleIdxsForSeries,
+  articleOgImage,
   parseMarkdown,
   seriesIdxForArticle,
 } from '../../../core/lib';
@@ -119,20 +119,30 @@ export class ArticleDetailComponent {
         description,
         path,
         lang,
-        image: DEFAULT_OG_IMAGE,
+        image: articleOgImage(article.slug, lang),
         type: 'article',
       });
-      this.seo.setArticleJsonLd({
-        title: article.title,
-        description,
-        path,
-        lang,
-        image: DEFAULT_OG_IMAGE,
-        type: 'article',
-        // Single publish date per article (showcase data); modified mirrors published until/unless a separate field is needed.
-        datePublished: article.date,
-        dateModified: article.date,
-      });
+      const tabs = this.i18n.content().tabs;
+
+      this.seo.setArticleJsonLd(
+        {
+          title: article.title,
+          description,
+          path,
+          lang,
+          image: articleOgImage(article.slug, lang),
+          type: 'article',
+          // Single publish date per article (showcase data); modified mirrors published until/unless a separate field is needed.
+          datePublished: article.date,
+          dateModified: article.date,
+        },
+        // tabs[0]/tabs[1] = the localized Home / Articles labels (order = TAB_SEGMENTS).
+        [
+          { name: tabs[0], path: `/${lang}` },
+          { name: tabs[1], path: `/${lang}/articles` },
+          { name: article.title, path },
+        ],
+      );
     });
 
     inject(DestroyRef).onDestroy(() => this.seo.clearJsonLd());

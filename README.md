@@ -111,10 +111,10 @@ is created by Terraform through `deploy-infra`; its token is fetched at runtime 
 ## Quick customization
 
 1. **Content / brand** — edit `core/content/content.fr.json` (the source), then `make i18n LANGS="es de…"` regenerates the non-FR locales
-2. **Articles** — bodies as `<slug>.<lang>.md` in `client/src/content/articles/`; series mapping in `core/lib/series-map.ts`; `article-bodies.ts` is **generated** (`make gen-article-bodies`)
+2. **Articles** — bodies as `<slug>.<lang>.md` in `client/src/content/articles/`; series mapping in `core/lib/series-map.ts`; `article-bodies.ts` is **generated** (`make gen-article-bodies`); then `make og` regenerates the committed social cards (the build guard fails without them)
 3. **Your experience** — edit `sceneTimeline.rows`
 4. **Your CV (PDF)** — replace the files under `client/public/cv/`; each locale points to a file through the `cvUrl` key of `core/content/content.<lang>.json` (ES/DE currently reuse the EN PDF; both download buttons — channel header and video meta — read the key)
-5. **The avatar** — replace `.profile__avatar` (the letter `S`) with an `<img src="…">` in `layout/channel-header/channel-header.component.html`
+5. **The avatar** — replace `client/public/avatar.jpg` (512px square; both avatars — channel header and video meta — load it as a CSS background)
 6. **Your links** — `sceneOutro.links` + `about.links` + `contact.altMethods`
 7. **Your availability** — `contact.avail`
 

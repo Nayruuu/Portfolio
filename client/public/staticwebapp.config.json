@@ -1,16 +1,17 @@
 {
-  "trailingSlash": "auto",
+  "trailingSlash": "never",
   "globalHeaders": {
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Embedder-Policy": "require-corp"
   },
-  "navigationFallback": {
-    "rewrite": "/index.html",
-    "exclude": [
-      "/*.{css,js,mjs,json,svg,ico,png,jpg,jpeg,webp,gif,woff,woff2,ttf,eot,map,txt,xml}",
-      "/assets/*"
-    ]
-  },
-  "responseOverrides": { "404": { "rewrite": "/index.html", "statusCode": 200 } },
+  "routes": [
+    { "route": "/", "redirect": "/fr", "statusCode": 301 },
+    { "route": "/bsp", "headers": { "X-Robots-Tag": "noindex" } },
+    {
+      "route": "/*.{css,js,mjs}",
+      "headers": { "Cache-Control": "public, max-age=31536000, immutable" }
+    }
+  ],
+  "responseOverrides": { "404": { "rewrite": "/404.html" } },
   "mimeTypes": { ".json": "application/json", ".webp": "image/webp", ".svg": "image/svg+xml" }
 }

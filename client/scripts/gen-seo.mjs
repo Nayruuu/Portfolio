@@ -20,30 +20,50 @@ const read = (lang) =>
 const content = Object.fromEntries(LANGS.map((lang) => [lang, read(lang)]));
 const primary = content.en ? 'en' : DEFAULT_LANG;
 
-// --- concept routes (one <url>, hreflang alternates per language inside) ---
-const STATIC = ['', 'articles', 'series', 'about', 'stack', 'contact'];
+// --- concept routes: one <url> PER LOCALE (each carrying the full hreflang cluster), with a
+// real lastmod — the article's own date on its page, the newest member date on a series page,
+// the newest article date on the evolving pages (home + the two lists), none on the static
+// pages (about/stack/contact: an invented date is worse than no claim).
+const articles = content[DEFAULT_LANG].articles;
+const newest = articles.map((article) => article.date).sort().at(-1);
+const seriesLastmod = (series) => {
+  const dates = articles
+    .filter((article) => article.series === series.slug)
+    .map((article) => article.date);
+
+  return dates.length > 0 ? dates.sort().at(-1) : null;
+};
+
 const localized = (path) =>
   Object.fromEntries(LANGS.map((lang) => [lang, path ? `/${lang}/${path}` : `/${lang}`]));
-const concepts = STATIC.map((path) => localized(path));
+const concepts = [
+  ...['', 'articles', 'series'].map((path) => ({ paths: localized(path), lastmod: newest })),
+  ...['about', 'stack', 'contact'].map((path) => ({ paths: localized(path), lastmod: null })),
+  ...articles.map((article) => ({
+    paths: localized(`articles/${article.slug}`),
+    lastmod: article.date,
+  })),
+  ...content[DEFAULT_LANG].series.map((series) => ({
+    paths: localized(`series/${series.slug}`),
+    lastmod: seriesLastmod(series),
+  })),
+];
 
-content[DEFAULT_LANG].articles.forEach((article) =>
-  concepts.push(localized(`articles/${article.slug}`)),
-);
-content[DEFAULT_LANG].series.forEach((series) => concepts.push(localized(`series/${series.slug}`)));
-
-const today = new Date().toISOString().slice(0, 10);
 const urls = concepts
-  .map((concept) => {
+  .flatMap((concept) => {
     const alts = LANGS.map(
       (lang) =>
-        `    <xhtml:link rel="alternate" hreflang="${lang}" href="${ORIGIN}${concept[lang]}"/>`,
+        `    <xhtml:link rel="alternate" hreflang="${lang}" href="${ORIGIN}${concept.paths[lang]}"/>`,
     )
       .concat(
-        `    <xhtml:link rel="alternate" hreflang="x-default" href="${ORIGIN}${concept[DEFAULT_LANG]}"/>`,
+        `    <xhtml:link rel="alternate" hreflang="x-default" href="${ORIGIN}${concept.paths[DEFAULT_LANG]}"/>`,
       )
       .join('\n');
+    const lastmod = concept.lastmod ? `\n    <lastmod>${concept.lastmod}</lastmod>` : '';
 
-    return `  <url>\n    <loc>${ORIGIN}${concept[DEFAULT_LANG]}</loc>\n    <lastmod>${today}</lastmod>\n${alts}\n  </url>`;
+    return LANGS.map(
+      (lang) => `  <url>\n    <loc>${ORIGIN}${concept.paths[lang]}</loc>${lastmod}\n${alts}\n  </url>`,
+    );
   })
   .join('\n');
 
@@ -105,5 +125,5 @@ ${articleSections}
 );
 
 console.log(
-  `✓ sitemap.xml (${concepts.length} urls × ${LANGS.length} langs), robots.txt, llms.txt → ${OUT}`,
+  `✓ sitemap.xml (${concepts.length} concepts × ${LANGS.length} langs = ${concepts.length * LANGS.length} urls), robots.txt, llms.txt → ${OUT}`,
 );

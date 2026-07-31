@@ -41,7 +41,16 @@
     "pip": "Mini-lecteur"
   },
   "bio": "Développeur full-stack .NET / Angular avec une casquette DevOps sur Azure Cloud. Aussi à l'aise sur Flutter + Firebase. Je construis des produits, je les déploie, je les surveille.",
+  "metaTitle": "Développeur full-stack .NET / Angular / Azure",
   "tabs": ["Accueil", "Articles", "Séries", "À propos", "Stack", "Contact"],
+  "tabDescriptions": [
+    "Portfolio façon chaîne vidéo d'un développeur full-stack .NET / Angular avec une casquette DevOps sur Azure : articles techniques, séries et projets réels.",
+    "Articles techniques sur .NET, Angular, Azure, Flutter et le DevOps : migrations, moteurs, pipelines et retours d'expérience tirés de projets réels.",
+    "Quatre séries d'articles qui se suivent : le .NET moderne, Angular 21 en pratique, Azure DevOps de zéro et Flutter en production.",
+    "Parcours, façon de travailler et choix techniques d'un développeur full-stack .NET / Angular qui construit, déploie et surveille ses produits.",
+    "La stack au complet : langages, frameworks, outils et services cloud du quotidien, du back .NET au front Angular jusqu'au déploiement Azure.",
+    "Une mission freelance, une question technique ou un simple bonjour : e-mail, LinkedIn, GitHub ou un créneau de 30 minutes."
+  ],
   "featuredTitle": "$ ./whoami — super-dev.app — développeur full-stack .NET / Angular / Azure",
   "featuredViews": "12 487 vues",
   "featuredWhen": "il y a 2 jours",

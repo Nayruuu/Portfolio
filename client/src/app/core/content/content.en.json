@@ -41,7 +41,16 @@
     "pip": "Mini player"
   },
   "bio": "Full-stack .NET / Angular dev with a DevOps streak on Azure Cloud. Also fluent in Flutter + Firebase. I build products, ship them, and keep them healthy.",
+  "metaTitle": "Full-stack .NET / Angular / Azure developer",
   "tabs": ["Home", "Articles", "Series", "About", "Stack", "Contact"],
+  "tabDescriptions": [
+    "A video-channel-style portfolio of a full-stack .NET / Angular developer with a DevOps hat on Azure: technical articles, series and real projects.",
+    "Technical articles on .NET, Angular, Azure, Flutter and DevOps: migrations, engines, pipelines and lessons learned from real projects.",
+    "Four article series that build on each other: Modern .NET, Angular 21 in practice, Azure DevOps from scratch and Flutter in production.",
+    "Background, working style and technical choices of a full-stack .NET / Angular developer who builds, ships and monitors his products.",
+    "The full stack: everyday languages, frameworks, tools and cloud services, from the .NET back end through the Angular front end to Azure deployment.",
+    "A freelance assignment, a technical question or just a hello: email, LinkedIn, GitHub or a 30-minute slot."
+  ],
   "featuredTitle": "$ ./whoami — super-dev.app — full-stack .NET / Angular / Azure developer",
   "featuredViews": "12,487 views",
   "featuredWhen": "2 days ago",

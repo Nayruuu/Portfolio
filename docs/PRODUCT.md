@@ -37,10 +37,14 @@ The app shell (`sd-app`) is: a top progress bar (shown only while content is loa
 channel header, the tabs bar, then the routed page inside a `.main` wrapper, the mini-player, the
 functional `.konami` keyboard-shortcut hint at the bottom (home route only), and the mobile-only
 `.prefs-dock` (the floating theme + language pill, §2.1.1). The theme is applied on load (writing `data-theme` onto the document)
-and **baseline SEO** is wired: on every navigation the page title becomes `super-dev.app — {first 48
-chars of the bio}`, the description is the bio, the page type is `website`, and any leftover article
-structured-data is cleared — **except** on an article-detail URL (`/{lang}/articles/{slug}`), which
-sets its own SEO. (This runs during prerendering too, so the static build captures it.)
+and **baseline SEO** is wired: on every navigation the page title is **per-route** — a tab page gets
+`{tab label} — super-dev.app` with its own `tabDescriptions` entry as meta description, a
+series-detail URL gets `{series title} — super-dev.app` (and the series description), and the home
+gets `super-dev.app — {metaTitle}` with `tabDescriptions[0]` (any other URL falls back to the same
+title + the bio); the page type is `website`, and the structured-data follows the route (a home URL
+gets the site-level `WebSite` + `Person` graph, any other non-article URL clears it) — **except** on
+an article-detail URL (`/{lang}/articles/{slug}`), which sets its own SEO. (This runs during
+prerendering too, so the static build captures it.)
 
 The `.konami` hint (`tip: [k] play/pause · [j/l] ±10s · [/] search`) is **functional**: global
 keydown handlers wire `[k]` (play/pause) and `[j]`/`[l]` (seek ∓10 s) on the player and `[/]` (focus the
@@ -150,8 +154,21 @@ its route is active (Home matched exactly, the rest fuzzy) and exposing `aria-se
 - **Theme**: light unless the stored theme preference is `'dark'`; applied as `<html data-theme>`;
   `index.html` carries a pre-paint anti-flash script (same stored key, defaults light).
 - **Baseline SEO**: on each navigation **except** an article-detail URL (which sets its own), the
-  title becomes `super-dev.app — {first 48 chars of the bio}`, the description is the bio, the type is
-  `website`, and any article structured-data is cleared.
+  title is per-route — `{tab label} — super-dev.app` on a tab page (with its `tabDescriptions`
+  entry as meta description), `{series title} — super-dev.app` (+ the series description) on a
+  series detail, `super-dev.app — {metaTitle}` on the home (+ `tabDescriptions[0]`; any other URL
+  keeps that title with the bio as description); the type is `website`, and the structured-data
+  follows the route — the `WebSite` + `Person` graph (with the GitHub/LinkedIn `sameAs` profiles)
+  on a home URL, cleared on any other non-article URL.
+- **Hosting (Azure SWA, `staticwebapp.config.json`)**: URLs are extensionless and slash-less
+  (`trailingSlash: never`), `/` 301-redirects to `/fr` at the edge, an unknown URL serves the static
+  branded `404.html` **with a real 404 status** (no soft-404 rewrite), the hidden `/bsp` route ships
+  an `X-Robots-Tag: noindex` header (the easter egg stays out of search results until the vitrine
+  launch), and hashed build assets (`js`/`css`) get a one-year immutable cache header. The generated
+  sitemap lists **every locale URL** (each carrying the full hreflang cluster) with **real
+  `lastmod` dates**: the article's own date on its page, the newest member date on a series page,
+  the newest article date on the evolving pages (home + the two lists), and none on
+  about/stack/contact.
 
 ### 2.5 Routing & app config (the param-less static-tree shell)
 
@@ -164,7 +181,9 @@ native prerenderer → empty `<router-outlet>`). Adding a language is a one-line
   routing changes the language), and sharing the **same lazy children**, built fresh per tree, in order:
   Home `''` (lazy component), `articles` and `series` (lazy sub-trees — each a list + detail), then
   `about`, `stack`, `contact` (lazy components). Root `''` and any unknown path redirect to
-  `/${DEFAULT_LANG}` with a **const-template static** string (build-evaluable for the static prerender).
+  `/${DEFAULT_LANG}` with a **const-template static** string (build-evaluable for the static prerender)
+  — this router redirect covers **client-side** navigations only; a direct hit on an unknown URL is
+  answered at the edge with the real 404 (§2.4, Hosting).
 - **Nested feature routes** (articles and series, both lazy): a list at `''` and a detail at
   `':slug'`; the `:slug` segment feeds the detail page as a required string input via
   component-input-binding.
@@ -646,13 +665,13 @@ A lazy list at `''` and a detail at `':slug'`, where **`:slug` = the article's s
 ASCII, identical across locales, = the Markdown filename stem), bound as a required string input; the detail
 page resolves the matching article (falling back to the first).
 
-**20 articles, 9 filter pills** (3 semantic + 6 tag); source order = `date` descending (newest first).
+**23 articles, 9 filter pills** (3 semantic + 6 tag); source order = `date` descending (newest first).
 
 - **Filtering**: pill 0 = ALL (source order), pill 1 = RECENT (first 6), pill 2 = POPULAR (descending
   by parsed read count), pills ≥3 = TAG, matched by **pill position** (locale-independent) against the
   tag list at `index − 3`.
 - **Tag set** (a fixed, closed list): `['.NET', 'ANGULAR', 'AZURE', 'FLUTTER', 'DEVOPS', 'TUTO']`.
-  Distribution `.NET`×5, `ANGULAR`×4, `AZURE`×3, `FLUTTER`×3, `DEVOPS`×3, `TUTO`×2. Localized pill
+  Distribution `.NET`×6, `ANGULAR`×6, `AZURE`×3, `FLUTTER`×3, `DEVOPS`×3, `TUTO`×2. Localized pill
   labels (FR `Tout/Récent/Populaire/.NET/Angular/Azure/Flutter/DevOps/Tuto`) match by **position**,
   not text.
 - **Read-count parsing**: a string like `'2,4k lectures'` / `'1.2M reads'` reads as a number — comma
@@ -668,26 +687,29 @@ page resolves the matching article (falling back to the first).
 
 | # | slug | tag | symbol | series · order |
 |---|---|---|---|---|
-| 0 | `etrangler-le-monolithe-dotnet` | .NET | `{ }` | dotnet-moderne · 1 |
-| 1 | `angular-zoneless-signals` | ANGULAR | `◆` | angular-21-en-pratique · 1 |
-| 2 | `angular-ssg-azure-static-web-apps` | AZURE | `↻` | azure-devops-de-zero · 1 |
-| 3 | `angular-resource-httpresource` | ANGULAR | `⟐` | angular-21-en-pratique · 2 |
-| 4 | `pipeline-cicd-github-actions-azure` | DEVOPS | `>_` | azure-devops-de-zero · 2 |
-| 5 | `azure-container-apps-dotnet` | AZURE | `⬢` | azure-devops-de-zero · 3 |
-| 6 | `flutter-firebase-offline-first` | FLUTTER | `■` | flutter-en-production · 1 |
-| 7 | `docker-multistage-dotnet-angular` | DEVOPS | `⬚` | azure-devops-de-zero · 5 |
-| 8 | `angular-defer-control-flow` | ANGULAR | `⧉` | angular-21-en-pratique · 3 |
-| 9 | `tester-angular-zoneless-vitest` | TUTO | `▲` | — |
-| 10 | `flutter-riverpod-architecture` | FLUTTER | `≋` | flutter-en-production · 2 |
-| 11 | `minimal-api-ef-core-dotnet8` | .NET | `ƒ()` | dotnet-moderne · 2 |
-| 12 | `angular-signalstore-ngrx` | ANGULAR | `◈` | angular-21-en-pratique · 4 |
-| 13 | `cqrs-vertical-slices-dotnet` | .NET | `⊕` | dotnet-moderne · 3 |
-| 14 | `opentelemetry-observabilite-dotnet` | DEVOPS | `◎` | azure-devops-de-zero · 6 |
-| 15 | `azure-key-vault-managed-identity` | AZURE | `⚿` | azure-devops-de-zero · 4 |
-| 16 | `dotnet-grpc-microservices` | .NET | `⇄` | dotnet-moderne · 4 |
-| 17 | `tuto-git-rebase-interactif` | TUTO | `⌥` | — |
-| 18 | `flutter-melos-monorepo` | FLUTTER | `⬡` | flutter-en-production · 3 |
-| 19 | `dotnet-source-generators` | .NET | `λ` | dotnet-moderne · 5 |
+| 0 | `universe-map-moteur-eclipses` | ANGULAR | `◐` | — |
+| 1 | `ngsharp-moteur-templates-interprete` | .NET | `{{ }}` | — |
+| 2 | `moteur-doom-software-webgpu` | ANGULAR | `▓` | — |
+| 3 | `etrangler-le-monolithe-dotnet` | .NET | `{ }` | dotnet-moderne · 1 |
+| 4 | `angular-zoneless-signals` | ANGULAR | `◆` | angular-21-en-pratique · 1 |
+| 5 | `angular-ssg-azure-static-web-apps` | AZURE | `↻` | azure-devops-de-zero · 1 |
+| 6 | `angular-resource-httpresource` | ANGULAR | `⟐` | angular-21-en-pratique · 2 |
+| 7 | `pipeline-cicd-github-actions-azure` | DEVOPS | `>_` | azure-devops-de-zero · 2 |
+| 8 | `azure-container-apps-dotnet` | AZURE | `⬢` | azure-devops-de-zero · 3 |
+| 9 | `flutter-firebase-offline-first` | FLUTTER | `■` | flutter-en-production · 1 |
+| 10 | `docker-multistage-dotnet-angular` | DEVOPS | `⬚` | azure-devops-de-zero · 5 |
+| 11 | `angular-defer-control-flow` | ANGULAR | `⧉` | angular-21-en-pratique · 3 |
+| 12 | `tester-angular-zoneless-vitest` | TUTO | `▲` | — |
+| 13 | `flutter-riverpod-architecture` | FLUTTER | `≋` | flutter-en-production · 2 |
+| 14 | `minimal-api-ef-core-dotnet8` | .NET | `ƒ()` | dotnet-moderne · 2 |
+| 15 | `angular-signalstore-ngrx` | ANGULAR | `◈` | angular-21-en-pratique · 4 |
+| 16 | `cqrs-vertical-slices-dotnet` | .NET | `⊕` | dotnet-moderne · 3 |
+| 17 | `opentelemetry-observabilite-dotnet` | DEVOPS | `◎` | azure-devops-de-zero · 6 |
+| 18 | `azure-key-vault-managed-identity` | AZURE | `⚿` | azure-devops-de-zero · 4 |
+| 19 | `dotnet-grpc-microservices` | .NET | `⇄` | dotnet-moderne · 4 |
+| 20 | `tuto-git-rebase-interactif` | TUTO | `⌥` | — |
+| 21 | `flutter-melos-monorepo` | FLUTTER | `⬡` | flutter-en-production · 3 |
+| 22 | `dotnet-source-generators` | .NET | `λ` | dotnet-moderne · 5 |
 
 (Note the deliberate gap: azure-devops-de-zero series order jumps 4→5→6, no 5-collision.)
 
@@ -713,9 +735,10 @@ The detail page (`sd-article-detail`, `tab-pane` host) resolves the current arti
 slug, derives its parsed-Markdown body, its position within its series and the series' member list,
 up to 3 same-tag suggested articles, and a scroll-progress value. In the browser it listens for scroll
 to feed the progress and, on each article change, smooth-scrolls the article just under the sticky nav.
-It also drives per-article SEO (title `{title} — super-dev.app`, an article-flavored description, the
-`article` type, and `BlogPosting` structured-data with the article's own ISO date); the
-structured-data is cleared when the page is left.
+It also drives per-article SEO (title `{title} — super-dev.app`, the entry's human-written
+description word-boundary capped at 160 chars, the `article` type, and a structured-data graph:
+`BlogPosting` with the article's own ISO date + a localized `BreadcrumbList`
+Home › Articles › title); the structured-data is cleared when the page is left.
 
 - **3px sticky reading-progress bar** `.article-detail__progress` pinned to the viewport top on phones
   (no nav there) and slid to **`top:56px`** under the sticky nav at `bp.from(md)`; accent, width = the
@@ -742,10 +765,13 @@ structured-data is cleared when the page is left.
   `__signature` line (`• {author} — portfolio{brand TLD}`, mono 12px, dashed top).
 - **"More in {tag}"** `__related` (only when there are same-tag suggestions): up to 3 `.rel-card`s
   (grid `64px 1fr`, the 64px `__sym` tile from `_symbol-box.scss`).
-- **SEO**: per-article title `{title} — super-dev.app`, an article-flavored description, and a
-  `BlogPosting` record whose publish/modified dates come from the article's own ISO date; cleared when
-  the page is left. The article description is `{tag} · {title without a leading "$ "} · {readTime}`,
-  capped at 160 characters.
+- **SEO**: per-article title `{title} — super-dev.app`, the entry's human-written `description`
+  (word-boundary capped at 160 chars) as meta description, a structured-data graph — a
+  `BlogPosting` whose publish/modified dates come from the article's own ISO date plus a localized
+  `BreadcrumbList` (Home › Articles › title, labels from `content.tabs`) — and a per-article
+  `og:image` card at `/og/{slug}.{lang}.jpg` (1200×630 JPEG, generated by `make og` and committed:
+  brand mark, tag pill in the tag's accent color, title with a length-stepped font size, faded
+  symbol watermark, ISO date + `▶ {readTime}` badge); cleared when the page is left.
 - **Bodies are real Markdown**: stored as raw `.md` files (one per slug **per `Lang`**, `<slug>.<lang>.md`),
   imported as text and indexed by slug via the generated `article-bodies.ts`. An in-house Markdown subset is parsed into typed blocks — headings,
   paragraphs, quotes, and list items as inline runs (plain / bold / inline-code / link), and fenced
@@ -905,9 +931,10 @@ note, not an interface spec.
   skipped; fenced code, then `h3`/`h2`, then quotes, then lists, then paragraphs, in that precedence;
   inline parsing prefers inline-code, then bold, then links).
 - **Code highlighting**: the per-language line tokenizer of §8 plus the language display labels.
-- **SEO / site**: a fixed site origin/name, the default OG image, the author identity, and per-language
-  OG locales (`OG_LOCALE` over all `LANGS`), plus helpers to absolutize a path and to swap a URL's
-  leading language segment to any `Lang` (`pathInLang`).
+- **SEO / site**: a fixed site origin/name, the default OG image, the per-article social-card URL
+  (`articleOgImage` → `/og/{slug}.{lang}.jpg`), the author identity + public profiles, and
+  per-language OG locales (`OG_LOCALE` over all `LANGS`), plus helpers to absolutize a path and to
+  swap a URL's leading language segment to any `Lang` (`pathInLang`).
 - **Infra constants**: the localStorage keys for language + theme and the `data-theme` attribute name.
 
 ---
@@ -936,8 +963,9 @@ interface spec.
 - **Viewport**: a single reactive "below `md`?" flag from a `matchMedia` listener — `false` on the
   server (SSR/prerender-safe), live in the browser. Drives the comments' collapsed-by-default start on
   phones (its sole consumer); pure-CSS responsive behavior never goes through it.
-- **SEO**: sets the title, Open Graph / Twitter / canonical / hreflang tags per route plus optional
-  `BlogPosting` structured-data on articles. All writes are idempotent (add-or-replace) so
+- **SEO**: sets the title, Open Graph / Twitter / canonical / hreflang tags per route plus a
+  route-shaped structured-data graph (`BlogPosting` + `BreadcrumbList` on articles, `WebSite` +
+  `Person` on the home). All writes are idempotent (add-or-replace) so
   re-running per navigation leaves exactly one tag, and the prerenderer freezes the result. Hreflang
   emits **one alternate per `Lang`** (the same path in each language, looped over `LANGS`) plus
   `x-default` at the default-language path, and one `og:locale:alternate` per other language.

@@ -12,13 +12,15 @@ import {
 } from '@angular/core';
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import { type Camera, type Sprite } from '../../core/lib/bsp-engine';
-import { LEVEL_TITLES } from '../../core/lib/game/registry/level-select';
 import {
+  LEVEL_TITLES,
   parseLevelParams,
+  type LevelParams,
+} from '../../core/lib/game/registry/level-select';
+import {
   RENDER_SETTLE_TIMEOUT_MS,
   settleWithin,
-  type LevelParams,
-} from '../../core/lib';
+} from '../../core/lib/game/telemetry/settle-within';
 import { AssetLoader, type AssetLoaderHooks } from '../../core/lib/game/boot/asset-loader';
 import type { WarmZone } from '../../core/lib/game/world/zone-world';
 import {
@@ -55,14 +57,9 @@ import {
   drawWinScreen,
   drawZoneFade,
 } from '../../core/lib/game/painters/overlay-painter';
-import {
-  ARC_DURATION,
-  RESTART_DELAY,
-  stepEnemies,
-  stepEnemyShots,
-  stepProjectiles,
-  ZONE_FADE,
-} from '../../core/lib';
+import { ARC_DURATION, RESTART_DELAY, ZONE_FADE } from '../../core/lib/game/game-tuning';
+import { stepEnemies, stepEnemyShots } from '../../core/lib/game/enemy/enemy-ai';
+import { stepProjectiles } from '../../core/lib/game/combat/projectile-step';
 import {
   InputController,
   type InputControllerHooks,

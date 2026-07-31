@@ -10,6 +10,12 @@ export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/og-default.png`;
 /** Portfolio owner identity (author of the JSON-LD BlogPosting). */
 export const AUTHOR = { name: 'Stéphane De Todaro', url: SITE_ORIGIN } as const;
 
+/** Public profiles for the JSON-LD Person `sameAs` (same targets as the contact channels). */
+export const SOCIAL_URLS = [
+  'https://github.com/Nayruuu',
+  'https://linkedin.com/in/stéphane-d',
+] as const;
+
 /** og:locale per language. */
 export const OG_LOCALE: Record<Lang, string> = {
   fr: 'fr_FR',

@@ -26,7 +26,7 @@ build-prod: ## Build production explicite
 build-ssg: ## Build prod + native Angular prerender + sitemap/robots/llms + SWA config
 	cd $(APP) && npm run build:ssg
 
-og: ## Regenerate the og:image social card (public/og-default.png)
+og: ## Regenerate the social cards (public/og-default.png + public/og/<slug>.<lang>.jpg)
 	cd $(APP) && npm run gen:og
 
 gen-icons: ## Regenerate the typed icon set (icon-set.ts) from icons/*.svg

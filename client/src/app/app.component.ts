@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs/operators';
+import { SITE_NAME, TAB_SEGMENTS } from './core/lib';
 import { I18nService } from './core/services/i18n/i18n.service';
 import { ThemeService } from './core/services/theme/theme.service';
 import { SeoService } from './core/services/seo/seo.service';
@@ -9,11 +10,15 @@ import { ChannelHeaderComponent } from './layout/channel-header/channel-header.c
 import { TabsBarComponent } from './layout/tabs-bar/tabs-bar.component';
 import { MiniPlayerComponent } from './features/home/player/mini-player/mini-player.component';
 import { PrefsComponent } from './layout/prefs/prefs.component';
-import { LANGS } from './domain';
+import { LANGS, type Content } from './domain';
+import type { SeoData } from './core/services/seo/seo.service';
 
 /** Any language home (`/fr`, `/es`, …) and any article-detail route — built from `LANGS`. */
 const HOME_RE = new RegExp(`^/(${LANGS.join('|')})/?$`);
 const ARTICLE_RE = new RegExp(`^/(${LANGS.join('|')})/articles/[^/]+$`);
+
+/** Series-detail route — captures the slug for its per-series title/description. */
+const SERIES_RE = new RegExp(`^/(${LANGS.join('|')})/series/([^/]+)$`);
 
 @Component({
   selector: 'sd-app',
@@ -44,23 +49,47 @@ export class AppComponent {
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
       .subscribe((event) => {
         const url = event.urlAfterRedirects;
+        const isHomeUrl = HOME_RE.test(url);
 
-        this.isHome.set(HOME_RE.test(url));
+        this.isHome.set(isHomeUrl);
 
         if (ARTICLE_RE.test(url)) {
           return;
         }
 
-        const content = this.i18n.content();
-
-        this.seo.clearJsonLd();
+        if (isHomeUrl) {
+          this.seo.setSiteJsonLd(this.i18n.lang());
+        } else {
+          this.seo.clearJsonLd();
+        }
         this.seo.update({
-          title: `super-dev.app — ${content.bio.slice(0, 48)}`,
-          description: content.bio,
+          ...this.seoFor(url, this.i18n.content()),
           path: url,
           lang: this.i18n.lang(),
           type: 'website',
         });
       });
+  }
+
+  /** Per-route title/description: series detail > tab label > brand + metaTitle (home, fallback). */
+  private seoFor(url: string, content: Content): Pick<SeoData, 'title' | 'description'> {
+    const series = content.series.find((entry) => entry.slug === url.match(SERIES_RE)?.[2]);
+
+    if (series) {
+      return { title: `${series.title} — ${SITE_NAME}`, description: series.description };
+    }
+    const tabIndex = TAB_SEGMENTS.indexOf(url.split('/')[2] ?? '');
+
+    if (tabIndex > 0) {
+      return {
+        title: `${content.tabs[tabIndex]} — ${SITE_NAME}`,
+        description: content.tabDescriptions[tabIndex],
+      };
+    }
+
+    return {
+      title: `${SITE_NAME} — ${content.metaTitle}`,
+      description: tabIndex === 0 ? content.tabDescriptions[0] : content.bio,
+    };
   }
 }

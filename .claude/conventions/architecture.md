@@ -148,10 +148,14 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
     (the `Image` `asset-loader`), `painters/` (the `<canvas>` painters). Plus the top-level `types.ts`
     (`KeycardColor` / `KEYCARD_COLORS`, …) and **`game-tuning.ts`** — the central gameplay balance/feel sheet
     (movement / look / combat / enemy / pickup / door / timing constants). The barrel (`game/index.ts`)
-    re-exports the logic + presentation, and is itself **re-exported through the `core/lib` root barrel** as
-    one line — `export * from './game'` — so consumers import them from `…/core/lib`. The **browser host
-    modules (`render/`, `input/`, `boot/`, `painters/`) are deliberately kept off both barrels** and imported
-    by direct path (§1 guardrail 2 — this keeps `Worker` / WebGPU out of the SSR-prerendered bundle). The
+    re-exports the logic + presentation, but is deliberately **NOT re-exported through the `core/lib` root
+    barrel**: every eager consumer of the root barrel (the SEO service, i18n, the shell components) would
+    otherwise drag the whole engine graph into the **initial bundle** (~190 kB raw measured). Game consumers
+    (the lazy mount component) import from `…/core/lib/game` (or deeper) by direct path — in practice today
+    every consumer goes deeper, so the sub-barrel currently has no importer: it is retained as the engine's
+    **public-surface declaration** (what is logic + presentation vs host adapter), not as a routing point. The **browser host
+    modules (`render/`, `input/`, `boot/`, `painters/`) are additionally kept off the `game/` sub-barrel** and
+    imported by direct path (§1 guardrail 2 — this keeps `Worker` / WebGPU out of the SSR-prerendered bundle). The
     `presentation/` helpers, by contrast, sit **on** the barrel and are SSR-safe *by construction* — plain
     classes whose `<canvas>` / `new Image()` calls are runtime-only and DOM-guarded, never run at import.
     Barrel placement is orthogonal to the coverage split: `DoomHud` / `WeaponView` / `loaded-image` ride the
@@ -428,7 +432,9 @@ Routing and SEO are wired at the root and in `core` — they obey the same bound
   (`resolve: { lang }`) that syncs `I18nService` before render. It is **not** a `:lang` param — a
   parameter-first parent route breaks Angular's native prerenderer (empty `<router-outlet>`). The
   generated trees keep **literal-path** configs, preserving this. `/` and unknown paths redirect to
-  `/${DEFAULT_LANG}` (a const-template string, build-evaluable). All trees share the same **lazy**
+  `/${DEFAULT_LANG}` (a const-template string, build-evaluable) — client-side navigations only; in
+  production, direct hits on `/` (301 → `/fr`) and unknown URLs (real 404) are answered at the edge
+  (`staticwebapp.config.json`, see `PRODUCT.md` §2.4 Hosting). All trees share the same **lazy**
   children (`langChildren()`). `app.routes.server.ts` enumerates prerender routes per `Lang` the same way.
 - The **route is the source of truth for language**: `routerLink`s are prefixed with `i18n.lang()`;
   the language **picker** navigates to the same path in the chosen `Lang` (`pathInLang`, swap segment 0),
@@ -437,8 +443,10 @@ Routing and SEO are wired at the root and in `core` — they obey the same bound
 - **Detail routes** read `:slug` through `input()` via `withComponentInputBinding()`; the feature
   resolves the entry by `findIndex(x.slug === slug())`.
 - **SEO logic lives in `core`**: `core/services/seo/seo.service.ts` sets title/OG/canonical/hreflang
-  + `BlogPosting` JSON-LD (hreflang alternates + `og:locale:alternate` looped over `LANGS`), using pure
-  helpers in `core/lib/site.ts` / `abs-url.ts` / `lang-path.ts` / `article-description.ts`. `AppComponent`
+  (hreflang alternates + `og:locale:alternate` looped over `LANGS`) + a route-shaped JSON-LD `@graph`
+  (`BlogPosting` + `BreadcrumbList` on articles, `WebSite` + `Person` on the home); the root
+  + service SEO wiring uses pure helpers in `core/lib/site.ts` / `abs-url.ts` / `lang-path.ts` /
+  `article-description.ts` / `truncate-at-word.ts` / `tab-segments.ts` / `og-image.ts`. `AppComponent`
   sets the baseline; article-detail sets its own. The SEO service depends inward (on `core/lib` +
   `domain`) like any other `core` service.
 - **Build-time config**: `client/src/environments/environment{,.prod}.ts` (`apiBaseUrl`), swapped by

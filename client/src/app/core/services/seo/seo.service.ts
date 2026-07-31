@@ -7,6 +7,7 @@ import {
   OG_LOCALE,
   SITE_NAME,
   SITE_ORIGIN,
+  SOCIAL_URLS,
   absUrl,
   pathInLang,
 } from '../../lib';
@@ -26,6 +27,12 @@ export interface SeoData {
 export interface ArticleJsonLd extends SeoData {
   datePublished: string;
   dateModified: string;
+}
+
+/** One BreadcrumbList link (localized label + app path). */
+export interface Crumb {
+  name: string;
+  path: string;
 }
 
 /**
@@ -69,29 +76,47 @@ export class SeoService {
     this.setHreflang(data.path);
   }
 
-  /** Inject/replace the BlogPosting JSON-LD for an article route. */
-  public setArticleJsonLd(data: ArticleJsonLd): void {
+  /** Inject/replace the BlogPosting (+ BreadcrumbList) JSON-LD for an article route. */
+  public setArticleJsonLd(data: ArticleJsonLd, crumbs: readonly Crumb[]): void {
     const url = absUrl(data.path);
     const image = data.image ?? DEFAULT_OG_IMAGE;
 
-    this.setJsonLd({
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: data.title,
-      description: data.description,
-      datePublished: data.datePublished,
-      dateModified: data.dateModified,
-      inLanguage: data.lang,
-      image: [image],
-      author: { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url },
-      publisher: {
-        '@type': 'Organization',
-        name: SITE_NAME,
-        url: SITE_ORIGIN,
-        logo: { '@type': 'ImageObject', url: `${SITE_ORIGIN}/favicon.svg` },
+    this.setJsonLd([
+      {
+        '@type': 'BlogPosting',
+        headline: data.title,
+        description: data.description,
+        datePublished: data.datePublished,
+        dateModified: data.dateModified,
+        inLanguage: data.lang,
+        image: [image],
+        author: { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url },
+        publisher: {
+          '@type': 'Organization',
+          name: SITE_NAME,
+          url: SITE_ORIGIN,
+          logo: { '@type': 'ImageObject', url: `${SITE_ORIGIN}/favicon.svg` },
+        },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
       },
-      mainEntityOfPage: { '@type': 'WebPage', '@id': url },
-    });
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((crumb, position) => ({
+          '@type': 'ListItem',
+          position: position + 1,
+          name: crumb.name,
+          item: absUrl(crumb.path),
+        })),
+      },
+    ]);
+  }
+
+  /** Inject/replace the site-level WebSite + Person JSON-LD (home routes). */
+  public setSiteJsonLd(lang: Lang): void {
+    this.setJsonLd([
+      { '@type': 'WebSite', name: SITE_NAME, url: SITE_ORIGIN, inLanguage: lang },
+      { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url, sameAs: [...SOCIAL_URLS] },
+    ]);
   }
 
   /** Remove the JSON-LD when leaving an article for a non-article route. */
@@ -156,7 +181,7 @@ export class SeoService {
     }
   }
 
-  private setJsonLd(payload: object): void {
+  private setJsonLd(entities: readonly object[]): void {
     let script = this.doc.getElementById(SeoService.JSON_LD_ID) as HTMLScriptElement | null;
 
     if (!script) {
@@ -165,6 +190,7 @@ export class SeoService {
       script.type = 'application/ld+json';
       this.doc.head.appendChild(script);
     }
-    script.textContent = JSON.stringify(payload); // textContent → no HTML parsing / XSS
+    // textContent → no HTML parsing / XSS
+    script.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': entities });
   }
 }
