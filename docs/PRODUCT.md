@@ -20,7 +20,7 @@ Division of labour (single-source — each fact lives in exactly one place):
 
 ## 1. Concept
 
-A multilingual (FR/EN/ES/DE, extensible via `LANG`) **"YouTube-channel" portfolio** for a full-stack **.NET / Angular / Azure** dev
+A multilingual (FR/EN/ES/DE, extensible via `LANG`) **"YouTube-channel" portfolio** for a **.NET / Angular / Azure** technical lead
 (brand `super-dev` + `.app` TLD, warm-red "play button" identity). The home page mimics a
 YouTube **watch page**; its "video" is a **simulated, autoplaying, looping player** whose frames are
 five timed, animated **scenes** — there is no real video element. Aesthetic: dark "cinema" + terminal/
@@ -74,9 +74,8 @@ Members left→right (visual notes):
   description) and routes to `/articles` from any other screen so results show as you type; an empty
   query shows all. Focus ring `border-color:--accent-deep`.
 - **Actions** (`.nav__actions`, gap 8px): the **`<sd-prefs>`** cluster (theme toggle + language picker,
-  §2.1.1) then the **`S` avatar** (32px circle, the brand-red sphere
-  `radial-gradient(circle at 30% 25%, oklch(72% .18 22deg), oklch(32% .12 22deg) 70%)` over `--surface`
-  — same identity as the channel-header avatar — `#0a0a0b` glyph, 2px border).
+  §2.1.1) then the **photo avatar** (32px circle, `/avatar.jpg` as a `center/cover` CSS background
+  over `--surface` — same identity as the channel-header avatar — 2px border).
 
 ### 2.1.1 Preferences — theme + language (`sd-prefs`, `.prefs__*`)
 
@@ -111,23 +110,24 @@ prompt/value terminal readout (only the uptime value is from content; the other 
      ┌─────────────────────┐
      │  $ super-dev.app  │
      │  > status: online   │
-     │  > role: full-stack │
+     │  > role: tech lead  │
      └─────────────────────┘
   ```
 
   and a right-aligned **terminal readout** (`.banner__terminal`):
   `$ uptime` / `{uptime value from content}` / `$ stack --top` / `  .net  angular  azure  flutter`.
-- **Profile** (`.profile`, grid `128px | 1fr | auto`): 128px avatar (`.profile__avatar`, radial
-  gradient `circle at 30% 25%, oklch(72% .18 22deg)→oklch(32% .12 22deg) 70%`, 4px `--bg` border,
-  `--sh-2`, **`margin-top:-64px`** overlap, green status dot `::after` 18px bottom-right) · meta:
-  `h1 "{author} — <span>full-stack</span>"` (the `full-stack` span is accent, fixed brand art),
-  handle line (`@super-dev · {featured category without #} · ★ {open-to-work}`), stats line
-  (vanity numbers from content: `<b>{subscribers count}</b> {subscribers} · <b>{videos count}</b>
-  {videos} · {joined} <b>{joined year}</b>`), bio paragraph · actions: **Share** + **Download-CV**
+- **Profile** (`.profile`, grid `128px | 1fr | auto`, `align-items:center`): 128px avatar
+  (`.profile__avatar`, the `/avatar.jpg` photo as a `center/cover` CSS background over `--surface`,
+  4px `--bg` border, `--sh-2` — no status dot: a personal *presence* indicator would be a
+  fabricated claim; the banner's ASCII `status: online` describes the **site**, which genuinely is)
+  · meta:
+  `h1 "{author} — <span>tech lead</span>"` (the `tech lead` span is accent, fixed brand art),
+  handle line (`@super-dev · {featured category without #}`), stats line
+  (`{joined} <b>{joined year}</b>` — real facts only, no fabricated audience numbers), bio paragraph · actions: **Share** + **Download-CV**
   (both `btn btn--ghost btn--sm`, 14px icons) + **Subscribe** toggle (primary `Subscribe` no-icon ↔
   neutral `btn` `Subscribed` + bell).
 
-**Below `md` on non-home pages** the header collapses to a **slim identity row**: the banner, the terminal readout, the handle line, the stats line, the bio, and the Share/CV ghost actions are all hidden; only a **40px avatar**, the `{author} — full-stack` name, and the Subscribe button remain. All of these are restored at `md` (the full two-part section described above).
+**Below `md` on non-home pages** the header collapses to a **slim identity row**: the banner, the terminal readout, the handle line, the stats line, the bio, and the Share/CV ghost actions are all hidden; only a **40px avatar**, the `{author} — tech lead` name, and the Subscribe button remain. All of these are restored at `md` (the full two-part section described above).
 
 **On the home route below `md`** the whole channel-header is **hidden** (`_layout.scss`:
 `:root:has(sd-home) sd-channel-header { display: none }`, restored to `block` at `md` — route-aware
@@ -149,8 +149,8 @@ its route is active (Home matched exactly, the rest fuzzy) and exposing `aria-se
 ### 2.4 Cross-cutting
 
 - **`data-screen-label`**: every screen-level section carries a numbered authoring marker (`00 Top
-  nav`, `01 Channel header`, `02 Channel tabs`, `03 Video meta`, `04 Comments`, `05 Recent articles
-  sidebar`, `08/09/10 Tab — about/stack/contact`, …). **No CSS, renders nothing** — keep it.
+  nav`, `01 Channel header`, `02 Channel tabs`, `03 Video meta`, `04 Reviews`, `05 Let's talk`,
+  `06 Recent articles sidebar`, `09/10/11 Tab — about/stack/contact`, …). **No CSS, renders nothing** — keep it.
 - **Theme**: light unless the stored theme preference is `'dark'`; applied as `<html data-theme>`;
   `index.html` carries a pre-paint anti-flash script (same stored key, defaults light).
 - **Baseline SEO**: on each navigation **except** an article-detail URL (which sets its own), the
@@ -256,8 +256,8 @@ dark surface. `code-block` uses `--code-*` for **every colour** — never the th
 
 ### 3.3 Base / global primitives
 
-- **Body**: `margin:0`, `font-family:--f-sans`, **`font-size:13px` mobile-first base → `14px` from
-  `md`**, `line-height:1.5`, `-webkit-font-smoothing:antialiased`,
+- **Body**: `margin:0`, `font-family:--f-sans`, **`font-size:14px`** (flat — the old 13px mobile
+  nudge was dropped in the mobile-readability pass), `line-height:1.5`, `-webkit-font-smoothing:antialiased`,
   `text-rendering:optimizeLegibility`. `* { box-sizing:border-box }`.
 - **Scanline overlay** (`body::before`): fixed full-viewport, `pointer-events:none`,
   `repeating-linear-gradient(0deg, rgb(255 255 255 / 1.2%) 0 1px, transparent 1px 3px)`,
@@ -310,13 +310,13 @@ macOS traffic lights, shared verbatim by the code-block head and the contact for
 
 ## 4. Home — the watch page + the player (centerpiece)
 
-**Layout**: the home page stacks `<sd-player>` + `<sd-video-meta>` + `<sd-comments>` as the main
+**Layout**: the home page stacks `<sd-player>` + `<sd-video-meta>` + `<sd-reviews>` + `<sd-lets-talk>` as the main
 column and a sibling `<sd-up-next>` aside — both `display:contents`, so the `.main` 2-col grid
 (`1fr / 380px`) owns the placement. The home page itself has no logic beyond composing those four.
 
 **On phones** (below `md`) the home reads like the **YouTube-app watch page**: the shell
 channel-header is hidden on this route (§2.2), so the column is `nav → tabs → full-bleed 16/9 player
-→ video-meta (one info block, incl. the mobile-only bio) → comments (collapsed) → up-next` — the
+→ video-meta (one info block, incl. the mobile-only bio) → the Malt reviews → the let's-talk CTA → up-next` — the
 single-column `.main` stacking from §3.3, with the watch-page specifics below.
 
 ### 4.1 The simulated player
@@ -328,16 +328,17 @@ single-column `.main` stacking from §3.3, with the watch-page specifics below.
   advances in **0.1s steps every 100ms**, wrapping back to 0 at the total duration. It can be
   toggled, played, paused, sought (clamped to the valid range), or advanced to the next chapter
   (wrapping past the last).
-- **Chapters / timeline** (from content, **total duration = 158s**; the dense scenes' windows are
-  sized to absorb the per-card `SCENE_CARD_DWELL`):
+- **Chapters / timeline** (from content, **total duration = 160s**; the dense scenes' windows are
+  sized to absorb the per-card `SCENE_CARD_DWELL` — re-timed when the scene content went CV-real,
+  so every scene finishes typing comfortably inside its window):
 
   | id | seconds | timestamp | scene |
   |---|---|---|---|
   | `intro` | 0 | `00:00` | `sd-scene-intro` |
   | `stack` | 15 | `00:15` | `sd-scene-stack` |
-  | `projects` | 48 | `00:48` | `sd-scene-projects` |
-  | `timeline` | 93 | `01:33` | `sd-scene-timeline` |
-  | `outro` | 128 | `02:08` | `sd-scene-outro` |
+  | `projects` | 52 | `00:52` | `sd-scene-projects` |
+  | `timeline` | 104 | `01:44` | `sd-scene-timeline` |
+  | `outro` | 147 | `02:27` | `sd-scene-outro` |
 
   The set of valid scene ids is exactly those 5; each matches its `sd-scene-{id}` element.
 - **Scene switching**: all 5 scenes are mounted simultaneously, absolutely stacked, and crossfaded —
@@ -622,12 +623,12 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   palettes, badges, beats AND each level's built/planned status) lives in the `level-designer` agent —
   this doc doesn't duplicate it.
 
-### 4.2 Video-meta · like-bar · comments · up-next
+### 4.2 Video-meta · like-bar · reviews · let's-talk · up-next
 
-- **video-meta** (`sd-video-meta`): the featured title as an `h2`; author row (`S` avatar
-  `.video-meta__author-av` 40px radial-gradient, `super-dev` + `✓`, `{subscribers count} {subscribers}`)
+- **video-meta** (`sd-video-meta`): the featured title as an `h2`; author row (the 40px photo avatar
+  `.video-meta__author-av` (`/avatar.jpg` CSS background), `{author}` + `✓` — no sub-line)
   + actions (`<sd-like-bar>`, **Share**, **Download-CV** — the two buttons are `btn btn--sm`). **Mobile-only bio** (`.video-meta__bio`, between the
-  author row and the description card: `margin:8px 0 0`, `--text-dim`, 13px / 1.55, hidden at `md`)
+  author row and the description card: `margin:8px 0 0`, `--text-dim`, 14px / 1.55, hidden at `md`)
   — the same `content.bio` the channel-header shows; on the phone watch page (§2.2 hides the
   channel-header on home) this makes `video-meta` the **single** channel-info block.
   **Description card**: a mono meta strip pairing each
@@ -635,30 +636,32 @@ total duration) and hover to the scrub-preview position. Global keydown shortcut
   description body + the **chapters list** — each `.chap` row seeks to its chapter's start time and
   gets `.is-active` (accent) while it is the current chapter.
 - **like-bar** (`sd-like-bar`, `.likebar`): pill `height:36px`, `--surface-2`, two buttons split by a
-  1px `__divider`; a local vote state (`up`/`down`/none, re-click clears, active → accent). The up
-  button shows a base count of **248** plus 1 when upvoted; the down button is count-less. Icons 16px.
-- **comments** (`sd-comments`/`sd-comment`): a header **toggle button** (`.comments__head` — comments
-  count + sort label + a `chevron-up`/`chevron-down` 16px icon, `aria-expanded`, full-width reset
-  button) + a **post-a-review** input row (a `<form>`: `S` avatar + bound input; a `commentSend`
-  button — "Publier"/"Post" — surfaces only once the field holds text, and Enter submits too) + a list
-  of `<sd-comment>`; the input + list render only while expanded. A submitted review is **prepended**
-  to the seeded testimonials as a `Comment` (`who`=`commentYou`, `__name-tag`=`commentYouTag`, brand-red
-  avatar, `when`=`commentJustNow`, 0 likes) and **persisted to localStorage** by `ReviewsService`
-  (newest-first — the client-only seam the real .NET API replaces next phase). The empty/default row keeps
-  the original 2-column grid (a `--posting` modifier adds the send-button track only while typing), so the
-  desktop home baseline is byte-identical. **Collapsed by default on phones** (the initial
-  state is `!ViewportService.isCompact()` — expanded on desktop, where the section reads exactly as
-  before; the chevron is hidden at `md`). Seed = **4 comments, 1 pinned**.
-  Each `.comment` (grid `40px 1fr`, gap 14px): colored 40px avatar (the author's first letter on the
-  comment's color), `@{handle}` (author name lowercased, spaces stripped) + uppercase `__name-tag`
-  pill, an optional `📌 {pinned label}`, a `__when` mono 11px timestamp, body 13.5px, and a single
-  **like toggle** showing the base likes plus the user's vote (mono 11px).
+  1px `__divider`; a local vote state (`up`/`down`/none, re-click clears, active → accent). Both
+  buttons are **count-less** (no fabricated like numbers) and carry `aria.like`/`aria.dislike`
+  labels. Icons 16px.
+- **reviews** (`sd-reviews`, `.reviews`/`.review`): **three real Malt recommendations, republished
+  in full with attribution** (Adrien Verschaere — Full-Stack Developer at Giraudy; Marc — CIO at
+  Giraudy; Nicolas — Cloud Architect at Dcube) — the honest successor of the deleted fake
+  testimonials, kept **deliberately discreet**: a single **collapsed toggle row** by default
+  (Malt's own pattern) — three overlapping 22px initial discs (data-driven `[style.background]`,
+  `-6px` stack), the one-line `reviews.teaser`, a bordered `via Malt` chip and a
+  `chevron-down`/`chevron-up` icon, `aria-expanded` on the full-width reset button. Expanding
+  reveals the mono subtitle (notes the non-FR locales are translations) with the
+  `reviews.linkLabel ↗` link to the public Malt profile (`target="_blank" rel="noopener"`), then
+  each `.review` (grid `40px 1fr`): 40px initial disc, name + mono `role` pill (`--surface-2`),
+  body 14.5px on phones / 13.5px from `md` (`pre-line` — keeps the authors' paragraph breaks).
+- **let's talk** (`sd-lets-talk`, `.lets-talk`): the honest CTA that **replaced the simulated
+  comments section** (fabricated testimonials from invented people don't survive real visitors). A
+  bordered `--surface` card: mono `discuss.heading` (terminal-flavored, e.g. `$ ./discutons.sh`),
+  one-line `discuss.body`, then an actions row — a primary `discuss.cta` button routing to
+  `/{lang}/contact` (mail icon) + the **LinkedIn and GitHub** links pulled from
+  `contact.altMethods` (single data source, opened `target="_blank" rel="noopener"`).
 - **up-next** aside (`sd-up-next`): header (up-next title · `<b>{read-next}</b>`) + the **first 5**
   articles as `.vid-card` rows
   (grid `168px 1fr`, gap 12px) linking to each article's detail. Thumb 16:9: background
   `radial-gradient(circle at 30% 30%, {accent}40, transparent 60%), #0a0a0c` + `__thumb-grid` (16px
   dotted overlay, shared `_cards.scss`) + 32px symbol + tag + a `__thumb-dur` read-time badge; then a
-  tag pill, a 2-line title, `{author} ✓`, and `{reads} • {ago}`.
+  tag pill, a 2-line title, `{author} ✓`, and `{localized date} • {read time}`.
 
 ---
 
@@ -668,23 +671,22 @@ A lazy list at `''` and a detail at `':slug'`, where **`:slug` = the article's s
 ASCII, identical across locales, = the Markdown filename stem), bound as a required string input; the detail
 page resolves the matching article (falling back to the first).
 
-**23 articles, 9 filter pills** (3 semantic + 6 tag); source order = `date` descending (newest first).
+**23 articles, 8 filter pills** (2 semantic + 6 tag); source order = `date` descending (newest first).
 
-- **Filtering**: pill 0 = ALL (source order), pill 1 = RECENT (first 6), pill 2 = POPULAR (descending
-  by parsed read count), pills ≥3 = TAG, matched by **pill position** (locale-independent) against the
-  tag list at `index − 3`.
+- **Filtering**: pill 0 = ALL (source order), pill 1 = RECENT (first 6), pills ≥2 = TAG, matched by
+  **pill position** (locale-independent) against the tag list at `index − 2`.
 - **Tag set** (a fixed, closed list): `['.NET', 'ANGULAR', 'AZURE', 'FLUTTER', 'DEVOPS', 'TUTO']`.
   Distribution `.NET`×6, `ANGULAR`×6, `AZURE`×3, `FLUTTER`×3, `DEVOPS`×3, `TUTO`×2. Localized pill
-  labels (FR `Tout/Récent/Populaire/.NET/Angular/Azure/Flutter/DevOps/Tuto`) match by **position**,
+  labels (FR `Tout/Récent/.NET/Angular/Azure/Flutter/DevOps/Tuto`) match by **position**,
   not text.
-- **Read-count parsing**: a string like `'2,4k lectures'` / `'1.2M reads'` reads as a number — comma
-  becomes a dot, the leading number is parsed, then multiplied by a million if it carries `M`, by a
-  thousand if it carries `k` (so `2,4k` = 2400 outranks `892`).
+- **Card meta**: every article card shows `{localized date} • {read time}` — the date is the
+  entry's real ISO `date` rendered by `formatArticleDate` (`Intl.DateTimeFormat`, UTC-pinned, short
+  month, e.g. `7 juil. 2026` / `Jul 7, 2026`). No fabricated read counts or fuzzy "ago" strings.
 - **Per-tag accent color** (one tag per article): `.NET #b4451c` · `ANGULAR #a2261c` · `AZURE
   #1c5fb4` · `FLUTTER #1c8fb4` · `DEVOPS #1c7e4a` · `TUTO #a26b1c`. Each article also has a mono
-  **glyph symbol**, a read time, a reads count, a fuzzy "ago", plus routing/SEO fields (slug, ISO
-  date, description) and an optional series slug + 1-based series order. Author identity is the fixed
-  `super-dev ✓` / `S` avatar everywhere.
+  **glyph symbol** and a read time, plus routing/SEO fields (slug, ISO date, description) and an
+  optional series slug + 1-based series order. Author identity is the fixed `{author} ✓` (the real name, `Stéphane De Todaro`) + photo
+  avatar everywhere; `super-dev` stays as the BRAND (domain, handle, ASCII box), never as the person.
 
 ### 5.1 Article slug → tag → symbol table (source order, newest-first)
 
@@ -718,7 +720,9 @@ page resolves the matching article (falling back to the first).
 
 ### 5.2 List & visual anatomy (`articles.component`)
 
-The list page (`sd-articles`, `tab-pane` host) holds a **language-stable** selected filter index
+The list page (`sd-articles`, `tab-pane` host) titles itself `$ ls articles/` (the language-neutral
+terminal command, whole title in the accent span — the unified tab-head style) and holds a
+**language-stable** selected filter index
 (default ALL) and shows the articles filtered by it; the filter pills change the selection; each card
 links to that article's detail.
 
@@ -728,7 +732,7 @@ wrap with 6px gap, 24px bottom margin. **`.vgrid`** = `repeat(auto-fill, minmax(
 16:9 `__thumb` (`--r-md`, radial accent gradient via per-card `--accent` + `color-mix 25%` over
 `#0a0a0c`, + 16px dotted `__thumb-grid`, **56px** `__thumb-sym`, tag, `__dur` read-time badge, a 54px
 accent `__play` overlay (decorative `aria-hidden` span) scaling in on hover); meta row (tag chip +
-decorative `__more`), 2-line `__title` (14px), `__sub` (`{author} ✓`), `__stats` (`{reads} • {ago}`).
+decorative `__more`), 2-line `__title` (15px on phones / 14px from `md`), `__sub` (`{author} ✓`), `__stats` (`{localized date} • {read time}`).
 When the active filter **and** the channel-search query leave no match, the grid is replaced by a
 `.vgrid-empty` line (`articlesUi.noResults`, mono 13px `--text-dim`).
 
@@ -754,8 +758,8 @@ Home › Articles › title); the structured-data is cleared when the page is le
   list) + `__actions` (a single **Share** button, label from content).
 - **Hero**: `__art` **280px** tall (accent bg + 32px dotted grid + **96px** centered symbol + tag);
   `__hero-inner` `padding:28px 32px` → tag pill (bordered, accent) + `__title` **36px** weight 700
-  (`letter-spacing:-0.025em`) + byline (36px `S` avatar, `super-dev ✓` name, mono meta in order **ago •
-  readTime read • reads**).
+  (`letter-spacing:-0.025em`) + byline (the 36px photo avatar, `{author} ✓` name, mono meta in order
+  **{localized date} • {read time} read**).
 - **Series ribbon** `.series-ribbon` (only when the article is in a series): 40px `__sym` tile +
   `__label` (`Article n of N`) + `__title` link (accent, links to the series detail) + `__sub`; a
   `__nav` row (dashed top) with prev/next article pills (drawn from the series order, hidden at
@@ -784,7 +788,9 @@ Home › Articles › title); the structured-data is cleared when the page is le
 
 ## 6. Series
 
-A lazy list at `''` and a detail at `':slug'` (resolved by matching the slug). **4 fixed series**,
+A lazy list at `''` (titled `$ ls series/` — the language-neutral terminal command, whole title in
+the accent span, same unified tab-head style as every tab) and a detail at `':slug'` (resolved by
+matching the slug). **4 fixed series**,
 each with a slug, title, description, three layer colors, and a symbol. **The member count and total
 read time are derived, not stored.**
 
@@ -805,9 +811,9 @@ read-time minutes → `"MM min"` if under 60, else `"Xh YY"` (zero-padded).
 
 ### 6.2 List & detail visual (the 3D stacked-card)
 
-The list page (`sd-series`, `tab-pane` host) shows each series augmented with its derived count and
-total read time, links each card to the series detail, and uses the card position to drive the
-"updated N days ago" vanity text. The detail page (`sd-series-detail`, `tab-pane` host) resolves the
+The list page (`sd-series`, `tab-pane` host) shows each series augmented with its derived count,
+total read time and a **real "updated" date** (the newest member article's date via
+`formatArticleDate`; hidden for an empty series), and links each card to the series detail. The detail page (`sd-series-detail`, `tab-pane` host) resolves the
 current series from the route slug, lists its member articles in order, derives the total read time,
 and runs the same browser-only auto-scroll-under-nav as the article detail.
 
@@ -824,8 +830,8 @@ offset down-right, with a centered mono symbol tinted `colors[0]` and a `text-sh
   `__sym`, overline, **32px** `__title`, desc, stats `{count} articles · {total read}`); a
   `Commencer` CTA **only if non-empty** (links to the first member); list `__list` of `.series-row`
   (grid `48px 64px 1fr 24px`): **1-based zero-padded** ordinal `__n` (`01`, `02`…) + article symbol
-  tile (own accent color, 64px from `_symbol-box.scss`) + tag pill + mono meta (tag · readTime · reads ·
-  ago) + hover `→` `__arrow`. Empty series → dashed `__empty`, no CTA. **Mobile-first**: on the phone the
+  tile (own accent color, 64px from `_symbol-box.scss`) + tag pill + mono meta (tag · `{localized
+  date}` · readTime) + hover `→` `__arrow`. Empty series → dashed `__empty`, no CTA. **Mobile-first**: on the phone the
   hero stacks to one column and the per-row symbol tile is hidden; the `240px 1fr` hero and the symbol
   column both return at `md`.
 
@@ -835,23 +841,24 @@ offset down-right, with a centered mono symbol tinted `colors[0]` and a `text-sh
 
 All three are simple `tab-pane` tabs (`sd-*`) rendering a `<section class="tabview">`.
 
-- **Stack** (`sd-stack`, `09 Tab — stack`, `$ cat stack.full`): a heading-only `tabview__head` (**no
+- **Stack** (`sd-stack`, `10 Tab — stack`, `$ cat stack.full`): a heading-only `tabview__head` (**no
   `__count` block**), then mastery tiers (seeded EXPERT / CONFIRMÉ / FAMILIER) — each a tier color
   (4px bar / name / years), a subtitle, a tech count + label, and a tech grid
-  `repeat(auto-fill, minmax(260px, 1fr))` of cards (name 13.5px, colored years mono, a mono note).
+  `repeat(auto-fill, minmax(260px, 1fr))` of cards (name 14.5px on phones / 13.5px from `md`, colored years mono, a mono note 12.5px / 11.5px from `md`).
   `.stack-tier__head` grid `4px 1fr auto`.
-- **About** (`sd-about`, `08 Tab — about`, `$ cat about.md`): `.about-grid` 2-col `minmax(0,1fr) /
+- **About** (`sd-about`, `09 Tab — about`, `$ cat about.md`): `.about-grid` 2-col `minmax(0,1fr) /
   320px`, gap 32px (**mobile-first: one column on the phone** — the aside stacks under the bio — the
-  2-col split returns at `md`). Bio paragraphs (`.about-bio__p` 15px `line-height:1.65`, max-width 65ch, **38px**
+  2-col split returns at `md`). Bio paragraphs (`.about-bio__p` 16px on phones / 15px from `md`, `line-height:1.65`, max-width 65ch, **38px**
   accent mono drop-cap on the first letter) + a `• {author} — portfolio{brand TLD}` signature (dashed
   top). Aside `.about-side` (14px gap): an **INFOS** card (a definition list of details, each row grid
   `110px 1fr`) + a **LIENS** card (links rendered as **inert `#` anchors**, `›` accent prefix; each
   link's icon field is unused).
-- **Contact** (`sd-contact`, `10 Tab — contact`, `$ ./contact.sh`): a heading-only `tabview__head`
+- **Contact** (`sd-contact`, `11 Tab — contact`, `$ ./contact.sh`): a heading-only `tabview__head`
   (no `__count`), then `.contact-grid` 2-col `minmax(0,1fr) / 300px`, gap 28px (**mobile-first: one column on the phone**,
-  so the terminal-window form runs **full-width**; the 2-col split returns at `md`). Left: an
-  availability banner (`.contact-avail` grid `1fr auto`, green gradient,
-  **pulsing 8px green dot** `pulse 1.6s`, response time) + a **terminal-window MOCK form**
+  so the terminal-window form runs **full-width**; the 2-col split returns at `md`). Left: a
+  response-time banner (`.contact-avail`, green gradient — availability claims and the
+  pulsing OPEN dot were removed with the fabricated social proof; only the response-time block
+  remains) + a **terminal-window MOCK form**
   (`.contact-form`, traffic-light dots, `$`-sigil labels: name / email / subject `<select>` / message
   `<textarea rows=6>`). Submit is **client-side validated first** (`NgForm` (`ngSubmit`): required
   name/message + Angular `email` validator; an invalid submit is blocked and surfaces inline
@@ -908,7 +915,7 @@ All three are simple `tab-pane` tabs (`sd-*`) rendering a `<section class="tabvi
   i18n / vanity-number / filter-vocabulary / series-count / og-image loose ends were closed in the
   2026-06-04 sweep. Remaining dynamic style bindings are data-driven, pointer-tracked (the game joystick), or the deliberate reveal fade-in.
 - **Intentional, not debt** (fixed brand art / data — reproduce as-is): the channel-header h1 role
-  word `full-stack`, the decorative ASCII status box + terminal readout, the `@super-dev` handle
+  word `tech lead`, the decorative ASCII status box + terminal readout, the `@super-dev` handle
   row, the `contact@super-dev.app` contact address, and the player's `4K · HDR` badge (the player's two
   aux buttons are both wired now — ⚙️ gear → speed menu, ⛶ pip → mini-player).
 - **Deliberately dark in light theme**: the player stage, the code-block chrome, and the contact form
@@ -926,7 +933,7 @@ note, not an interface spec.
 - **Player / animation**: the reveal (opacity fade-in), the typewriter (left-to-right text slice at a
   fixed rate), the sequential `typingSchedule`, the mobile-montage `focusedIndex` (active item from the
   playhead), and the `MM:SS` time formatter described in §4.1.
-- **Articles**: read-count parsing (k/M → number), the all/recent/popular/tag filter selection, and
+- **Articles**: the localized card date (`formatArticleDate`), the all/recent/tag filter selection, and
   the capped article description, all described in §5.
 - **Series ↔ article mapping**: the derived series→members grouping and the per-series total read time
   described in §6.
@@ -963,9 +970,6 @@ interface spec.
   **default LIGHT**), written onto `<html data-theme>` and persisted, with a toggle and a setter.
 - **Player clock**: the simulated playhead described in §4.1 (time + playing state, derived current
   chapter and elapsed, the 100ms tick, and toggle/play/pause/seek/next-chapter).
-- **Viewport**: a single reactive "below `md`?" flag from a `matchMedia` listener — `false` on the
-  server (SSR/prerender-safe), live in the browser. Drives the comments' collapsed-by-default start on
-  phones (its sole consumer); pure-CSS responsive behavior never goes through it.
 - **SEO**: sets the title, Open Graph / Twitter / canonical / hreflang tags per route plus a
   route-shaped structured-data graph (`BlogPosting` + `BreadcrumbList` on articles, `WebSite` +
   `Person` on the home). All writes are idempotent (add-or-replace) so

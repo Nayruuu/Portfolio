@@ -110,7 +110,7 @@ writeFileSync(
 
 > ${content[primary].bio}
 
-Portfolio of a full-stack .NET / Angular / Azure developer, presented as a "YouTube channel".
+Portfolio of a .NET / Angular / Azure technical lead, presented as a "YouTube channel".
 Language is a URL prefix (${LANGS.map((lang) => `\`/${lang}\``).join(', ')}).
 
 ${articleSections}

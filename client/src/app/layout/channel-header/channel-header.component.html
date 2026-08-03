@@ -15,20 +15,11 @@
   <div class="profile">
     <div class="profile__avatar" role="img" [attr.aria-label]="content().author"></div>
     <div class="profile__meta">
-      <h1>{{ content().author }} — <span>full-stack</span></h1>
+      <h1>{{ content().author }} — <span>tech lead</span></h1>
       <div class="profile__handle">
-        &#64;super-dev.app · {{ content().featuredCategory.replace('#', '') }} · ★
-        {{ content().openToWork }}
+        &#64;super-dev.app · {{ content().featuredCategory.replace('#', '') }}
       </div>
       <div class="profile__stats">
-        <span
-          ><b>{{ content().subscribersCount }}</b> {{ content().subscribers }}</span
-        >
-        <span>·</span>
-        <span
-          ><b>{{ content().videosCount }}</b> {{ content().videos }}</span
-        >
-        <span>·</span>
         <span
           >{{ content().joined }} <b>{{ content().joinedYear }}</b></span
         >

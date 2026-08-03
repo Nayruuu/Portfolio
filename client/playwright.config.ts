@@ -41,7 +41,7 @@ export default defineConfig({
     // Mobile only re-runs the visual specs (mobile baselines). Behavioural specs
     // drive nav controls that live in the closed drawer at phone widths, so they
     // stay desktop-only on chromium.
-    { name: 'mobile', use: { ...devices['Pixel 5'] }, testMatch: /visual(-detail)?\.spec\.ts/ },
+    { name: 'mobile', use: { ...devices['Pixel 5'] }, testMatch: /visual(-detail|-scenes)?\.spec\.ts/ },
     // WebKit (the iOS Safari engine) — the mobile visual baselines run on Chromium
     // device emulation, so engine-specific WebKit rendering bugs are invisible there.
     // This narrow project guards the player against them. Needs `npx playwright install webkit`.

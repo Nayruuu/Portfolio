@@ -109,22 +109,12 @@
 		gap: 8px;
 	}
 
-	// Same brand-red "sphere" identity as the channel-header avatar (was a red→purple
-	// gradient that read as a second, off-brand identity) — just sized down for the bar.
+	// Same photo identity as the channel-header avatar — just sized down for the bar.
 	&__avatar {
 		width: 32px;
 		height: 32px;
 		border-radius: 999px;
-		background:
-			radial-gradient(circle at 30% 25%, oklch(72% 0.18 22deg), oklch(32% 0.12 22deg) 70%),
-			var(--surface);
-		display: grid;
-		place-items: center;
-		font-family: var(--f-mono);
-		font-weight: 700;
-		font-size: 13px;
-		letter-spacing: -0.04em;
-		color: #0a0a0b;
+		background: var(--surface) url('/avatar.jpg') center / cover;
 		cursor: pointer;
 		border: 2px solid var(--border);
 	}

@@ -1,6 +1,6 @@
 # super-dev — Angular 21 portfolio
 
-A "YouTube channel" portfolio for a full-stack .NET / Angular / Azure developer.
+A "YouTube channel" portfolio for a .NET / Angular / Azure technical lead.
 **Project stack:** Angular 21 standalone components, signals, zoneless change detection, SCSS.
 
 ---
@@ -40,7 +40,7 @@ client/src/app/
 │
 ├── core/                       ← UI-less client/infra logic (one bounded exception: the game engine core/lib/game)
 │   ├── api/                    ← the seam to the .NET API (content-api.service, api.token)
-│   ├── services/               ← signal / SignalStore state (content, game, i18n, player, reviews, search, seo, theme, viewport)
+│   ├── services/               ← signal / SignalStore state (content, game, i18n, player, search, seo, theme)
 │   ├── lib/                    ← 100 %-tested pure functions (markdown, tokenize, site…) + bsp-engine/ + game/ (BSP engine + the embedded OPEN SPACE.EXE game: logic 100 % tested, browser host covered by the e2e net)
 │   └── content/                ← one content.<lang>.json per language + the shared typed bridge + the generated article-bodies.ts
 │
@@ -48,7 +48,7 @@ client/src/app/
 ├── layout/                     ← the shell (nav, prefs, channel-header, tabs-bar)
 │
 └── features/                   ← one lazy-loaded folder per feature
-    ├── home/                   ← player (+ scenes, floating mini-player), video-meta, comments, like-bar, up-next
+    ├── home/                   ← player (+ scenes, floating mini-player), video-meta, reviews (real Malt recommendations), lets-talk, like-bar, up-next
     ├── bsp-demo/               ← sd-bsp-demo mount component for OPEN SPACE.EXE (engine in core/lib/game; mounted in the player + served at /bsp)
     ├── articles/               ← filterable list (+ article-detail)
     ├── series/                 ← themed cards (+ series-detail)
@@ -116,7 +116,6 @@ is created by Terraform through `deploy-infra`; its token is fetched at runtime 
 4. **Your CV (PDF)** — replace the files under `client/public/cv/`; each locale points to a file through the `cvUrl` key of `core/content/content.<lang>.json` (ES/DE currently reuse the EN PDF; both download buttons — channel header and video meta — read the key)
 5. **The avatar** — replace `client/public/avatar.jpg` (512px square; both avatars — channel header and video meta — load it as a CSS background)
 6. **Your links** — `sceneOutro.links` + `about.links` + `contact.altMethods`
-7. **Your availability** — `contact.avail`
 
 ## Notes
 

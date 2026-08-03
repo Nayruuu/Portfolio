@@ -18,39 +18,6 @@
 	padding: 16px 20px;
 	margin-bottom: 18px;
 
-	&__status {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		font-family: var(--f-mono);
-		font-size: 11px;
-		letter-spacing: 0.1em;
-		color: var(--ok);
-		margin-bottom: 6px;
-	}
-
-	&__dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 999px;
-		background: var(--ok);
-		box-shadow: 0 0 10px var(--ok);
-		animation: pulse 1.6s ease-in-out infinite;
-	}
-
-	&__title {
-		font-size: 17px;
-		font-weight: 600;
-		letter-spacing: -0.01em;
-		margin-bottom: 2px;
-	}
-
-	&__sub {
-		font-family: var(--f-mono);
-		font-size: 11.5px;
-		color: var(--text-dim);
-	}
-
 	&__rt {
 		font-family: var(--f-mono);
 		font-size: 10px;
@@ -271,10 +238,6 @@
 		grid-template-columns: minmax(0, 1fr) 300px;
 	}
 
-	.contact-avail {
-		grid-template-columns: 1fr auto;
-	}
-
 	.contact-form__actions {
 		flex-direction: row;
 		align-items: center;
@@ -326,14 +289,6 @@
 	border-color: oklch(70% 0.16 145deg / 40%);
 }
 
-:host-context([data-theme='light']) .contact-avail__status {
-	color: oklch(55% 0.15 145deg);
-}
-
-:host-context([data-theme='light']) .contact-avail__dot {
-	background: oklch(55% 0.15 145deg);
-	box-shadow: 0 0 10px oklch(55% 0.15 145deg);
-}
 
 :host-context([data-theme='light']) .contact-side__icon {
 	background: var(--surface);

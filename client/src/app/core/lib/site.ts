@@ -13,7 +13,7 @@ export const AUTHOR = { name: 'Stéphane De Todaro', url: SITE_ORIGIN } as const
 /** Public profiles for the JSON-LD Person `sameAs` (same targets as the contact channels). */
 export const SOCIAL_URLS = [
   'https://github.com/Nayruuu',
-  'https://linkedin.com/in/stéphane-d',
+  'https://www.linkedin.com/in/st%C3%A9phane-d-930048b3/',
 ] as const;
 
 /** og:locale per language. */

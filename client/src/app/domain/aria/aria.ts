@@ -6,8 +6,8 @@ export interface Aria {
   pip: string;
   fullscreen: string;
   exitFullscreen: string;
+  like: string;
   dislike: string;
-  dropPhoto: string;
   gameStart: string;
   gameExit: string;
 }

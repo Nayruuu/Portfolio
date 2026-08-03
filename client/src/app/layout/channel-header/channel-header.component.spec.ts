@@ -46,7 +46,7 @@ describe('ChannelHeaderComponent', () => {
     const lines = component.terminal();
 
     expect(lines[0]).toEqual(['$ ', 'uptime']);
-    expect(lines[1]).toEqual(['', '  9 ans, 47k commits']);
+    expect(lines[1]).toEqual(['', '  9 ans, de la conception au run']);
     expect(lines[2]).toEqual(['$ ', 'stack --top']);
     expect(lines[3]).toEqual(['', '  .net  angular  azure  flutter']);
   });
@@ -59,7 +59,7 @@ describe('ChannelHeaderComponent', () => {
 
     const lines = component.terminal();
 
-    expect(lines[1]).toEqual(['', '  9 years, 47k commits']);
+    expect(lines[1]).toEqual(['', '  9 years, from design to run']);
     // Lines without a language branch stay identical.
     expect(lines[0]).toEqual(['$ ', 'uptime']);
     expect(lines[3]).toEqual(['', '  .net  angular  azure  flutter']);

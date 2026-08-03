@@ -59,11 +59,12 @@ signal primitives, OnPush, native control flow) are owned by [`code.md`](../../c
 
 > The trailing `// …` labels in these skeletons (here and in the service skeleton below) are **teaching
 > annotations for this doc, not comments to reproduce** — real code follows `code.md §1`: comments only for a
-> non-obvious WHY/trap, never restating the code.
+> non-obvious WHY/trap, never restating the code. The `Comment` type and `sd-comment-item` component are
+> **illustrative only** — no such members exist in the codebase.
 
     <!-- comment-item.component.html  (native control flow only; every @for has track) -->
     @if (data().pinned) {
-      <span class="comment__badge">{{ i18n.content().comments.pinned }}</span>
+      <span class="comment__badge">{{ i18n.content().seriesUi.overline }}</span>
     }
     @for (line of data().lines; track line.id) {
       <p>{{ line.text }}</p>

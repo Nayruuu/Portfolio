@@ -7,18 +7,13 @@
   "join": "Contact",
   "cv": "Download CV",
   "cvUrl": "/cv/stephane-de-todaro-en.pdf",
-  "subscribers": "subscribers",
-  "videos": "videos",
   "joined": "Active since",
-  "openToWork": "open to work",
-  "headerUptime": "  9 years, 47k commits",
+  "headerUptime": "  9 years, from design to run",
   "share": "Share",
-  "author": "super-dev",
+  "author": "Stéphane De Todaro",
   "themeToDark": "Dark mode",
   "themeToLight": "Light mode",
   "themeToggleAria": "Toggle theme",
-  "subscribersCount": "12.8k",
-  "videosCount": "47",
   "joinedYear": "2017",
   "konamiTip": "tip:",
   "konamiKeys": "[k] play/pause · [j/l] ±10s · [/] search",
@@ -34,31 +29,30 @@
     "settings": "Settings",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit fullscreen",
+    "like": "Like",
     "dislike": "Dislike",
-    "dropPhoto": "Drop your photo here",
     "gameStart": "Start the game",
     "gameExit": "Exit the game",
     "pip": "Mini player"
   },
-  "bio": "Full-stack .NET / Angular dev with a DevOps streak on Azure Cloud. Also fluent in Flutter + Firebase. I build products, ship them, and keep them healthy.",
-  "metaTitle": "Full-stack .NET / Angular / Azure developer",
+  "bio": "Technical lead and full-stack architect. I design, industrialize and operate SaaS platforms on Azure, and I publish open-source software engines.",
+  "metaTitle": "Technical Lead .NET / Angular / Azure",
   "tabs": ["Home", "Articles", "Series", "About", "Stack", "Contact"],
   "tabDescriptions": [
-    "A video-channel-style portfolio of a full-stack .NET / Angular developer with a DevOps hat on Azure: technical articles, series and real projects.",
+    "A video-channel-style portfolio of a .NET / Angular / Azure technical lead: technical articles, series and real projects.",
     "Technical articles on .NET, Angular, Azure, Flutter and DevOps: migrations, engines, pipelines and lessons learned from real projects.",
     "Four article series that build on each other: Modern .NET, Angular 21 in practice, Azure DevOps from scratch and Flutter in production.",
-    "Background, working style and technical choices of a full-stack .NET / Angular developer who builds, ships and monitors his products.",
+    "Background, working style and technical choices of a technical lead who designs, industrializes and operates SaaS platforms on Azure.",
     "The full stack: everyday languages, frameworks, tools and cloud services, from the .NET back end through the Angular front end to Azure deployment.",
     "A freelance assignment, a technical question or just a hello: email, LinkedIn, GitHub or a 30-minute slot."
   ],
-  "featuredTitle": "$ ./whoami — super-dev.app — full-stack .NET / Angular / Azure developer",
-  "featuredViews": "12,487 views",
+  "featuredTitle": "$ ./whoami — super-dev.app — technical lead .NET / Angular / Azure",
   "featuredWhen": "2 days ago",
-  "featuredCategory": "#Full-stack",
+  "featuredCategory": "#Tech-lead",
   "featuredTags": ["dotnet", "angular", "azure", "flutter", "firebase", "devops"],
-  "descriptionMeta": ["Compiled", "Last build", "Status"],
-  "descriptionMetaValues": ["v2026.1", "2 days ago", "✔ production"],
-  "descriptionBody": "Welcome to my channel. I document what I build: .NET APIs, Angular UIs, Azure DevOps pipelines, and the occasional Flutter app. This video is a fast tour of what I do. Chapters are below the timeline. — open to full-stack or platform missions.",
+  "descriptionMeta": ["Framework", "Rendering", "Status"],
+  "descriptionMetaValues": ["Angular 21", "Static SSG", "✔ production"],
+  "descriptionBody": "Welcome to my channel. I document what I build: .NET APIs, Angular UIs, Azure DevOps pipelines, and the occasional Flutter app. This video is a fast tour of what I do. Chapters are below the timeline.",
   "chapters": [
     {
       "id": "intro",
@@ -74,127 +68,67 @@
     },
     {
       "id": "projects",
-      "timestamp": "00:48",
+      "timestamp": "00:52",
       "title": "Recent projects",
-      "seconds": 48
+      "seconds": 52
     },
     {
       "id": "timeline",
-      "timestamp": "01:33",
+      "timestamp": "01:44",
       "title": "Experience",
-      "seconds": 93
+      "seconds": 104
     },
     {
       "id": "outro",
-      "timestamp": "02:08",
+      "timestamp": "02:27",
       "title": "Contact / outro",
-      "seconds": 128
+      "seconds": 147
     }
   ],
-  "totalSec": 158,
+  "totalSec": 160,
   "chaptersLabel": "Chapters",
-  "commentsCount": "143 comments",
-  "commentsSort": "SORTED BY: Top",
-  "commentInputPh": "Add a comment…",
-  "commentPinned": "pinned",
-  "commentYou": "You",
-  "commentYouTag": "Visitor",
-  "commentJustNow": "just now",
-  "commentSend": "Post",
-  "comments": [
-    {
-      "who": "M. Lambert",
-      "tag": "CTO",
-      "color": "#2d5af5",
-      "when": "3d ago",
-      "body": "We worked together on the Azure migration. Solid on DevOps and ships clean Angular — rare combo. Recommended.",
-      "likes": 47,
-      "pinned": true
-    },
-    {
-      "who": "S. Nguyen",
-      "tag": "Lead Dev",
-      "color": "#b4451c",
-      "when": "1w ago",
-      "body": "Code reviews with him = masterclass. Strong architecture, real test coverage, and he says no when no is the right answer.",
-      "likes": 31
-    },
-    {
-      "who": "C. Marchand",
-      "tag": "PO",
-      "color": "#1c7e4a",
-      "when": "2w ago",
-      "body": "Takes a fuzzy brief and turns it into a clean sprint. Even rarer: shows up to standup with solutions, not just blockers.",
-      "likes": 18
-    },
-    {
-      "who": "A. Ben Salem",
-      "tag": "DevOps",
-      "color": "#5b2da6",
-      "when": "1mo ago",
-      "body": "Clean Azure DevOps pipelines, sane IaC. Cut our deploy time by 40% thanks to his refactor.",
-      "likes": 12
-    }
-  ],
   "upNext": {
     "title": "Recent articles",
     "readNext": "read next"
   },
-  "projects": [
-    {
-      "tag": "FULL-STACK",
-      "duration": "08:42",
-      "title": "$ deploy.azure() — B2B SaaS platform (.NET 8 + Angular 17)",
-      "stats": "2.4k views • 1 month ago",
-      "accentColor": "#b4451c"
-    },
-    {
-      "tag": "MOBILE",
-      "duration": "06:18",
-      "title": "$ flutter run — cross-platform mobile app with Firebase",
-      "stats": "1.8k views • 2 months ago",
-      "accentColor": "#1c5fb4"
-    },
-    {
-      "tag": "DEVOPS",
-      "duration": "11:05",
-      "title": "$ az pipelines — multi-env CI/CD setup",
-      "stats": "3.1k views • 3 months ago",
-      "accentColor": "#1c7e4a"
-    },
-    {
-      "tag": "ARCHI",
-      "duration": "14:22",
-      "title": "$ refactor.sh — legacy monolith to .NET microservices",
-      "stats": "5.2k views • 4 months ago",
-      "accentColor": "#7e1c1c"
-    },
-    {
-      "tag": "LIVE",
-      "duration": "22:30",
-      "title": "// dev stream — building a GraphQL API in .NET live",
-      "stats": "892 views • 5 months ago",
-      "accentColor": "#5b2da6"
-    }
-  ],
-  "articleFilters": [
-    "All",
-    "Recent",
-    "Popular",
-    ".NET",
-    "Angular",
-    "Azure",
-    "Flutter",
-    "DevOps",
-    "Tutorial"
-  ],
+  "articleFilters": ["All", "Recent", ".NET", "Angular", "Azure", "Flutter", "DevOps", "Tutorial"],
+  "reviews": {
+    "subtitle": "three Malt recommendations, full text — translated from French",
+    "teaser": "Adrien, Marc and Nicolas recommend Stéphane",
+    "source": "via Malt",
+    "url": "https://www.malt.fr/profile/stephanedetodaro1",
+    "linkLabel": "view on Malt",
+    "items": [
+      {
+        "who": "Adrien Verschaere",
+        "role": "Full-Stack Developer at Giraudy",
+        "body": "Stéphane is genuinely invested in his work within the company; he is technically very good at what he does (full-stack on Microsoft technologies), with solid skills across backend development (.NET), frontend (Angular) and DevOps (Azure and its whole ecosystem).\n\nOn a human level, he is someone you quickly come to appreciate and want to work with. He handles pressure well and shows great autonomy on his projects.\n\nI recommend him without hesitation!",
+        "color": "#2d5af5"
+      },
+      {
+        "who": "Marc",
+        "role": "CIO at Giraudy",
+        "body": "Stéphane is a developer with high technical skills around Microsoft development technologies, in .NET as well as Angular. Code quality and optimization are fundamentals of his work. He is genuinely full-stack. He drives proposals on both front and back to find agile, durable solutions, and he is good at analyzing malfunctions and joining projects already under way.\n\nBeyond his technical skills, he is curious and has a real aptitude for teamwork: he will support and grow other developers without doing the work in their place. Stéphane has a good command of the Scrum agile methodology.",
+        "color": "#1c7e4a"
+      },
+      {
+        "who": "Nicolas",
+        "role": "Cloud Architect at Dcube",
+        "body": "Stéphane is a highly competent tech lead. He masters the front end, the back end, databases, CI/CD and the cloud alike. He puts the architecture and design patterns in place and optimizes constantly. He talks to technical and functional people equally well. In short, a gem :-)",
+        "color": "#b4451c"
+      }
+    ]
+  },
+  "discuss": {
+    "heading": "$ ./lets-talk.sh",
+    "body": "A project, an assignment, a question about an article? The easiest is to talk it over directly.",
+    "cta": "Get in touch"
+  },
   "articles": [
     {
       "slug": "universe-map-moteur-eclipses",
       "tag": "ANGULAR",
       "title": "A 3D map of the Universe, checked against the August 12, 2026 eclipse",
-      "reads": "612 reads",
-      "ago": "3 hours ago",
       "readTime": "10 min",
       "accentColor": "#a2261c",
       "symbol": "◐",
@@ -205,8 +139,6 @@
       "slug": "ngsharp-moteur-templates-interprete",
       "tag": ".NET",
       "title": "Interpret, don't compile: a template engine for .NET",
-      "reads": "1.1k reads",
-      "ago": "1 day ago",
       "readTime": "9 min",
       "accentColor": "#b4451c",
       "symbol": "{{ }}",
@@ -217,8 +149,6 @@
       "slug": "moteur-doom-software-webgpu",
       "tag": "ANGULAR",
       "title": "A DOOM-style engine in the browser, with three backends",
-      "reads": "1.4k reads",
-      "ago": "2 days ago",
       "readTime": "11 min",
       "accentColor": "#a2261c",
       "symbol": "▓",
@@ -229,8 +159,6 @@
       "slug": "etrangler-le-monolithe-dotnet",
       "tag": ".NET",
       "title": "Strangle a .NET 8 monolith without breaking everything",
-      "reads": "3.2k reads",
-      "ago": "1 month ago",
       "readTime": "9 min",
       "accentColor": "#b4451c",
       "symbol": "{ }",
@@ -243,8 +171,6 @@
       "slug": "angular-zoneless-signals",
       "tag": "ANGULAR",
       "title": "Take an Angular app zoneless + signals",
-      "reads": "4.1k reads",
-      "ago": "3 weeks ago",
       "readTime": "8 min",
       "accentColor": "#a2261c",
       "symbol": "◆",
@@ -257,8 +183,6 @@
       "slug": "angular-ssg-azure-static-web-apps",
       "tag": "AZURE",
       "title": "Deploy a prerendered (SSG) Angular SPA to Azure Static Web Apps",
-      "reads": "2.7k reads",
-      "ago": "1 month ago",
       "readTime": "7 min",
       "accentColor": "#1c5fb4",
       "symbol": "↻",
@@ -271,8 +195,6 @@
       "slug": "angular-resource-httpresource",
       "tag": "ANGULAR",
       "title": "Loading data with resource() and httpResource()",
-      "reads": "3.6k reads",
-      "ago": "2 months ago",
       "readTime": "7 min",
       "accentColor": "#a2261c",
       "symbol": "⟐",
@@ -285,8 +207,6 @@
       "slug": "pipeline-cicd-github-actions-azure",
       "tag": "DEVOPS",
       "title": "A GitHub Actions → Azure CI/CD pipeline, from scratch",
-      "reads": "1.9k reads",
-      "ago": "2 months ago",
       "readTime": "8 min",
       "accentColor": "#1c7e4a",
       "symbol": ">_",
@@ -299,8 +219,6 @@
       "slug": "azure-container-apps-dotnet",
       "tag": "AZURE",
       "title": "Deploying a .NET API to Azure Container Apps",
-      "reads": "2.4k reads",
-      "ago": "3 months ago",
       "readTime": "8 min",
       "accentColor": "#1c5fb4",
       "symbol": "⬢",
@@ -313,8 +231,6 @@
       "slug": "flutter-firebase-offline-first",
       "tag": "FLUTTER",
       "title": "Offline-first sync in Flutter + Firebase",
-      "reads": "2.2k reads",
-      "ago": "2 months ago",
       "readTime": "9 min",
       "accentColor": "#1c8fb4",
       "symbol": "■",
@@ -327,8 +243,6 @@
       "slug": "docker-multistage-dotnet-angular",
       "tag": "DEVOPS",
       "title": "Multi-stage Docker images for .NET + Angular",
-      "reads": "2.6k reads",
-      "ago": "4 months ago",
       "readTime": "9 min",
       "accentColor": "#1c7e4a",
       "symbol": "⬚",
@@ -341,8 +255,6 @@
       "slug": "angular-defer-control-flow",
       "tag": "ANGULAR",
       "title": "@defer and the new control flow: less JS at startup",
-      "reads": "2.9k reads",
-      "ago": "4 months ago",
       "readTime": "6 min",
       "accentColor": "#a2261c",
       "symbol": "⧉",
@@ -355,8 +267,6 @@
       "slug": "tester-angular-zoneless-vitest",
       "tag": "TUTO",
       "title": "Tutorial — testing zoneless Angular components with Vitest",
-      "reads": "1.4k reads",
-      "ago": "3 months ago",
       "readTime": "6 min",
       "accentColor": "#a26b1c",
       "symbol": "▲",
@@ -367,8 +277,6 @@
       "slug": "flutter-riverpod-architecture",
       "tag": "FLUTTER",
       "title": "A testable Flutter architecture with Riverpod",
-      "reads": "2.0k reads",
-      "ago": "5 months ago",
       "readTime": "8 min",
       "accentColor": "#1c8fb4",
       "symbol": "≋",
@@ -381,8 +289,6 @@
       "slug": "minimal-api-ef-core-dotnet8",
       "tag": ".NET",
       "title": "Minimal APIs + EF Core: a clean .NET 8 API",
-      "reads": "3.1k reads",
-      "ago": "5 months ago",
       "readTime": "8 min",
       "accentColor": "#b4451c",
       "symbol": "ƒ()",
@@ -395,8 +301,6 @@
       "slug": "angular-signalstore-ngrx",
       "tag": "ANGULAR",
       "title": "App state with NgRx SignalStore",
-      "reads": "2.1k reads",
-      "ago": "6 months ago",
       "readTime": "8 min",
       "accentColor": "#a2261c",
       "symbol": "◈",
@@ -409,8 +313,6 @@
       "slug": "cqrs-vertical-slices-dotnet",
       "tag": ".NET",
       "title": "CQRS and vertical slices without the ceremony",
-      "reads": "2.3k reads",
-      "ago": "6 months ago",
       "readTime": "7 min",
       "accentColor": "#b4451c",
       "symbol": "⊕",
@@ -423,8 +325,6 @@
       "slug": "opentelemetry-observabilite-dotnet",
       "tag": "DEVOPS",
       "title": ".NET observability with OpenTelemetry",
-      "reads": "1.6k reads",
-      "ago": "6 months ago",
       "readTime": "8 min",
       "accentColor": "#1c7e4a",
       "symbol": "◎",
@@ -437,8 +337,6 @@
       "slug": "azure-key-vault-managed-identity",
       "tag": "AZURE",
       "title": "Zero-config secrets: Key Vault + Managed Identity",
-      "reads": "1.7k reads",
-      "ago": "7 months ago",
       "readTime": "7 min",
       "accentColor": "#1c5fb4",
       "symbol": "⚿",
@@ -451,8 +349,6 @@
       "slug": "dotnet-grpc-microservices",
       "tag": ".NET",
       "title": ".NET microservices with gRPC",
-      "reads": "1.8k reads",
-      "ago": "7 months ago",
       "readTime": "9 min",
       "accentColor": "#b4451c",
       "symbol": "⇄",
@@ -465,8 +361,6 @@
       "slug": "tuto-git-rebase-interactif",
       "tag": "TUTO",
       "title": "Tutorial — mastering interactive rebase",
-      "reads": "4.3k reads",
-      "ago": "7 months ago",
       "readTime": "5 min",
       "accentColor": "#a26b1c",
       "symbol": "⌥",
@@ -477,8 +371,6 @@
       "slug": "flutter-melos-monorepo",
       "tag": "FLUTTER",
       "title": "A Flutter monorepo with Melos",
-      "reads": "1.2k reads",
-      "ago": "8 months ago",
       "readTime": "6 min",
       "accentColor": "#1c8fb4",
       "symbol": "⬡",
@@ -491,8 +383,6 @@
       "slug": "dotnet-source-generators",
       "tag": ".NET",
       "title": "Generating code at compile time: source generators",
-      "reads": "1.5k reads",
-      "ago": "8 months ago",
       "readTime": "10 min",
       "accentColor": "#b4451c",
       "symbol": "λ",
@@ -503,7 +393,7 @@
     }
   ],
   "articlesUi": {
-    "title": "All articles",
+    "title": "$ ls articles/",
     "subCount": " articles • published 2025—2026",
     "itemsLabel": "items",
     "back": "Back to articles",
@@ -546,12 +436,11 @@
     }
   ],
   "seriesUi": {
-    "title": "Series",
+    "title": "$ ls series/",
     "subtitle": "Articles grouped by theme — beginner to advanced",
     "countLabel": "series",
     "articles": "articles",
     "updatedPrefix": "Updated",
-    "updatedSuffix": "w ago",
     "openSeries": "Open series",
     "back": "Back to series",
     "overline": "SERIES",
@@ -562,26 +451,26 @@
   },
   "sceneIntro": {
     "hi": "// hi, world",
-    "name": "super-dev",
-    "role": "full-stack",
-    "tagline": "I design, I code, I deploy, I monitor.",
+    "name": "Stéphane De Todaro",
+    "role": "technical lead",
+    "tagline": "I design, industrialize, operate.",
     "tags": [".NET", "Angular", "Azure", "Flutter"],
     "metrics": [
       {
         "value": "9",
-        "label": "years XP"
+        "label": "years of XP"
       },
       {
-        "value": "40+",
-        "label": "projects shipped"
+        "value": "2",
+        "label": "open-source libs (NuGet)"
       },
       {
-        "value": "12",
-        "label": "clients"
+        "value": "100%",
+        "label": "AI plugin adoption"
       },
       {
-        "value": "8",
-        "label": "Azure certs"
+        "value": "3,000+",
+        "label": "billboards driven"
       }
     ]
   },
@@ -591,27 +480,27 @@
     "cards": [
       {
         "title": "Backend",
-        "mainLabel": ".NET 8 / C# 12",
+        "mainLabel": ".NET 9 / C#",
         "items": [
-          "EF Core 8 / Dapper",
-          "Minimal APIs + Carter",
+          "EF Core",
+          "REST + GraphQL APIs (HotChocolate)",
           "MediatR + CQRS",
-          "OpenAPI / Swagger",
-          "MassTransit / RabbitMQ",
-          "xUnit + Testcontainers"
+          "Clean / hexagonal architecture",
+          "SQL Server",
+          "xUnit"
         ],
         "accentColor": "#b4451c"
       },
       {
         "title": "Frontend",
-        "mainLabel": "Angular 21+",
+        "mainLabel": "Angular 14→21",
         "items": [
+          "TypeScript",
           "Signals + RxJS",
-          "NgRx / SignalStore",
-          "Standalone components",
-          "SSR & hydration",
-          "Tailwind + SCSS",
-          "Storybook + Jest"
+          "NGXS · SignalStore",
+          "SCSS",
+          "SSR / SSG (prerender)",
+          "Playwright + Vitest"
         ],
         "accentColor": "#1c5fb4"
       },
@@ -620,24 +509,24 @@
         "mainLabel": "Azure",
         "items": [
           "App Service / Functions",
-          "AKS + Helm + KEDA",
-          "Service Bus / Event Grid",
-          "Application Insights",
-          "Azure DevOps Pipelines",
-          "Terraform + Bicep"
+          "Service Bus",
+          "Terraform",
+          "Azure DevOps — close to 40 pipelines",
+          "Docker",
+          "Firebase"
         ],
         "accentColor": "#1c7e4a"
       },
       {
-        "title": "Mobile",
-        "mainLabel": "Flutter + Firebase",
+        "title": "AI / Methods",
+        "mainLabel": "Claude Code",
         "items": [
-          "Flutter 3.x / Dart",
-          "Riverpod + GoRouter",
-          "Firestore + Auth",
-          "Cloud Functions",
-          "FCM push + Crashlytics",
-          "App Distribution"
+          "Plugins / hooks / agents / MCP",
+          "TDD",
+          "Scrum / ScrumBan",
+          "Ionic / Flutter",
+          "PowerShell",
+          "Dev onboarding in one command"
         ],
         "accentColor": "#7e2d8c"
       }
@@ -650,39 +539,39 @@
   "projectScenes": [
     {
       "number": "01",
-      "name": "Multi-tenant B2B SaaS platform",
-      "role": "Tech Lead — team of 4",
-      "description": "Rebuilt a legacy ASP.NET WebForms product into a modern SaaS. Azure AD B2C auth, Stripe billing, BI exports.",
-      "stack": [".NET 8", "Angular 17", "Azure App Service", "PostgreSQL"],
-      "metric": "↓ 60% load time",
-      "tag": "FULL-STACK"
+      "name": "OPEN SPACE.EXE — software-rendered FPS engine",
+      "role": "Author — from scratch, driving an AI",
+      "description": "A DOOM-style (BSP) engine with no WebGL: two render backends (8-thread CPU via SharedArrayBuffer, WebGPU), voxel sprites, hand-authored levels.",
+      "stack": ["TypeScript", "WebGPU / WGSL", "Web Workers", "SharedArrayBuffer"],
+      "metric": "CPU ↔ WebGPU pixel parity, measured",
+      "tag": "ENGINE"
     },
     {
       "number": "02",
-      "name": "Cross-platform mobile app",
-      "role": "Lead developer",
-      "description": "Field service app for techs. Offline-first, incremental sync, push, geotagged photos.",
-      "stack": ["Flutter", "Firebase", "Cloud Functions", "Firestore"],
-      "metric": "4.8 ★ store — 1.2k DAU",
-      "tag": "MOBILE"
+      "name": "NgSharp v3 — a template engine for .NET",
+      "role": "Author — NuGet · MIT",
+      "description": "Angular-style interpreted templates, format-agnostic: parses any text file with deep HTML awareness. Zero dependencies, Native AOT compatible.",
+      "stack": ["C#", ".NET 9", "Native AOT"],
+      "metric": "first render in microseconds",
+      "tag": ".NET"
     },
     {
       "number": "03",
-      "name": "Monolith → microservices migration",
-      "role": "Solution architect",
-      "description": "Strangler pattern over 18 months. Domain split, event-driven via Service Bus, AKS production.",
-      "stack": [".NET 8", "AKS", "Service Bus", "Terraform"],
-      "metric": "↓ 70% MTTR — zero downtime",
-      "tag": "ARCHI"
+      "name": "FluentGraphQL — a query builder for .NET",
+      "role": "Author — NuGet · MIT",
+      "description": "Fluent, type-safe GraphQL queries on the .NET side, no generated schema. Performance tracked by reproducible benchmarks committed in the repo.",
+      "stack": ["C#", ".NET 9", "GraphQL"],
+      "metric": "reproducible benchmarks (.NET 9)",
+      "tag": ".NET"
     },
     {
       "number": "04",
-      "name": "Multi-env CI/CD pipelines",
-      "role": "DevOps lead",
-      "description": "Azure DevOps Pipelines + IaC Terraform/Bicep. Dev → staging → prod with approvals and auto rollback.",
-      "stack": ["Azure DevOps", "Terraform", "Bicep", "Helm"],
-      "metric": "↓ 40% deploy time",
-      "tag": "DEVOPS"
+      "name": "Universe Map — a 3D map of the Universe",
+      "role": "Author — Angular + Three.js",
+      "description": "Continuous zoom across five orders of magnitude, 10,000 stars in a single draw call, local ephemerides and an eclipse engine checked against NASA data.",
+      "stack": ["Angular 21", "Three.js", "WebGL"],
+      "metric": "Aug 12, 2026 eclipse verified vs NASA",
+      "tag": "ANGULAR"
     }
   ],
   "sceneTimeline": {
@@ -690,43 +579,51 @@
     "subtitle": "career — latest commit first",
     "rows": [
       {
-        "year": "2023—now",
-        "role": "Full-stack Tech Lead",
-        "company": "ScaleCo — B2B SaaS (.NET / Angular / Azure)",
+        "year": "2024—present",
+        "role": "Technical Lead — solo run & AI",
+        "company": "Giraudy (ex-Exterion Media) — outdoor advertising",
         "bullets": [
-          "Legacy → microservices rebuild",
-          "CI/CD + monitoring set up",
-          "Mentoring 3 junior devs"
+          "A dozen apps maintained solo",
+          "PHP → .NET migration: 31 modules in 3 weeks",
+          "Internal AI plugin adopted by the whole team"
         ]
       },
       {
-        "year": "2021—2023",
-        "role": "Full-stack Developer",
-        "company": "Consulting — enterprise missions (banking, retail)",
+        "year": "2021—2024",
+        "role": "Technical Lead — industrialization",
+        "company": "Giraudy — same platform, continuously",
         "bullets": [
-          "3 client missions shipped",
-          "On-prem → Azure migration",
-          "Tech lead on 2 projects"
+          "Azure infrastructure moved to Terraform",
+          "Close to 40 automated deployment pipelines",
+          "Pre-prod / prod parity, no more manual ops"
         ]
       },
       {
-        "year": "2019—2021",
-        "role": "Full-stack Developer",
-        "company": "Early-stage startup — Angular + .NET Core",
-        "bullets": ["Stack from scratch", "MVP → 50k users", "First prod on Kubernetes"]
+        "year": "2018—2021",
+        "role": "Technical Lead — build phase",
+        "company": "Giraudy — platform driving 3,000+ billboards",
+        "bullets": [
+          "Microservices architecture (about twenty services)",
+          "GraphQL APIs (HotChocolate) + Ocelot gateway",
+          "Authorization model rebuilt"
+        ]
       },
       {
-        "year": "2017—2019",
-        "role": "Apprentice developer",
-        "company": "Apprenticeship — Paris consulting firm",
-        "bullets": ["First lines in prod", ".NET / Angular training", "Eng degree + Microsoft cert"]
+        "year": "2017—2018",
+        "role": "Full-stack lead dev · consultant",
+        "company": "Bolloré Logistics · LexisNexis",
+        "bullets": [
+          "Validation engine rebuilt front to back",
+          "Mentored a team of 4 developers",
+          "Automated SQL script generation + tests"
+        ]
       }
     ]
   },
   "sceneOutro": {
     "hash": "// end of tour. thanks for watching.",
-    "subtitle": "Open to new missions.",
-    "cta": "If you need a dev who codes, ships, and knows why the pipeline is red — we should talk.",
+    "subtitle": "France — remote-friendly.",
+    "cta": "If you're looking for a lead who codes, ships, and knows why the pipeline is red — we should talk.",
     "links": [
       {
         "label": "contact@super-dev.app",
@@ -737,11 +634,11 @@
         "icon": "code"
       },
       {
-        "label": "linkedin.com/in/stéphane-d",
+        "label": "linkedin.com/in/stéphane-d-930048b3",
         "icon": "link"
       }
     ],
-    "sign": "super-dev — super-dev.app"
+    "sign": "Stéphane De Todaro — super-dev.app"
   },
   "about": {
     "heading": "$ cat about.md",
@@ -749,7 +646,7 @@
     "infoLabel": "INFO",
     "linksLabel": "LINKS",
     "paragraphs": [
-      "My name is super-dev. I've been a full-stack developer for 9 years, with a DevOps streak that grew gradually — first out of necessity, then out of genuine pleasure for shipping things properly.",
+      "My name is Stéphane De Todaro. Technical lead and full-stack architect with 9 years of experience — a role that grew gradually: first because someone had to ship what we built, then out of genuine pleasure for industrializing.",
       "Day-to-day: C# / .NET for APIs and services, TypeScript / Angular for interfaces, Bicep + Terraform on Azure. And regularly, Dart / Flutter when a mobile project shows up.",
       "I believe in frequent releases, tests that actually cover, pipelines that don't lie, and the fact that \"it works on my machine\" is not a proof. My colleagues describe me as someone who ships and who teaches."
     ],
@@ -759,24 +656,12 @@
         "value": "France — remote-friendly"
       },
       {
-        "label": "Availability",
-        "value": "Open to missions — freelance or permanent"
-      },
-      {
-        "label": "Day rate",
-        "value": "€600—800 depending on context"
-      },
-      {
         "label": "Languages",
         "value": "French (native) • English (C1)"
       },
       {
         "label": "Member since",
         "value": "2017 — 9 years XP"
-      },
-      {
-        "label": "Total views",
-        "value": "287,432 views"
       }
     ],
     "links": [
@@ -789,7 +674,7 @@
         "icon": "code"
       },
       {
-        "label": "linkedin.com/in/stéphane-d",
+        "label": "linkedin.com/in/stéphane-d-930048b3",
         "icon": "link"
       },
       {
@@ -805,92 +690,92 @@
     "levels": [
       {
         "tierName": "EXPERT",
-        "tierSubtitle": "5+ years, recurring prod use, I can debug blindfolded",
+        "tierSubtitle": "the daily foundation, in prod for years",
         "color": "#b4451c",
         "techs": [
           {
             "name": ".NET / C#",
-            "years": "9 yrs",
-            "note": "From Framework 4.x to .NET 8. Prefer Minimal APIs on greenfield."
+            "years": "since 2017",
+            "note": "From .NET Core 2 to .NET 9, major upgrades included. xUnit everywhere."
           },
           {
-            "name": "Angular",
-            "years": "7 yrs",
-            "note": "From AngularJS to v21 + signals. Daily RxJS."
+            "name": "Angular / TypeScript",
+            "years": "since 2018",
+            "note": "14→20 migrations shipped in prod; this portfolio runs v21, signals and zoneless."
           },
           {
-            "name": "Azure App Service",
-            "years": "6 yrs",
-            "note": "Simplest fit for 80% of cases. AKS when needed."
-          },
-          {
-            "name": "Azure DevOps",
-            "years": "6 yrs",
-            "note": "YAML pipelines, service connections, multi-env release flows."
+            "name": "Azure",
+            "years": "since 2018",
+            "note": "App Service, Functions, Service Bus: the backbone of the platform I maintain."
           },
           {
             "name": "SQL Server / EF Core",
-            "years": "8 yrs",
-            "note": "EF Core 8 + migrations. Dapper when raw speed matters."
+            "years": "since 2017",
+            "note": "From tuned stored procedures at Bolloré to daily EF Core migrations."
+          },
+          {
+            "name": "GraphQL / HotChocolate",
+            "years": "since 2018",
+            "note": "The platform's microservice APIs, behind an Ocelot gateway."
+          },
+          {
+            "name": "Architecture",
+            "years": "since 2018",
+            "note": "DDD, CQRS, Event Sourcing, clean / hexagonal. About twenty microservices in prod."
           }
         ]
       },
       {
         "tierName": "CONFIRMED",
-        "tierSubtitle": "2-5 years, shipped to prod, I know what breaks",
+        "tierSubtitle": "shipped to prod, years of hindsight",
         "color": "#1c7e4a",
         "techs": [
           {
-            "name": "AKS / Kubernetes",
-            "years": "4 yrs",
-            "note": "Helm, KEDA for event-driven scaling. Not an SRE expert."
+            "name": "Terraform",
+            "years": "since 2021",
+            "note": "The platform's Azure infrastructure, pre-prod / prod parity."
           },
           {
-            "name": "Terraform / Bicep",
-            "years": "4 yrs",
-            "note": "Reusable modules, Azure Storage state. Prefer Bicep for pure Azure."
+            "name": "Azure DevOps",
+            "years": "pipelines since 2021",
+            "note": "Close to 40 automated deployment pipelines, YAML, multi-environment."
           },
           {
-            "name": "Flutter / Dart",
-            "years": "3 yrs",
-            "note": "Riverpod, GoRouter, custom rendering. 2 apps in stores."
+            "name": "Claude Code / MCP",
+            "years": "since 2024",
+            "note": "Internal plugin (hooks, agents, skills) adopted by the whole team: onboarding in one command."
+          },
+          {
+            "name": "Ionic / Flutter",
+            "years": "in prod",
+            "note": "The platform's field mobile app, maintained solo."
           },
           {
             "name": "Firebase",
-            "years": "3 yrs",
-            "note": "Auth, Firestore, Cloud Functions, FCM. Known limits."
+            "years": "in prod",
+            "note": "Auth, data and push for the mobile app. Known limits."
           },
           {
-            "name": "Service Bus / RabbitMQ",
-            "years": "4 yrs",
-            "note": "Event-driven via MassTransit. Sagas, retry, DLQ."
+            "name": "Docker",
+            "years": "daily",
+            "note": "Multi-stage builds, healthchecks, dev and CI."
           }
         ]
       },
       {
         "tierName": "FAMILIAR",
-        "tierSubtitle": "less than a year cumulative, but I adapt fast",
+        "tierSubtitle": "newer or more occasional — I adapt fast",
         "color": "#5b2da6",
         "techs": [
           {
-            "name": "Python / FastAPI",
-            "years": "1 yr",
-            "note": "ETL scripts, internal micro-APIs. Not my main stack."
+            "name": "PowerShell",
+            "years": "occasional",
+            "note": "Automated SQL script generation at LexisNexis, admin tooling since."
           },
           {
-            "name": "GraphQL",
-            "years": "2 yrs",
-            "note": "HotChocolate server-side, Apollo client-side. Pick your battles."
-          },
-          {
-            "name": "Docker / containers",
-            "years": "5 yrs",
-            "note": "Daily for dev, multi-stage builds, healthchecks."
-          },
-          {
-            "name": "Postgres",
-            "years": "3 yrs",
-            "note": "When escaping SQL Server. JSON columns, full-text."
+            "name": "WebGPU / WGSL",
+            "years": "2025",
+            "note": "The GPU backend of the DOOM engine hidden in this site — 1000+ Vitest tests, Playwright e2e."
           }
         ]
       }
@@ -899,11 +784,6 @@
   "contact": {
     "heading": "$ ./contact.sh",
     "subtitle": "fastest channel to reach me",
-    "avail": {
-      "status": "OPEN",
-      "title": "Available from 2026-07-01",
-      "subtitle": "€600—800/day • full-stack or platform • remote or hybrid"
-    },
     "responseTime": "Typically < 24h on weekdays",
     "responseTimeLabel": "RESPONSE TIME",
     "composeNew": "new",
@@ -937,7 +817,7 @@
       },
       {
         "kind": "linkedin",
-        "label": "linkedin.com/in/stéphane-d",
+        "label": "linkedin.com/in/stéphane-d-930048b3",
         "subtitle": "DMs welcome"
       },
       {

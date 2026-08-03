@@ -68,17 +68,16 @@ link list.
   `FLUTTER #1c8fb4` · `DEVOPS #1c7e4a` · `TUTO #a26b1c`. Never pick a new color.
 - `symbol`: one mono glyph, unique across articles (check the existing set).
 - Insert at **position 0** (source order = date descending) with an ISO `date`.
-- `reads` / `ago` are simulated-channel chrome, localized by convention: FR `874 lectures` /
-  `il y a 5 heures`, EN `874 reads` / `5 hours ago`, ES `874 lecturas` / `hace 5 horas`,
-  DE `874 Aufrufe` / `vor 5 Stunden`. `readTime` like `9 min` everywhere.
+- `readTime` like `9 min` everywhere. (No `reads`/`ago` fields — the fabricated view counts and
+  fuzzy timestamps were removed with the simulated social proof; cards render the real ISO `date`.)
 - `slug` kebab-case ASCII, identical across locales, = the Markdown filename stem. Optional
   `series` + 1-based `seriesOrder` (project stories usually carry none).
 
 ## WIRE checklist (in order)
 
 1. FR body at `client/src/content/articles/<slug>.fr.md`.
-2. Entry into the **four** `content.<lang>.json` — hand-translate `title` / `description` /
-   `reads` / `ago`; keep `slug` / `tag` / `accentColor` / `symbol` / `date` / `readTime` verbatim.
+2. Entry into the **four** `content.<lang>.json` — hand-translate `title` / `description`; keep
+   `slug` / `tag` / `accentColor` / `symbol` / `date` / `readTime` verbatim.
 3. Bodies: `node scripts/gen-i18n.mjs en es de --slug=<slug>` from `client/`. Then **verify each
    output yourself** — the script's gate only counts code fences, and it has shipped a "German"
    body that was still French, and another prefixed with model chatter. Check: first line is in
@@ -106,7 +105,7 @@ set (reword a heading only if it is itself a tell). What changes is the prose: h
 tells, split the walls of text, vary the texture. Then:
 
 1. Restyle the FR entry `description` in `content.fr.json` ONLY if it trips a tell; never touch
-   `slug` / `tag` / `accentColor` / `symbol` / `date` / `reads` / `ago` / `readTime` / series.
+   `slug` / `tag` / `accentColor` / `symbol` / `date` / `readTime` / series.
 2. Regenerate the three locale bodies (`--slug=<slug> --force`) and run the full translation
    verification from the WIRE checklist (language, intro, fences, links, blockquote, grammar
    pass); hand-translate a locale that misbehaves twice. If the description changed, re-align it

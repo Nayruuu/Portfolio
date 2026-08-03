@@ -1,5 +1,5 @@
 @let content = i18n.content();
-<aside data-screen-label="05 Recent articles sidebar">
+<aside data-screen-label="06 Recent articles sidebar">
   <div class="up-next__head">
     <div class="up-next__head-title">
       {{ content.upNext.title }} ·
@@ -29,7 +29,7 @@
         >
         <h3 class="vid-card__title">{{ article.title }}</h3>
         <div class="vid-card__channel">{{ content.author }} <span>✓</span></div>
-        <div class="vid-card__stats">{{ article.reads }} • {{ article.ago }}</div>
+        <div class="vid-card__stats">{{ dateOf(article) }} • {{ article.readTime }}</div>
       </div>
     </a>
   }

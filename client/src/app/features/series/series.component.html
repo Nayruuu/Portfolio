@@ -1,8 +1,10 @@
 @let content = i18n.content();
-<section class="tabview" data-screen-label="07 Tab — series">
+<section class="tabview" data-screen-label="08 Tab — series">
   <div class="tabview__head">
     <div>
-      <h2 class="tabview__title"><span>// </span>{{ content.seriesUi.title }}</h2>
+      <h2 class="tabview__title">
+        <span>{{ content.seriesUi.title }}</span>
+      </h2>
       <p class="tabview__sub">
         {{ content.seriesUi.subtitle }}
       </p>
@@ -40,11 +42,10 @@
           <h3 class="pcard__title">{{ series.title }}</h3>
           <div class="pcard__meta">
             <span>{{ series.totalRead }}</span>
-            <span>·</span>
-            <span
-              >{{ content.seriesUi.updatedPrefix }} {{ index + 1
-              }}{{ content.seriesUi.updatedSuffix }}</span
-            >
+            @if (series.updated) {
+              <span>·</span>
+              <span>{{ content.seriesUi.updatedPrefix }} {{ series.updated }}</span>
+            }
           </div>
           <p class="pcard__desc">{{ series.description }}</p>
           <span class="pcard__cta">

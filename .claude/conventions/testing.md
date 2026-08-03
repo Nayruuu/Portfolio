@@ -208,7 +208,7 @@ Config: `client/playwright.config.ts`. Specs in `client/e2e/*.spec.ts`; baseline
   **1 % pixel-diff tolerance**.
 - `projects`: **three** — `chromium` (`devices['Desktop Chrome']`, runs every spec except the iOS one,
   via `testIgnore: /player-ios\.spec\.ts/`), `mobile` (`devices['Pixel 5']`, 393×851) with
-  `testMatch: /visual(-detail)?\.spec\.ts/`, so the mobile project **only re-runs the visual specs** to
+  `testMatch: /visual(-detail|-scenes)?\.spec\.ts/`, so the mobile project **only re-runs the visual specs** to
   capture phone baselines, and `webkit` (`devices['iPhone 13']`) with
   `testMatch: /player-ios\.spec\.ts/` — the real **iOS Safari engine**, which
   the Chromium-based `mobile` project (device *emulation*, not WebKit) can't exercise. The behavioural specs
@@ -219,7 +219,7 @@ Config: `client/playwright.config.ts`. Specs in `client/e2e/*.spec.ts`; baseline
   reuseExistingServer: !CI, timeout: 120_000 }` — auto-starts `ng serve` (no prerender) on the same
   `PW_PORT`-driven port, up to 120 s; CI gets a fresh server, local reuses a running one.
 
-### The 17 specs (behavioral + visual)
+### The 18 specs (behavioral + visual)
 
 Behavioral (target by ARIA role / stable class, FR text, case-insensitive regex where noted):
 
@@ -292,11 +292,27 @@ Visual baselines (captured under **both** projects — `chromium` desktop and `m
 - `visual-detail.spec.ts` — `article-detail.png` and `series-detail.png` (navigate in, wait for the
   detail element + `networkidle`, full-page snapshot). These detail screens drift most during a
   refactor; the snapshot separates intended change from accidental regression.
+- `visual-scenes.spec.ts` — the **five player scenes** get real baselines despite being animated:
+  the player's clock is **simulated**, so pause (`k`, proven by the toggle button's aria-label
+  flipping to "Lecture" — the LIVE/PAUSED badge is hidden on phones) + a progress-bar seek renders
+  a **deterministic frozen frame**. Each seek target sits ≥1.5s after the scene's typing settles
+  and before its chapter flips. Four hardening lessons are load-bearing — the seek loop retries
+  the whole hover-wake → fresh `boundingBox` → click sequence (`expect().toPass`) because the
+  boot overlay can swallow an early click, idle controls fade to `pointer-events:none`, and the
+  bar's geometry can shift while the page settles; the landing proof targets the **`.is-focus`**
+  element (the phone montage hides every card but the focused one — a bare card selector resolves
+  *hidden* on mobile and only passes by render-race luck); the screenshot targets
+  `sd-player-stage`, NOT `.player` (the control row's time readout / progress fill shift with
+  click jitter); and the controls strip is **masked** (its auto-hide fade clock varies with the
+  retries — mask it, don't race it). This is the net `visual.spec.ts` cannot provide (it masks
+  `.player`); it caught scene-typing overrunning chapter windows AND the projects montage
+  overflowing its 16/9 box when the video content went CV-real.
 
-**16 baseline PNGs** total under `e2e/__screenshots__/` — the same 8 screens captured twice (once per
-project, per the `{-projectName}` suffix): **8 desktop** `…-chromium.png` + **8 mobile** `…-mobile.png`,
-across `visual.spec.ts/{home,articles,series,about,stack,contact}-{chromium,mobile}.png` and
-`visual-detail.spec.ts/{article-detail,series-detail}-{chromium,mobile}.png`.
+**26 baseline PNGs** total under `e2e/__screenshots__/` — 13 screens captured twice (once per
+project, per the `{-projectName}` suffix): **13 desktop** `…-chromium.png` + **13 mobile** `…-mobile.png`,
+across `visual.spec.ts/{home,articles,series,about,stack,contact}-{chromium,mobile}.png`,
+`visual-detail.spec.ts/{article-detail,series-detail}-{chromium,mobile}.png` and
+`visual-scenes.spec.ts/scene-{intro,stack,projects,timeline,outro}-{chromium,mobile}.png`.
 
 ### Snapshot re-baseline discipline
 
@@ -305,6 +321,12 @@ across `visual.spec.ts/{home,articles,series,about,stack,contact}-{chromium,mobi
 - Re-baseline **only when the change is deliberate and reviewed**, with
   `npm run e2e:update` (`playwright test --update-snapshots`), and commit the regenerated PNGs in the
   **same** change as the code that justifies them (so the diff is auditable).
+- **Sub-tolerance drift trap**: `--update-snapshots` (mode `changed`) only rewrites baselines whose
+  comparison FAILS — an intended change *below* the 1 % tolerance passes, is silently NOT captured,
+  and accumulates in the baseline until an unrelated later diff exposes the whole pile at once
+  (bit us 2026-07-31: four sub-1 % UI changes stacked invisibly in `contact-chromium.png`). After a
+  deliberate visual change that the confirm run absorbs without diffing, force a full capture with
+  `npx playwright test --update-snapshots=all` so the PNGs always carry the current truth.
 - Re-baseline on the **same engine/config** each set was captured on — desktop on Chromium
   `Desktop Chrome`, mobile on `Pixel 5` (both `locale: 'fr-FR'`, `animations: 'disabled'`). Different
   OS/font rendering will spuriously rewrite every PNG — don't.

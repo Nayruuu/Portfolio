@@ -17,7 +17,7 @@ export class ChannelHeaderComponent {
   protected readonly ascii = `   ┌─────────────────────┐
    │  $ super-dev.app  │
    │  > status: online   │
-   │  > role: full-stack │
+   │  > role: tech lead  │
    └─────────────────────┘`;
 
   protected readonly terminal = computed<[string, string][]>(() => [

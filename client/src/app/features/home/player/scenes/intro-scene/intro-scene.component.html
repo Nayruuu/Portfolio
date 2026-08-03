@@ -7,8 +7,14 @@
         [at]="schedule().nameAt"
         [text]="data().name"
         [cps]="cps"
-      /><span>.</span
-      ><sd-typed [elapsed]="elapsed()" [at]="schedule().roleAt" [text]="data().role" [cps]="cps" />
+      /><span class="scene-intro__chain"
+        ><span>.</span
+        ><sd-typed
+          [elapsed]="elapsed()"
+          [at]="schedule().roleAt"
+          [text]="data().role"
+          [cps]="cps"
+      /></span>
     </h2>
     <div class="scene-intro__tagline">
       <sd-typed

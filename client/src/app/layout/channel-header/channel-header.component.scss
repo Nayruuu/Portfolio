@@ -77,19 +77,6 @@
 		border: 2px solid var(--bg);
 		margin-top: 0;
 		box-shadow: var(--sh-2);
-		position: relative;
-
-		&::after {
-			content: '';
-			position: absolute;
-			bottom: 6px;
-			right: 6px;
-			width: 18px;
-			height: 18px;
-			border-radius: 999px;
-			background: var(--ok);
-			border: 3px solid var(--bg);
-		}
 	}
 
 	&__meta {

@@ -97,6 +97,7 @@
 
 	&__meta {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 8px;
 		font-family: var(--f-mono);
 		font-size: 11px;
@@ -104,7 +105,7 @@
 	}
 
 	&__desc {
-		font-size: 12.5px;
+		font-size: 13.5px;
 		color: var(--text-dim);
 		margin: 4px 0 0;
 		line-height: 1.5;
@@ -153,5 +154,12 @@
 	/* Light theme override (co-located). */
 	:host-context([data-theme='light']) .pcard:hover {
 		box-shadow: var(--sh-1);
+	}
+}
+
+// Mobile-first readability bump (same rationale as video-meta).
+@include bp.from(md) {
+	.pcard__desc {
+		font-size: 12.5px;
 	}
 }

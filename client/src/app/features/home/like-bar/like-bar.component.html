@@ -1,7 +1,10 @@
 <div class="likebar">
-  <button [class.is-on]="vote() === 'up'" (click)="vote.set(vote() === 'up' ? null : 'up')">
+  <button
+    [class.is-on]="vote() === 'up'"
+    (click)="vote.set(vote() === 'up' ? null : 'up')"
+    [attr.aria-label]="i18n.content().aria.like"
+  >
     <sd-icon name="thumbs-up" [size]="16" />
-    {{ likesBase + (vote() === 'up' ? 1 : 0) }}
   </button>
   <span class="likebar__divider"></span>
   <button

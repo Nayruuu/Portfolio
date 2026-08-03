@@ -36,8 +36,8 @@ const defaultHtml = `<!doctype html><html><head><meta charset="utf-8"><style>
   .role { margin-top: 30px; font-family: 'JetBrains Mono', monospace; font-size: 30px; color: #a4a4a8; }
 </style></head><body>
   <div class="mark"><div class="play"></div><div class="brand">&gt;_ super-dev<b>.app</b></div></div>
-  <h1>full-stack <span>.NET / Angular / Azure</span> developer</h1>
-  <div class="role">$ role: lead — full-stack · devops · mobile</div>
+  <h1>technical lead <span>.NET / Angular / Azure</span></h1>
+  <div class="role">$ role: lead technique — architecture · infra · dev</div>
 </body></html>`;
 
 const escapeHtml = (text) =>

@@ -102,7 +102,7 @@ Plus these **global cross-component** light rules in the same file (top-level `[
 not `:host-context` — the file is global):
 - Body texture flip: `[data-theme='light'] body::before` → `repeating-linear-gradient(0deg, rgb(0 0 0 / 1.2%) 0, rgb(0 0 0 / 1.2%) 1px, transparent 1px, transparent 3px)` at `opacity: 0.5` (dark `_base.scss` uses `rgb(255 255 255 / 1.2%)` at `opacity: 0.6`).
 - `.btn--primary` solid-dark on light: local component-vars `--bg: #1a1a1a; --bd: #1a1a1a; --fg: #fff` (hover → `#000`). `.btn--accent` → `color: #fff; --fg: #fff`. (These `#1a1a1a/#000/#fff` are theme-flip literals, **not** a new palette.)
-- `.likebar button:hover` → `background: rgb(0 0 0 / 5%)`; `::selection` → `var(--accent-glow)`/`var(--text)`; `.boot`/`.konami b` → `var(--accent)`; `.konami` → `var(--text-mute)`; `.comment__name-tag` → `var(--surface)`/`var(--border)`; `.tab[aria-selected='true']` → `border-bottom-color: var(--accent)`.
+- `.likebar button:hover` → `background: rgb(0 0 0 / 5%)`; `::selection` → `var(--accent-glow)`/`var(--text)`; `.boot`/`.konami b` → `var(--accent)`; `.konami` → `var(--text-mute)`; `.tab[aria-selected='true']` → `border-bottom-color: var(--accent)`.
 
 ## `@use` order — `client/src/styles.scss` (cascade-significant, do not reorder)
 
@@ -111,7 +111,7 @@ Copy this list verbatim (the cascade rule and why the order is load-bearing: des
 ```
 tokens → base → boot → buttons → tabs → layout → tabview → feature-bits
        → theme-light → overlays → scenes → scene-rich → code-block → dots
-       → likebar → comment → cards → symbol-box → loadbar
+       → likebar → cards → symbol-box → loadbar
 ```
 
 ### Exact partial inventory (`client/src/styles/_*.scss`)
@@ -126,7 +126,7 @@ that you reproduced the whole file, not a fragment). Nineteen are in the cascade
 |---|---|---|
 | `_breakpoints.scss` | the `$breakpoints` map (`sm 600 / md 900 / lg 1100`) + `@mixin from($bp)` (mobile-first `min-width`). **Not** in the `styles.scss` `@use` chain. (design.md §11) | — |
 | `_tokens.scss` | `:root { … }` — the dark token table (verbatim above). Comment lines + blank lines between groups. `@use`s `breakpoints` and overrides `--pad` to `32px` at `bp.from(md)`. | — |
-| `_base.scss` | `* { box-sizing }`, `html, body` (reset + mobile-first `font-size: 13px` → `14px` at `bp.from(md)` / `line-height: 1.5`), `body::before` (scanline), `::selection`, the two `sd-*` `display` groups (`block` list; `display: contents` on `sd-home, sd-up-next, sd-scene-*`). | — |
+| `_base.scss` | `* { box-sizing }`, `html, body` (reset + flat `font-size: 14px` / `line-height: 1.5`), `body::before` (scanline), `::selection`, the two `sd-*` `display` groups (`block` list; `display: contents` on `sd-home, sd-up-next, sd-scene-*`). | — |
 | `_boot.scss` | `.boot` (+ `&__pre`, `&__caret`). | `blink` (`50% { opacity: 0 }`) |
 | `_buttons.scss` | `.btn` (+ `&--primary/--accent/--ghost/--sm/--grow`). | — |
 | `_tabs.scss` | `.tabs`, `.tab`, `.tab__label`, the link-neutralize group (`.btn, .rel-card, .series-row, .series-ribbon__btn, .series-ribbon__title, .vgrid-card, .pcard, .vid-card { text-decoration: none }` — the card grids render as real `<a>` anchors), `.tab:hover`, `.tab[aria-selected='true']`. Mobile-first: `.tabs` is a **fixed bottom bar** (`bp.from(md)` restores the top text row, byte-identical); `.tab` is icon-over-`.tab__label` on mobile, `.tab .tab__icon` hidden at `md`; light bg override (+ its `md` reset) in `_theme-light.scss`. | — |
@@ -140,7 +140,6 @@ that you reproduced the whole file, not a fragment). Nineteen are in the cascade
 | `_code-block.scss` | `.code-block*` + the `.k/.s/.c/.n/.a` syntax classes → the always-dark **`--code-*`** tokens (the code panel never flips; the §1 **theme-invariant single-declaration** group — declared once in `:root`, not re-declared in `_theme-light`, PRODUCT.md §3.1). Mobile-first (`bp.from(md)` bumps font/padding); a long line keeps its indentation and **scrolls horizontally** in `.code-block__code` (`white-space: pre`), the `position: sticky` line-number gutter pinned + a visible thin scrollbar — never wraps, never widens the page. | — |
 | `_dots.scss` | grouped traffic-light dots hoist (below). | — |
 | `_likebar.scss` | `.likebar`, `.likebar button` (+ `:hover`/`.is-on`), `.likebar__divider`. | — |
-| `_comment.scss` | `.comment*` (avatar, head, name, tags, body, actions). | — |
 | `_cards.scss` | grouped `.vgrid-card, .pcard { cursor }` + `__thumb-grid` backdrop hoist (below). | — |
 | `_symbol-box.scss` | grouped 64px `__sym` tile hoist (below). | — |
 | `_loadbar.scss` | `.loadbar`. | `loadbar` |
@@ -165,7 +164,6 @@ and **6** components with **no `styleUrl`** (they render only global-partial cla
 | `tabs-bar.component` | `.tabs`, `.tab`, `.tab__icon`, `.tab__label` | `_tabs` |
 | `code-block.component` | `.code-block*`, `.code-block__dot*` | `_code-block`, `_dots` |
 | `like-bar.component` | `.likebar`, `.likebar__divider` | `_likebar` |
-| `comment.component` | `.comment*` | `_comment` |
 
 Do **not** generate a `.scss` (or `styleUrl`) for any of these six. The `pulse`
 keyframe lives in `player.component.scss` — see Animation ownership.
@@ -183,7 +181,8 @@ keyframe lives in `player.component.scss` — see Animation ownership.
 | `features/bsp-demo` | `.bsp-demo` (the standalone `/bsp` debug layout — flex column, centred, `gap`/`padding`); `&__viewport` (`position:relative`, `min(92vw,960px)`); `&__canvas` (`width:100%`, `image-rendering:pixelated` — the below-display framebuffer upscales crisp for the software-renderer look); `&__hud` (the composited **DOOM image HUD** `<canvas>`, `aria-hidden`; `inset:auto 0 0`, `height:22%`, `aspect-ratio:2117/404`, `margin-inline:auto`, `pointer-events:none` — the whole bar drawn in JS by `DoomHud`); grouped `&__exit, &__fullscreen` (top-right circular corner buttons — exit-door + native-fullscreen toggle, `right:10px`/`54px`; the fullscreen button only renders when the player passes `fullscreenAvailable`, never on `/bsp`); `&__fps` (top-left dev readout — FPS/ms/threads/texture source, mono green); `&__hint` (dev keyboard hint, mono); `&__controls` (top-left semi-transparent keyboard-controls recap, `display:none` by default) + `&__control` (`white-space:nowrap`). `:host-context(.player)` overrides make the game fill the player box (`:host` + `.bsp-demo` + `&__viewport`/`&__canvas` → `position:absolute; inset:0`, dropping the standalone centring/padding), **hide** the dev `&__fps`/`&__hint`, and **show** `&__controls`. Mounted `@if (game.running())` in place of `sd-player-stage`, and served standalone at `/bsp` | no |
 | `features/home/video-meta` | `.video-meta*`, `.description*`, `.chap*` | yes (`.description`) |
 | `features/home/up-next` | `.up-next*`, `.vid-card*` (NOT `__thumb-grid` — hoisted; thumb track widens at `bp.from(sm)`) | yes (`.vid-card:hover`, top-level `@media (hover:hover)`) |
-| `features/home/comments` | `.comments*` (head = full-width reset toggle button + `__chevron` hidden at `bp.from(md)`; input — NOT `.comment*`, that's global) | yes (input-field) |
+| `features/home/lets-talk` | `.lets-talk*` (bordered `--surface` CTA card: mono heading, body line, actions row) | — |
+| `features/home/reviews` | `.reviews*` collapsed toggle row (22px overlapping initial discs, teaser, `via Malt` chip, chevron) + expanded `.review*` cards (40px disc on data-driven color, role pill, `pre-line` body) | — |
 | `features/articles/articles` | `.vfilters`, `.vfilter`, `.vgrid`, `.vgrid-card*` (NOT `__thumb-grid`) | yes (`.vfilter.is-on`) |
 | `features/articles/article-detail` | `.article-detail*`, `.article-hero*`, `.series-ribbon*`, `.rel-card*` (NOT `.rel-card__sym` — hoisted) | no |
 | `features/series/series` | `.pgrid`, `.pcard*` (NOT `.pcard { cursor }` — hoisted; `.pcard` 2-col at `bp.from(md)`) | yes (`.pcard:hover` shadow) |
@@ -202,7 +201,7 @@ keyframe lives in `player.component.scss` — see Animation ownership.
 
 **Global partials** (rendered by ≥2 components, so they MUST be global — Emulated scoping would break
 them otherwise): `.btn*`, `.tabs`/`.tab`, `.tabview*`, `.scene*` (base intro/projects/
-timeline/outro), `.scene-*-rich__cmd`/`__sub span`, `.code-block*` + `.k/.s/.c/.n/.a`, `.comment*`,
+timeline/outro), `.scene-*-rich__cmd`/`__sub span`, `.code-block*` + `.k/.s/.c/.n/.a`,
 `.likebar*`, `.boot*`, `.reveal`/`.egg`/`.konami`, `.loadbar`, `.article-detail__topbar`,
 `.video-meta__author-av`, plus the four grouped hoists below.
 
@@ -267,7 +266,7 @@ PRODUCT.md §4–§7 per-screen visual sections give each screen's element tree
    instances is a class (design.md §9). Keep `@media`/`@keyframes`/`:host-context` top-level (§2).
 
 Shared animations to reuse (define `@keyframes` in the owning file, top-level): `blink` 1s `steps(1)`
-(cursor/caret), `pulse` 1.6s ease-in-out (live/availability dots), `eggIn` 0.3s, `loadbar` 0.9s
+(cursor/caret), `pulse` 1.6s ease-in-out (the player's live dot), `eggIn` 0.3s, `loadbar` 0.9s
 ease-in-out. Standard transitions: `all 0.15s` (buttons/borders/bg), `0.35s ease` (scene opacity),
 `0.05s linear` (progress fill).
 

@@ -19,6 +19,7 @@ import {
   articleDescription,
   articleIdxsForSeries,
   articleOgImage,
+  formatArticleDate,
   parseMarkdown,
   seriesIdxForArticle,
 } from '../../../core/lib';
@@ -146,6 +147,10 @@ export class ArticleDetailComponent {
     });
 
     inject(DestroyRef).onDestroy(() => this.seo.clearJsonLd());
+  }
+
+  protected dateOf(article: Article): string {
+    return formatArticleDate(article.date, this.i18n.lang());
   }
 
   protected heroBg(article: Article): string {

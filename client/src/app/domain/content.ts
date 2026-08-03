@@ -4,11 +4,11 @@ import { Aria } from './aria/aria';
 import { Series } from './series/series';
 import { SeriesUi } from './series/series-ui';
 import { ProjectScene } from './project/project-scene';
-import { ProjectThumb } from './project/project-thumb';
 import { StackTab } from './stack/stack-tab';
 import { About } from './about/about';
 import { Contact } from './contact/contact';
-import { Comment } from './comment/comment';
+import { Discuss } from './discuss/discuss';
+import { ReviewsBlock } from './review/reviews-block';
 import { Chapter } from './player/chapter';
 import { SceneIntro } from './player/scene-intro';
 import { SceneOutro } from './player/scene-outro';
@@ -20,7 +20,7 @@ import { UpNext } from './player/up-next';
 /**
  * The multilingual content contract. Typing every `content.<lang>.ts` bridge as `Content`
  * guarantees all locales stay structurally aligned at compile time. Holds both UI micro-copy
- * (labels/placeholders) and domain data (articles, series, chapters, comments…).
+ * (labels/placeholders) and domain data (articles, series, chapters…).
  */
 export interface Content {
   brandTld: string;
@@ -31,18 +31,13 @@ export interface Content {
   join: string;
   cv: string;
   cvUrl: string;
-  subscribers: string;
-  videos: string;
   joined: string;
-  openToWork: string;
   headerUptime: string;
   share: string;
   author: string;
   themeToDark: string;
   themeToLight: string;
   themeToggleAria: string;
-  subscribersCount: string;
-  videosCount: string;
   joinedYear: string;
   konamiTip: string;
   konamiKeys: string;
@@ -59,7 +54,6 @@ export interface Content {
   tabDescriptions: string[]; // per-tab meta description, index-aligned with `tabs`
 
   featuredTitle: string;
-  featuredViews: string;
   featuredWhen: string;
   featuredCategory: string;
   featuredTags: string[];
@@ -74,21 +68,14 @@ export interface Content {
   /** Label on the inline player's "popped out to mini-player" placeholder. */
   playerRestore: string;
 
-  commentsCount: string;
-  commentsSort: string;
-  commentInputPh: string;
-  commentPinned: string;
-  commentYou: string;
-  commentYouTag: string;
-  commentJustNow: string;
-  commentSend: string;
-  comments: Comment[];
-
   upNext: UpNext;
 
-  projects: ProjectThumb[];
 
   articleFilters: string[];
+  /** Real, attributed Malt recommendations (the honest replacement for fake testimonials). */
+  reviews: ReviewsBlock;
+  /** The honest end-of-home CTA that replaced the simulated comments section. */
+  discuss: Discuss;
   articles: Article[];
   articlesUi: ArticlesUi;
 

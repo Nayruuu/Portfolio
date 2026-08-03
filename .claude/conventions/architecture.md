@@ -121,7 +121,7 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
 
 - **One** barrel only: `domain/index.ts`. It `export *` from **every** domain file (one
   `export * from './sub/file';` line per file), plus the root `content.ts` contract.
-- The sub-domain folders (`about/`, `article/`, `code/`, `comment/`, `contact/`, `i18n/`, `player/`,
+- The sub-domain folders (`about/`, `article/`, `code/`, `contact/`, `discuss/`, `i18n/`, `player/`,
   `project/`, `series/`, `stack/`, `aria/`) are **internal organization only** — there is **no
   per-folder barrel**.
 - **Consumers** (anything in `core`/`shared`/`layout`/`features`) import from the folder:
@@ -175,8 +175,8 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
     Big and feature-scoped, it is **not** folded into the root barrel; consumers import it directly through
     its own sub-barrel, `…/core/lib/bsp-engine`.
 - **Consumers** import from the folder: `import { parseMarkdown, STORAGE_KEYS } from '…/core/lib';`.
-- **Intra-`lib`** imports go **file → file directly** (`select-articles.ts` →
-  `import { readCount } from './read-count';`), **never the barrel**.
+- **Intra-`lib`** imports go **file → file directly** (`article-description.ts` →
+  `import { truncateAtWord } from './truncate-at-word';`), **never the barrel**.
 
 ### Everything else in `core` — no barrel; import the file directly
 
@@ -231,12 +231,12 @@ domain/
   aria/     aria.ts
   article/  article.ts article-block.ts article-tag.ts articles-ui.ts indexed-article.ts inline-run.ts
   code/     code-lang.ts token.ts
-  comment/  comment.ts
-  contact/  contact.ts contact-kind.ts contact-method.ts availability.ts form-labels.ts
+  contact/  contact.ts contact-kind.ts contact-method.ts form-labels.ts
+  discuss/  discuss.ts
   game/     weapon-id.ts                   # WEAPON_IDS value-set + the derived WeaponId union (the game domain)
   i18n/     lang.ts theme.ts
   player/   chapter.ts metric.ts scene-id.ts scene-{intro,stack,projects,timeline,outro}.ts stack-card.ts timeline-row.ts up-next.ts
-  project/  project-scene.ts project-thumb.ts
+  project/  project-scene.ts
   series/   series.ts series-ui.ts
   stack/    stack-tab.ts stack-tech.ts stack-tier.ts
 ```
@@ -251,7 +251,7 @@ domain/
 ```
 core/
   api/        api.token.ts  content-api.service.ts          # the API module (the .NET-API seam)
-  services/   content/  game/  i18n/  player/  reviews/  search/  seo/  theme/  viewport/  # one folder per service (+ its .spec)
+  services/   content/  game/  i18n/  player/  search/  seo/  theme/  # one folder per service (+ its .spec)
   content/    content.<lang>.ts + content.<lang>.json (one per Lang)  json-content.ts  article-bodies.ts (generated)
   lib/        index.ts + one pure function per file (+ constants.ts, + the bsp-engine/ engine and the game/ embedded-engine sub-modules) — 100 % tested, except game's browser host adapters (§1 callout / testing.md)
 ```
@@ -275,7 +275,7 @@ in its own folder** with its co-located template + styles (+ spec):
 ```
 features/home/
   home.component.{ts,html}                 # feature root — flat (no own scss)
-  comment/  comments/  like-bar/  up-next/  video-meta/   # one folder per sub-component
+  lets-talk/  like-bar/  reviews/  up-next/  video-meta/   # one folder per sub-component
   player/   player.component.{ts,html,scss}
             player-stage/  player-stage.component.{ts,html,scss}  # bg + scenes, reused inline + in the mini
             mini-player/   mini-player.component.{ts,html,scss}   # floating PiP, rendered at the shell

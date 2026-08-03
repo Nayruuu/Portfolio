@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 A multilingual (FR/EN/ES/DE — extensible via the `LANG` value set) **"YouTube-channel" portfolio** for
-a full-stack **.NET / Angular / Azure** developer — brand `super-dev` / `.app`, selector prefix
+a **.NET / Angular / Azure** technical lead — brand `super-dev` / `.app`, selector prefix
 **`sd-`**. First and foremost a **technical showcase**: the code must stay exemplary against the latest
 Angular 21 patterns. (Non-FR locales are **AI-translated** from FR via `make i18n`, committed.)
 
@@ -17,7 +17,7 @@ convention lives in **`.claude/conventions/`** (the rulebook) and every product/
 | [`.claude/conventions/architecture.md`](.claude/conventions/architecture.md) | The five layers, the inward-only **dependency rule**, barrels & import style, folder layout, one-declaration-per-file, the typed content bridge, routing/SEO **placement**. |
 | [`.claude/conventions/code.md`](.claude/conventions/code.md) | TS/Angular code shape: standalone · OnPush · zoneless · signals · `input()`/`output()`/`model()`/`viewChild()` · `inject()` · member accessibility & order · native control flow · the ESLint rule set (incl. custom `local/prefer-signal-primitives`) · no-`enum`/derived-union/naming rules. |
 | [`.claude/conventions/design.md`](.claude/conventions/design.md) | SCSS/design **rules**: CSS-tokens-only, one-level BEM nesting, blank-line-between-blocks (Stylelint), tabs indentation, the cascade-significant `@use` order, shared-vs-co-located placement, grouped-selector hoisting, `:host-context` theme overrides, when `[style.x]` is allowed, **mobile-first breakpoints** (the `from()` mixin + `$breakpoints` map). (Token **values** live in `docs/PRODUCT.md`.) |
-| [`.claude/conventions/testing.md`](.claude/conventions/testing.md) | The test contract: Vitest patterns + exact coverage thresholds, the `core/` 100 % guard, Playwright config (chromium + **mobile** + **webkit** projects) + the 17 specs + 16 visual baselines (8 desktop + 8 mobile) + re-baseline discipline, the prerender guard. |
+| [`.claude/conventions/testing.md`](.claude/conventions/testing.md) | The test contract: Vitest patterns + exact coverage thresholds, the `core/` 100 % guard, Playwright config (chromium + **mobile** + **webkit** projects) + the 18 specs + 26 visual baselines (13 desktop + 13 mobile, incl. the five frozen player scenes) + re-baseline discipline, the prerender guard. |
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | The ***what***: product concept, route/tab inventory, the simulated player-scenes mechanism, the data tables (chapters, slugs, tags, series ↔ article mapping), and **the design source of truth** — exact token palette (dark + light), per-screen pixel spacing, font ladder, keyframes. |
 
 > **Single-source principle**: each rule lives in exactly one of the docs above; this file and the
@@ -128,7 +128,7 @@ These are the sharp edges a rebuild trips on. Each is owned in depth by a linked
 - **Mobile-first responsive**: base SCSS targets the phone; the desktop layout lives in
   `@include bp.from(md|lg)` blocks (the `$breakpoints` map + `from()` mixin, the *only* `@use` in
   component SCSS). Desktop visual baselines are **never** re-baselined to mask a mobile-first leak.
-  (Breakpoint rules → `design.md §11`; mobile Playwright project / 16 baselines / 360px overflow guard →
+  (Breakpoint rules → `design.md §11`; mobile Playwright project / 26 baselines / 360px overflow guard →
   `testing.md`.)
 
 ## Git / commits

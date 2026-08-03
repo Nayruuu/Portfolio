@@ -1,5 +1,3 @@
-@use 'breakpoints' as bp;
-
 * {
 	box-sizing: border-box;
 }
@@ -10,7 +8,7 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--f-sans);
-	font-size: 13px;
+	font-size: 14px;
 	line-height: 1.5;
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizelegibility;
@@ -69,11 +67,3 @@ sd-scene-outro {
 	display: contents;
 }
 
-// The base font is nudged down to 13px on phones for denser, calmer mobile
-// typography; the 14px desktop baseline is restored from tablet up.
-@include bp.from(md) {
-	html,
-	body {
-		font-size: 14px;
-	}
-}
