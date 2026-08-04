@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
-import { ContactKind, ContactMethod } from '../../domain';
+import { ContactFormState, ContactKind, ContactMethod } from '../../domain';
 import { I18nService } from '../../core/services/i18n/i18n.service';
+import { ContactApiService } from '../../core/api/contact-api.service';
 import { IconComponent } from '../../shared/icon/icon.component';
 
 @Component({
@@ -20,9 +21,10 @@ export class ContactComponent {
   protected subject = this.i18n.content().contact.subjects[0];
   protected message = '';
 
-  protected readonly state = signal<'idle' | 'sending' | 'sent'>('idle');
+  protected website = '';
 
-  /** Flipped on the first submit attempt — gates the inline error display until then. */
+  protected readonly state = signal<ContactFormState>('idle');
+
   protected readonly submitted = signal(false);
 
   protected readonly placeholder = computed(() => this.i18n.content().contact.messagePlaceholder);
@@ -31,7 +33,13 @@ export class ContactComponent {
     this.i18n.content().contact.formLabels.sent.split('—')[0].trim(),
   );
 
-  protected submit(form: NgForm): void {
+  protected readonly submitLocked = computed(
+    () => this.state() === 'sending' || this.state() === 'sent',
+  );
+
+  private readonly contactApi = inject(ContactApiService);
+
+  protected async submit(form: NgForm): Promise<void> {
     if (form.invalid) {
       this.submitted.set(true);
       this.focusFirstInvalid(form);
@@ -40,7 +48,19 @@ export class ContactComponent {
     }
 
     this.state.set('sending');
-    setTimeout(() => this.state.set('sent'), 1100);
+
+    try {
+      await this.contactApi.send({
+        name: this.name,
+        email: this.email,
+        subject: this.subject,
+        message: this.message,
+        website: this.website,
+      });
+      this.state.set('sent');
+    } catch {
+      this.state.set('error');
+    }
   }
 
   protected iconOf(kind: ContactKind): string {
@@ -60,12 +80,10 @@ export class ContactComponent {
     }
   }
 
-  /** Real destination for a contact channel — `mailto:` for the email, `https://` for the rest. */
   protected linkOf(method: ContactMethod): string {
     return method.kind === 'mail' ? `mailto:${method.label}` : `https://${method.label}`;
   }
 
-  /** Move focus to the first field in error so a fist/SR user lands on what to fix. */
   private focusFirstInvalid(form: NgForm): void {
     const firstInvalid = ['name', 'email', 'message'].find(
       (name) => form.controls?.[name]?.invalid,

@@ -8,4 +8,5 @@ export interface FormLabels {
   sent: string;
   required: string;
   invalidEmail: string;
+  error: string;
 }

@@ -105,18 +105,27 @@
               }}</span>
             }
           </label>
+          <input
+            type="text"
+            name="website"
+            [(ngModel)]="website"
+            hidden
+            tabindex="-1"
+            autocomplete="off"
+            aria-hidden="true"
+          />
           <div class="contact-form__actions">
-            <button type="submit" class="btn btn--accent" [disabled]="state() !== 'idle'">
+            <button type="submit" class="btn btn--accent" [disabled]="submitLocked()">
               @switch (state()) {
-                @case ('idle') {
-                  <sd-icon name="mail" [size]="14" />
-                  {{ content.formLabels.send }}
-                }
                 @case ('sending') {
                   <span>{{ content.formLabels.sending }}</span>
                 }
                 @case ('sent') {
                   <span>✔ {{ shortSent() }}</span>
+                }
+                @default {
+                  <sd-icon name="mail" [size]="14" />
+                  {{ content.formLabels.send }}
                 }
               }
             </button>
@@ -128,6 +137,8 @@
           <p class="contact-form__status" role="status" aria-live="polite">
             @if (state() === 'sent') {
               ✔ {{ content.formLabels.sent }}
+            } @else if (state() === 'error') {
+              ⚠ {{ content.formLabels.error }}
             }
           </p>
         </div>

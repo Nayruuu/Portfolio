@@ -9,8 +9,6 @@ resource "azurerm_static_web_app" "this" {
   tags = var.tags
 }
 
-# Optional custom-domain binding. Skipped until DNS for the domain points at the
-# SWA (the binding waits on DNS-TXT validation, which would otherwise fail/hang).
 resource "azurerm_static_web_app_custom_domain" "this" {
   count = var.custom_domain == null ? 0 : 1
 

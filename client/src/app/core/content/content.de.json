@@ -809,7 +809,8 @@
       "sending": "Wird gesendet…",
       "sent": "Nachricht gesendet — ich melde mich schnell zurück.",
       "required": "Dieses Feld ist erforderlich.",
-      "invalidEmail": "Ungültige E-Mail-Adresse."
+      "invalidEmail": "Ungültige E-Mail-Adresse.",
+      "error": "Senden fehlgeschlagen — versuch es erneut oder schreib mir direkt."
     },
     "subjects": [
       "Ein Freelance-Projekt",

@@ -800,7 +800,8 @@
       "sending": "Sending…",
       "sent": "Message sent — I'll reply soon.",
       "required": "This field is required.",
-      "invalidEmail": "Invalid email address."
+      "invalidEmail": "Invalid email address.",
+      "error": "Sending failed — try again or email me directly."
     },
     "subjects": [
       "A freelance mission",

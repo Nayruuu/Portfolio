@@ -9,51 +9,46 @@ on:
   #   paths: [api/**]
 
 env:
-  IMAGE: ghcr.io/nayruuu/super-dev-api
+  DOTNET_VERSION: "10.0.x"
+  FUNCTIONAPP_NAME: afu-sd-api
+  PROJECT: api/src/SuperDev.Api/SuperDev.Api.csproj
+  PUBLISH_DIR: ${{ github.workspace }}/publish
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    environment: api
 
     permissions:
       id-token: write # Azure OIDC login
       contents: read
-      packages: write # push to GHCR
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Build + push image
-        uses: docker/build-push-action@v6
-        with:
-          context: api
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ github.sha }}
-            ${{ env.IMAGE }}:latest
+      - name: Test
+        run: dotnet test api --configuration Release
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT }} --configuration Release --output ${{ env.PUBLISH_DIR }}
 
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Points the Container App at the freshly pushed image. The image must be
-      # public on GHCR (so Container Apps pulls it without registry credentials),
-      # or a registry secret must be configured on the app. ca-api / rg-infra-web come
-      # from infra/ (Terraform).
-      - name: Update Container App
-        run: |
-          az containerapp update \
-            --name ca-api \
-            --resource-group rg-infra-web \
-            --image ${{ env.IMAGE }}:${{ github.sha }}
+      # Zip-deploys the pre-published isolated-worker output to the Flex Consumption app.
+      # afu-sd-api / its app settings come from infra/ (Terraform).
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@bc63708cc6539760eea18d8a7de4ce8ef5fdf593 # v1
+        with:
+          app-name: ${{ env.FUNCTIONAPP_NAME }}
+          package: ${{ env.PUBLISH_DIR }}

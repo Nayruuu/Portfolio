@@ -809,7 +809,8 @@
       "sending": "Enviando…",
       "sent": "Mensaje enviado — te respondo pronto.",
       "required": "Este campo es obligatorio.",
-      "invalidEmail": "Dirección de e-mail no válida."
+      "invalidEmail": "Dirección de e-mail no válida.",
+      "error": "El envío falló — inténtalo de nuevo o escríbeme directamente."
     },
     "subjects": [
       "Una misión freelance",
