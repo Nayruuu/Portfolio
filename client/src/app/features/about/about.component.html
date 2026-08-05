@@ -1,5 +1,5 @@
 @let content = i18n.content();
-<section class="tabview" data-screen-label="08 Tab — about">
+<section class="tabview" data-screen-label="09 Tab — about">
   <div class="tabview__head">
     <div>
       <h2 class="tabview__title">
@@ -17,7 +17,7 @@
         <p class="about-bio__p">{{ paragraph }}</p>
       }
       <div class="about-bio__signature">
-        <span>•</span> {{ content.author }} — portfolio{{ content.brandTld }}
+        <span>•</span> {{ content.author }} — super-dev{{ content.brandTld }}
       </div>
     </div>
 
@@ -43,11 +43,31 @@
         <ul class="about-side__links">
           @for (link of content.about.links; track link.label) {
             <li>
-              <a href="#" (click)="$event.preventDefault()">
+              <a [href]="href(link)" target="_blank" rel="noopener">
                 <span class="about-side__arrow">›</span>{{ link.label }}
               </a>
             </li>
           }
+        </ul>
+      </div>
+
+      <div class="about-side__card">
+        <div class="about-side__head">
+          {{ content.projectsUi.title }}
+        </div>
+        <ul class="about-side__links">
+          @for (project of projects(); track project.slug) {
+            <li>
+              <a [routerLink]="['/', i18n.lang(), 'projects', project.slug]">
+                <span class="about-side__arrow">›</span>{{ project.name }}
+              </a>
+            </li>
+          }
+          <li>
+            <a [routerLink]="['/', i18n.lang(), 'projects']">
+              <span class="about-side__arrow">›</span>{{ content.projectsUi.back }}
+            </a>
+          </li>
         </ul>
       </div>
     </aside>

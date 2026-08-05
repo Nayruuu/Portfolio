@@ -1,28 +1,47 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ContactKind } from '../../domain';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ContactFormState, ContactKind } from '../../domain';
 import { ContactComponent } from './contact.component';
 
 describe('ContactComponent', () => {
   let fixture: ComponentFixture<ContactComponent>;
+  let httpMock: HttpTestingController;
 
   beforeEach(async () => {
-    await TestBed.configureTestingModule({ imports: [ContactComponent] }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [ContactComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
     fixture = TestBed.createComponent(ContactComponent);
+    httpMock = TestBed.inject(HttpTestingController);
   });
+
+  afterEach(() => httpMock.verify());
 
   it('mounts without error and renders content', async () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent.trim().length).toBeGreaterThan(0);
   });
 
-  // submit/state/iconOf are protected; reach them via a typed cast on the instance.
-  // `submit` only reads `form.invalid`, so a minimal stand-in stands in for `NgForm`.
   type ContactInternals = {
-    state: () => 'idle' | 'sending' | 'sent';
+    state: () => ContactFormState;
     submitted: () => boolean;
-    submit: (form: { invalid: boolean }) => void;
+    submit: (form: { invalid: boolean }) => Promise<void>;
+    reset: () => void;
     iconOf: (kind: ContactKind) => string;
+    name: string;
+    email: string;
+    subject: string;
+    message: string;
+    website: string;
+  };
+
+  const solveAltcha = (token: string): void => {
+    const widget = fixture.nativeElement.querySelector('altcha-widget') as { value?: string };
+
+    widget.value = token;
   };
   const internals = (): ContactInternals =>
     fixture.componentInstance as unknown as ContactInternals;
@@ -31,51 +50,97 @@ describe('ContactComponent', () => {
   const invalidForm = { invalid: true };
 
   describe('submit()', () => {
-    it('blocks an invalid form — stays idle and flags `submitted`', () => {
+    it('blocks an invalid form — stays idle, flags `submitted`, and sends nothing', async () => {
       expect(internals().state()).toBe('idle');
 
-      internals().submit(invalidForm);
+      await internals().submit(invalidForm);
 
       expect(internals().state()).toBe('idle');
       expect(internals().submitted()).toBe(true);
+      httpMock.expectNone('/api/contact');
     });
 
-    it('immediately switches a valid form to the "sending" state', () => {
-      expect(internals().state()).toBe('idle');
+    it('POSTs the form with the honeypot and the solved altcha token, reaching "sent"', async () => {
+      await fixture.whenStable();
+      const contact = internals();
 
-      internals().submit(validForm);
+      contact.name = 'Jane';
+      contact.email = 'jane@example.com';
+      contact.subject = 'Mission';
+      contact.message = 'Bonjour';
+      solveAltcha('altcha-token');
 
-      expect(internals().state()).toBe('sending');
+      const done = contact.submit(validForm);
+
+      expect(contact.state()).toBe('sending');
+
+      const request = httpMock.expectOne('/api/contact');
+
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({
+        name: 'Jane',
+        email: 'jane@example.com',
+        subject: 'Mission',
+        message: 'Bonjour',
+        website: '',
+        altcha: 'altcha-token',
+      });
+      request.flush(null, { status: 202, statusText: 'Accepted' });
+      await done;
+
+      expect(contact.state()).toBe('sent');
     });
 
-    it('disables the submit button when the state is no longer "idle"', async () => {
+    it('reaches the "error" state when the POST fails', async () => {
+      const done = internals().submit(validForm);
+
+      httpMock.expectOne('/api/contact').flush('down', { status: 500, statusText: 'Server Error' });
+      await done;
+
+      expect(internals().state()).toBe('error');
+    });
+
+    it('reset() clears the fields and returns to idle after a successful send', async () => {
+      await fixture.whenStable();
+      const contact = internals();
+
+      contact.name = 'Jane';
+      contact.email = 'jane@example.com';
+      contact.message = 'Bonjour';
+      solveAltcha('altcha-token');
+
+      const done = contact.submit(validForm);
+
+      httpMock.expectOne('/api/contact').flush(null, { status: 202, statusText: 'Accepted' });
+      await done;
+      expect(contact.state()).toBe('sent');
+
+      contact.reset();
+
+      expect(contact.state()).toBe('idle');
+      expect(contact.submitted()).toBe(false);
+      expect(contact.name).toBe('');
+      expect(contact.email).toBe('');
+      expect(contact.message).toBe('');
+    });
+
+    it('disables the submit button while sending', async () => {
       await fixture.whenStable();
       const button = (): HTMLButtonElement =>
         fixture.nativeElement.querySelector('button[type="submit"]');
 
       expect(button().disabled).toBe(false);
 
-      internals().submit(validForm);
+      const done = internals().submit(validForm);
+
       await fixture.whenStable();
 
       expect(button().disabled).toBe(true);
-    });
 
-    // Zoneless means no zone.js, so fakeAsync/tick are unavailable. Use Vitest's
-    // fake timers to drive the setTimeout(1100ms).
-    it('switches to the "sent" state after the setTimeout (1100 ms)', () => {
-      vi.useFakeTimers();
-
-      internals().submit(validForm);
-      expect(internals().state()).toBe('sending');
-
-      vi.advanceTimersByTime(1100);
-
-      expect(internals().state()).toBe('sent');
+      httpMock.expectOne('/api/contact').flush(null, { status: 202, statusText: 'Accepted' });
+      await done;
     });
   });
-
-  afterEach(() => vi.useRealTimers());
 
   describe('iconOf()', () => {
     it('returns "@" for mail', () => {

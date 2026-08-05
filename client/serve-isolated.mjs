@@ -30,6 +30,9 @@ const send = (res, type, body) => {
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Content-Type', type);
+  // No caching: this is the local eyeball server and assets reuse stable filenames (prop_chair.vox, the
+  // rebuilt bundle) across iterations — without this the browser serves a stale prop and "it didn't update".
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
   res.end(body);
 };
 

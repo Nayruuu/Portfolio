@@ -5,6 +5,13 @@
 .scene-intro__name {
 	font-size: 52px !important;
 	margin-bottom: 8px !important;
+
+	// The real name + role no longer fit one line: the dot + role chain is one unbreakable
+	// unit, so the wrap lands cleanly before it ("Stéphane De Todaro" / ".lead technique").
+	.scene-intro__chain {
+		display: inline-block;
+		white-space: nowrap;
+	}
 }
 
 .scene-intro__tagline {

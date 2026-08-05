@@ -109,7 +109,6 @@
 		.video-meta__author-av {
 			width: 36px;
 			height: 36px;
-			font-size: 13px;
 		}
 	}
 
@@ -207,6 +206,12 @@
 		span {
 			color: var(--accent);
 		}
+	}
+
+	&__react {
+		margin-top: 28px;
+		display: flex;
+		justify-content: center;
 	}
 }
 

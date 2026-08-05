@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 APP   := client
 
-.PHONY: help install dev build build-prod build-ssg og gen-icons test test-cov e2e lint lint-fix format format-check check-docs clean
+.PHONY: help install dev build build-prod build-ssg og gen-icons gen-article-bodies gen-read-times test test-cov e2e lint lint-fix format format-check check-docs clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -26,7 +26,7 @@ build-prod: ## Build production explicite
 build-ssg: ## Build prod + native Angular prerender + sitemap/robots/llms + SWA config
 	cd $(APP) && npm run build:ssg
 
-og: ## Regenerate the og:image social card (public/og-default.png)
+og: ## Regenerate the social cards (public/og-default.png + public/og/<slug>.<lang>.jpg)
 	cd $(APP) && npm run gen:og
 
 gen-icons: ## Regenerate the typed icon set (icon-set.ts) from icons/*.svg
@@ -34,6 +34,9 @@ gen-icons: ## Regenerate the typed icon set (icon-set.ts) from icons/*.svg
 
 gen-article-bodies: ## Regenerate article-bodies.ts from content/articles/*.md
 	cd $(APP) && npm run gen:article-bodies
+
+gen-read-times: ## Derive each article's readTime from its body word count (also runs inside build-ssg)
+	cd $(APP) && npm run gen:read-times
 
 optimize-game-art: ## Convert served game PNGs → WebP (shrinks the in-player game's image payload)
 	cd $(APP) && npm run optimize:game-art

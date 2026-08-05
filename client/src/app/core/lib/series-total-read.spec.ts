@@ -7,8 +7,6 @@ function art(readTime: string): Article {
     slug: 'x',
     tag: '.NET',
     title: 'x',
-    reads: '1k',
-    ago: '1 j',
     readTime,
     accentColor: '#fff',
     symbol: '#',

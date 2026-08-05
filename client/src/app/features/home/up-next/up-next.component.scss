@@ -84,7 +84,7 @@
 	}
 
 	&__title {
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 600;
 		line-height: 1.35;
 		letter-spacing: -0.005em;
@@ -142,5 +142,12 @@
 	/* Light theme override (co-located). */
 	:host-context([data-theme='light']) .vid-card:hover {
 		background: var(--surface-2);
+	}
+}
+
+// Mobile-first readability bump (same rationale as video-meta).
+@include bp.from(md) {
+	.vid-card__title {
+		font-size: 13px;
 	}
 }

@@ -1,5 +1,5 @@
 @let content = i18n.content().contact;
-<section class="tabview" data-screen-label="10 Tab — contact">
+<section class="tabview" data-screen-label="11 Tab — contact">
   <div class="tabview__head">
     <div>
       <h2 class="tabview__title">
@@ -12,14 +12,6 @@
   <div class="contact-grid">
     <div>
       <div class="contact-avail">
-        <div class="contact-avail__l">
-          <div class="contact-avail__status">
-            <span class="contact-avail__dot"></span>
-            {{ content.avail.status }}
-          </div>
-          <div class="contact-avail__title">{{ content.avail.title }}</div>
-          <div class="contact-avail__sub">{{ content.avail.subtitle }}</div>
-        </div>
         <div class="contact-avail__r">
           <div class="contact-avail__rt">
             {{ content.responseTimeLabel }}
@@ -36,108 +28,134 @@
           <span class="contact-form__head-title"> message.compose — {{ content.composeNew }} </span>
         </div>
         <div class="contact-form__body">
-          <label>
-            <span class="contact-form__lbl">
-              <span>$</span>
-              {{ content.formLabels.name }}
-            </span>
-            <input
-              #nameModel="ngModel"
-              [(ngModel)]="name"
-              name="name"
-              required
-              [class.is-error]="submitted() && nameModel.invalid"
-              [attr.aria-invalid]="submitted() && nameModel.invalid"
-              [attr.aria-describedby]="submitted() && nameModel.invalid ? 'err-name' : null"
-            />
-            @if (submitted() && nameModel.invalid) {
-              <span id="err-name" class="contact-form__error" role="alert">{{
-                content.formLabels.required
-              }}</span>
-            }
-          </label>
-          <label>
-            <span class="contact-form__lbl">
-              <span>$</span>
-              {{ content.formLabels.email }}
-            </span>
-            <input
-              #emailModel="ngModel"
-              type="email"
-              [(ngModel)]="email"
-              name="email"
-              required
-              email
-              [class.is-error]="submitted() && emailModel.invalid"
-              [attr.aria-invalid]="submitted() && emailModel.invalid"
-              [attr.aria-describedby]="submitted() && emailModel.invalid ? 'err-email' : null"
-            />
-            @if (submitted() && emailModel.invalid) {
-              <span id="err-email" class="contact-form__error" role="alert">{{
-                emailModel.errors?.['required']
-                  ? content.formLabels.required
-                  : content.formLabels.invalidEmail
-              }}</span>
-            }
-          </label>
-          <label>
-            <span class="contact-form__lbl">
-              <span>$</span>
-              {{ content.formLabels.subject }}
-            </span>
-            <select [(ngModel)]="subject" name="subject">
-              @for (subjectOption of content.subjects; track subjectOption) {
-                <option>{{ subjectOption }}</option>
+          @if (state() === 'sent') {
+            <div class="contact-form__success" role="status" aria-live="polite">
+              <span class="contact-form__success-icon" aria-hidden="true">✓</span>
+              <h3 class="contact-form__success-title">{{ content.formLabels.sentTitle }}</h3>
+              <p class="contact-form__success-text">{{ content.formLabels.sentBody }}</p>
+              <button type="button" class="contact-form__success-again" (click)="reset()">
+                {{ content.formLabels.sendAnother }}
+              </button>
+            </div>
+          } @else {
+            <label>
+              <span class="contact-form__lbl">
+                <span>$</span>
+                {{ content.formLabels.name }}
+              </span>
+              <input
+                #nameModel="ngModel"
+                [(ngModel)]="name"
+                name="name"
+                required
+                [class.is-error]="submitted() && nameModel.invalid"
+                [attr.aria-invalid]="submitted() && nameModel.invalid"
+                [attr.aria-describedby]="submitted() && nameModel.invalid ? 'err-name' : null"
+              />
+              @if (submitted() && nameModel.invalid) {
+                <span id="err-name" class="contact-form__error" role="alert">{{
+                  content.formLabels.required
+                }}</span>
               }
-            </select>
-          </label>
-          <label>
-            <span class="contact-form__lbl">
-              <span>$</span>
-              {{ content.formLabels.message }}
-            </span>
-            <textarea
-              #messageModel="ngModel"
-              rows="6"
-              [(ngModel)]="message"
-              name="message"
-              required
-              [placeholder]="placeholder()"
-              [class.is-error]="submitted() && messageModel.invalid"
-              [attr.aria-invalid]="submitted() && messageModel.invalid"
-              [attr.aria-describedby]="submitted() && messageModel.invalid ? 'err-message' : null"
-            ></textarea>
-            @if (submitted() && messageModel.invalid) {
-              <span id="err-message" class="contact-form__error" role="alert">{{
-                content.formLabels.required
-              }}</span>
-            }
-          </label>
-          <div class="contact-form__actions">
-            <button type="submit" class="btn btn--accent" [disabled]="state() !== 'idle'">
-              @switch (state()) {
-                @case ('idle') {
+            </label>
+            <label>
+              <span class="contact-form__lbl">
+                <span>$</span>
+                {{ content.formLabels.email }}
+              </span>
+              <input
+                #emailModel="ngModel"
+                type="email"
+                [(ngModel)]="email"
+                name="email"
+                required
+                email
+                [class.is-error]="submitted() && emailModel.invalid"
+                [attr.aria-invalid]="submitted() && emailModel.invalid"
+                [attr.aria-describedby]="submitted() && emailModel.invalid ? 'err-email' : null"
+              />
+              @if (submitted() && emailModel.invalid) {
+                <span id="err-email" class="contact-form__error" role="alert">{{
+                  emailModel.errors?.['required']
+                    ? content.formLabels.required
+                    : content.formLabels.invalidEmail
+                }}</span>
+              }
+            </label>
+            <label>
+              <span class="contact-form__lbl">
+                <span>$</span>
+                {{ content.formLabels.subject }}
+              </span>
+              <select [(ngModel)]="subject" name="subject">
+                @for (subjectOption of content.subjects; track subjectOption) {
+                  <option>{{ subjectOption }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span class="contact-form__lbl">
+                <span>$</span>
+                {{ content.formLabels.message }}
+              </span>
+              <textarea
+                #messageModel="ngModel"
+                rows="6"
+                [(ngModel)]="message"
+                name="message"
+                required
+                [placeholder]="placeholder()"
+                [class.is-error]="submitted() && messageModel.invalid"
+                [attr.aria-invalid]="submitted() && messageModel.invalid"
+                [attr.aria-describedby]="submitted() && messageModel.invalid ? 'err-message' : null"
+              ></textarea>
+              @if (submitted() && messageModel.invalid) {
+                <span id="err-message" class="contact-form__error" role="alert">{{
+                  content.formLabels.required
+                }}</span>
+              }
+            </label>
+            <input
+              type="text"
+              name="website"
+              [(ngModel)]="website"
+              hidden
+              tabindex="-1"
+              autocomplete="off"
+              aria-hidden="true"
+            />
+            <altcha-widget
+              #altchaWidget
+              challenge="/api/altcha"
+              auto="onload"
+              display="invisible"
+              [attr.language]="i18n.lang()"
+            ></altcha-widget>
+            <div class="contact-form__actions">
+              <button
+                type="submit"
+                class="btn btn--accent contact-form__send"
+                [disabled]="submitLocked()"
+              >
+                @if (state() === 'sending') {
+                  <span class="contact-form__spinner" aria-hidden="true"></span>
+                  {{ content.formLabels.sending }}
+                } @else {
                   <sd-icon name="mail" [size]="14" />
                   {{ content.formLabels.send }}
                 }
-                @case ('sending') {
-                  <span>{{ content.formLabels.sending }}</span>
-                }
-                @case ('sent') {
-                  <span>✔ {{ shortSent() }}</span>
-                }
+              </button>
+              <span class="contact-form__hint">
+                {{ content.orVia }}
+                <a href="mailto:contact&#64;super-dev.app">contact&#64;super-dev.app</a>
+              </span>
+            </div>
+            <p class="contact-form__status" role="status" aria-live="polite">
+              @if (state() === 'error') {
+                ⚠ {{ content.formLabels.error }}
               }
-            </button>
-            <span class="contact-form__hint">
-              {{ content.orVia }}
-              <a href="mailto:contact&#64;super-dev.app">contact&#64;super-dev.app</a>
-            </span>
-          </div>
-          <p class="contact-form__status" role="status" aria-live="polite">
-            @if (state() === 'sent') {
-              ✔ {{ content.formLabels.sent }}
-            }
-          </p>
+            </p>
+          }
         </div>
       </form>
     </div>

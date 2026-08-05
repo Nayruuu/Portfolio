@@ -6,14 +6,8 @@ export interface Aria {
   pip: string;
   fullscreen: string;
   exitFullscreen: string;
+  like: string;
   dislike: string;
-  dropPhoto: string;
   gameStart: string;
   gameExit: string;
-  gameMute: string;
-  gameUnmute: string;
-  gameFire: string;
-  gameUse: string;
-  gameSwitch: string;
-  gameReload: string;
 }

@@ -2,6 +2,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HomeComponent } from './home.component';
 import { PlayerService } from '../../core/services/player/player.service';
+import { FeedbackApiService } from '../../core/api/feedback-api.service';
+
+// The like-bar (mounted via video-meta) fetches its tally on render; stub the API so the
+// pending HTTP GET can't leave `whenStable()` hanging. The counter itself is covered by
+// like-bar.component.spec.ts.
+const feedback: Pick<FeedbackApiService, 'count' | 'cast'> = {
+  count: () => Promise.resolve({ up: 0, down: 0, mine: null }),
+  cast: () => Promise.resolve({ up: 0, down: 0, mine: null }),
+};
 
 describe('HomeComponent', () => {
   let fixture: ComponentFixture<HomeComponent>;
@@ -19,7 +28,10 @@ describe('HomeComponent', () => {
         removeEventListener: () => undefined,
       }) as unknown as MediaQueryList;
 
-    await TestBed.configureTestingModule({ imports: [HomeComponent] }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [HomeComponent],
+      providers: [{ provide: FeedbackApiService, useValue: feedback }],
+    }).compileComponents();
     TestBed.inject(PlayerService).pause();
     fixture = TestBed.createComponent(HomeComponent);
   });

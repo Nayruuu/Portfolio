@@ -23,5 +23,15 @@ test('inline code renders to a <code> element', async ({ page }) => {
 
   await expect(body).toBeVisible();
   await expect(body.locator('code').first()).toBeVisible();
-  await expect(body).not.toContainText('**');
+  // No leaked bold markdown in the PROSE. `**` is legitimate inside <code> here — the article
+  // documents the `**` wildcard route — so strip code/pre before asserting.
+  const prose = await body.evaluate((el) => {
+    const clone = el.cloneNode(true) as HTMLElement;
+
+    clone.querySelectorAll('code, pre, sd-code-block').forEach((node) => node.remove());
+
+    return clone.textContent ?? '';
+  });
+
+  expect(prose).not.toContain('**');
 });

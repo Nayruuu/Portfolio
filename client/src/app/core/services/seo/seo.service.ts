@@ -2,9 +2,10 @@ import { DOCUMENT, Injectable, inject } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
 import { DEFAULT_LANG, LANGS, type Lang } from '../../../domain';
 import {
-  AUTHOR,
   DEFAULT_OG_IMAGE,
   OG_LOCALE,
+  PERSON,
+  PERSON_ID,
   SITE_NAME,
   SITE_ORIGIN,
   absUrl,
@@ -26,6 +27,27 @@ export interface SeoData {
 export interface ArticleJsonLd extends SeoData {
   datePublished: string;
   dateModified: string;
+}
+
+/** schema.org SoftwareSourceCode inputs for a project detail page. */
+export interface ProjectJsonLd {
+  name: string;
+  description: string;
+  stack: string[];
+  repo: string;
+  programmingLanguage: string;
+  /** SPDX license URL. */
+  license: string;
+  /** Other canonical identities (NuGet / docs / live site) → `sameAs`. */
+  sameAs: string[];
+  path: string;
+  lang: Lang;
+}
+
+/** One BreadcrumbList link (localized label + app path). */
+export interface Crumb {
+  name: string;
+  path: string;
 }
 
 /**
@@ -69,34 +91,136 @@ export class SeoService {
     this.setHreflang(data.path);
   }
 
-  /** Inject/replace the BlogPosting JSON-LD for an article route. */
-  public setArticleJsonLd(data: ArticleJsonLd): void {
+  /** Inject/replace the BlogPosting (+ BreadcrumbList) JSON-LD for an article route. */
+  public setArticleJsonLd(data: ArticleJsonLd, crumbs: readonly Crumb[]): void {
     const url = absUrl(data.path);
     const image = data.image ?? DEFAULT_OG_IMAGE;
 
-    this.setJsonLd({
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: data.title,
-      description: data.description,
-      datePublished: data.datePublished,
-      dateModified: data.dateModified,
-      inLanguage: data.lang,
-      image: [image],
-      author: { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url },
-      publisher: {
-        '@type': 'Organization',
-        name: SITE_NAME,
-        url: SITE_ORIGIN,
-        logo: { '@type': 'ImageObject', url: `${SITE_ORIGIN}/favicon.svg` },
+    this.setJsonLd([
+      {
+        '@type': 'BlogPosting',
+        headline: data.title,
+        description: data.description,
+        datePublished: data.datePublished,
+        dateModified: data.dateModified,
+        inLanguage: data.lang,
+        image: [image],
+        author: PERSON,
+        publisher: {
+          '@type': 'Organization',
+          name: SITE_NAME,
+          url: SITE_ORIGIN,
+          logo: { '@type': 'ImageObject', url: `${SITE_ORIGIN}/favicon.svg` },
+        },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
       },
-      mainEntityOfPage: { '@type': 'WebPage', '@id': url },
-    });
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((crumb, position) => ({
+          '@type': 'ListItem',
+          position: position + 1,
+          name: crumb.name,
+          item: absUrl(crumb.path),
+        })),
+      },
+    ]);
+  }
+
+  /** Inject/replace the site-level WebSite + canonical Person JSON-LD (home routes). */
+  public setSiteJsonLd(lang: Lang): void {
+    this.setJsonLd([this.siteNode(lang), PERSON]);
+  }
+
+  /** Inject/replace the WebSite + ProfilePage + canonical Person JSON-LD (about = named-entity route). */
+  public setProfileJsonLd(lang: Lang, path: string): void {
+    const url = absUrl(path);
+
+    this.setJsonLd([
+      this.siteNode(lang),
+      {
+        '@type': 'ProfilePage',
+        '@id': url,
+        url,
+        inLanguage: lang,
+        mainEntity: { '@id': PERSON_ID },
+      },
+      PERSON,
+    ]);
+  }
+
+  /** Inject/replace the SoftwareSourceCode (+ BreadcrumbList) JSON-LD for a project detail route. */
+  public setProjectJsonLd(data: ProjectJsonLd, crumbs: readonly Crumb[]): void {
+    const url = absUrl(data.path);
+
+    this.setJsonLd([
+      {
+        '@type': 'SoftwareSourceCode',
+        name: data.name,
+        description: data.description,
+        url,
+        codeRepository: data.repo,
+        programmingLanguage: data.programmingLanguage,
+        keywords: data.stack.join(', '),
+        license: data.license,
+        sameAs: data.sameAs,
+        author: PERSON,
+        inLanguage: data.lang,
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((crumb, position) => ({
+          '@type': 'ListItem',
+          position: position + 1,
+          name: crumb.name,
+          item: absUrl(crumb.path),
+        })),
+      },
+    ]);
+  }
+
+  /** Inject/replace the WebSite + CollectionPage (ItemList) + Person JSON-LD for the projects list. */
+  public setProjectsJsonLd(lang: Lang, path: string, items: readonly Crumb[]): void {
+    const url = absUrl(path);
+
+    this.setJsonLd([
+      this.siteNode(lang),
+      {
+        '@type': 'CollectionPage',
+        '@id': url,
+        url,
+        inLanguage: lang,
+        about: { '@id': PERSON_ID },
+        mainEntity: {
+          '@type': 'ItemList',
+          itemListElement: items.map((item, position) => ({
+            '@type': 'ListItem',
+            position: position + 1,
+            name: item.name,
+            url: absUrl(item.path),
+          })),
+        },
+      },
+      PERSON,
+    ]);
   }
 
   /** Remove the JSON-LD when leaving an article for a non-article route. */
   public clearJsonLd(): void {
     this.doc.getElementById(SeoService.JSON_LD_ID)?.remove();
+  }
+
+  /**
+   * The `WebSite` graph node — named after the PERSON (the entity we want a name query to resolve to),
+   * with the domain kept as `alternateName`. `og:site_name` stays the domain, so nothing contradicts.
+   */
+  private siteNode(lang: Lang): object {
+    return {
+      '@type': 'WebSite',
+      name: PERSON.name,
+      alternateName: SITE_NAME,
+      url: SITE_ORIGIN,
+      inLanguage: lang,
+    };
   }
 
   private setName(name: string, content: string): void {
@@ -156,7 +280,7 @@ export class SeoService {
     }
   }
 
-  private setJsonLd(payload: object): void {
+  private setJsonLd(entities: readonly object[]): void {
     let script = this.doc.getElementById(SeoService.JSON_LD_ID) as HTMLScriptElement | null;
 
     if (!script) {
@@ -165,6 +289,7 @@ export class SeoService {
       script.type = 'application/ld+json';
       this.doc.head.appendChild(script);
     }
-    script.textContent = JSON.stringify(payload); // textContent → no HTML parsing / XSS
+    // textContent → no HTML parsing / XSS
+    script.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': entities });
   }
 }

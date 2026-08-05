@@ -1,16 +1,15 @@
 import { ARTICLE_TAGS, type Article, type IndexedArticle } from '../../domain';
-import { readCount } from './read-count';
 
 /**
- * Filter selection as an index into `articleFilters`. The first three slots are semantic
- * (all / recent / popular); any higher index is a tag filter, mapped to `ARTICLE_TAGS` by
- * `selected - 3`. Indexing by position (not the localized label text) keeps matching stable
+ * Filter selection as an index into `articleFilters`. The first two slots are semantic
+ * (all / recent); any higher index is a tag filter, mapped to `ARTICLE_TAGS` by
+ * `selected - 2`. Indexing by position (not the localized label text) keeps matching stable
  * across locales — "Tuto"/"Tutorial" both resolve to the canonical `TUTO`.
  */
-export const ARTICLE_FILTER = { ALL: 0, RECENT: 1, POPULAR: 2 } as const;
+export const ARTICLE_FILTER = { ALL: 0, RECENT: 1 } as const;
 
-/** Index of the first tag pill in `articleFilters` (after all/recent/popular). */
-const FIRST_TAG_INDEX = 3;
+/** Index of the first tag pill in `articleFilters` (after all/recent). */
+const FIRST_TAG_INDEX = 2;
 
 /** How many articles the "recent" filter keeps. */
 const RECENT_COUNT = 6;
@@ -28,11 +27,6 @@ export function selectArticles(articles: readonly Article[], selected: number): 
   }
   if (selected === ARTICLE_FILTER.RECENT) {
     return indexed.slice(0, RECENT_COUNT);
-  }
-  if (selected === ARTICLE_FILTER.POPULAR) {
-    return [...indexed].sort(
-      (first, second) => readCount(second.article.reads) - readCount(first.article.reads),
-    );
   }
 
   const tag = ARTICLE_TAGS[selected - FIRST_TAG_INDEX];

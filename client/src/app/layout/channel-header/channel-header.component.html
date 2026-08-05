@@ -13,22 +13,13 @@
   </div>
 
   <div class="profile">
-    <div class="profile__avatar" [title]="content().aria.dropPhoto">S</div>
+    <div class="profile__avatar" role="img" [attr.aria-label]="content().author"></div>
     <div class="profile__meta">
-      <h1>{{ content().author }} — <span>full-stack</span></h1>
+      <h1>{{ content().author }} — <span>tech lead</span></h1>
       <div class="profile__handle">
-        &#64;super-dev.app · {{ content().featuredCategory.replace('#', '') }} · ★
-        {{ content().openToWork }}
+        &#64;super-dev.app · {{ content().featuredCategory.replace('#', '') }}
       </div>
       <div class="profile__stats">
-        <span
-          ><b>{{ content().subscribersCount }}</b> {{ content().subscribers }}</span
-        >
-        <span>·</span>
-        <span
-          ><b>{{ content().videosCount }}</b> {{ content().videos }}</span
-        >
-        <span>·</span>
         <span
           >{{ content().joined }} <b>{{ content().joinedYear }}</b></span
         >
@@ -36,21 +27,15 @@
       <p class="profile__bio">{{ content().bio }}</p>
     </div>
     <div class="profile__actions">
-      <button class="btn btn--ghost btn--sm">
-        <sd-icon name="share" [size]="14" /> {{ content().share }}
-      </button>
-      <button class="btn btn--ghost btn--sm">
-        <sd-icon name="download" [size]="14" /> {{ content().cv }}
-      </button>
-      <button
-        [class]="subscribed() ? 'btn btn--grow' : 'btn btn--primary btn--grow'"
-        (click)="subscribed.update((isSubscribed) => !isSubscribed)"
-      >
-        @if (subscribed()) {
-          <sd-icon name="bell" [size]="14" />
+      <button type="button" class="btn btn--ghost btn--sm" (click)="share()">
+        @if (!copied()) {
+          <sd-icon name="share" [size]="14" />
         }
-        {{ subscribed() ? content().subscribed : content().subscribe }}
+        {{ copied() ? content().copyDone : content().share }}
       </button>
+      <a class="btn btn--ghost btn--sm" [href]="content().cvUrl" download>
+        <sd-icon name="download" [size]="14" /> {{ content().cv }}
+      </a>
     </div>
   </div>
 </section>

@@ -1,0 +1,45 @@
+@let ui = i18n.content().projectsUi;
+@let proj = project();
+<section class="proj-detail" data-screen-label="15 Project detail">
+  <a class="proj-detail__back" [routerLink]="['/', i18n.lang(), 'projects']">
+    <span aria-hidden="true">←</span> {{ ui.back }}
+  </a>
+
+  <header class="proj-detail__head">
+    <span class="proj-detail__overline">{{ ui.overline }} · {{ proj.tag }}</span>
+    <h1 class="proj-detail__name">{{ proj.name }}</h1>
+    <p class="proj-detail__role">{{ proj.role }}</p>
+  </header>
+
+  <p class="proj-detail__lead">{{ proj.description }}</p>
+
+  <p class="proj-detail__metric">{{ proj.metric }}</p>
+
+  <div class="proj-detail__section">
+    <h2 class="proj-detail__label">{{ ui.stackLabel }}</h2>
+    <ul class="proj-detail__stack">
+      @for (tech of proj.stack; track tech) {
+        <li class="proj-detail__chip">{{ tech }}</li>
+      }
+    </ul>
+  </div>
+
+  <div class="proj-detail__section">
+    <h2 class="proj-detail__label">{{ ui.linksLabel }}</h2>
+    <div class="proj-detail__links">
+      @for (link of links(); track link.href) {
+        <a class="proj-detail__link" [href]="link.href" target="_blank" rel="noopener">
+          {{ link.label }} <span aria-hidden="true">↗</span>
+        </a>
+      }
+      @if (articleSlug(); as slug) {
+        <a
+          class="proj-detail__link proj-detail__link--article"
+          [routerLink]="['/', i18n.lang(), 'articles', slug]"
+        >
+          {{ ui.readArticle }} <span aria-hidden="true">→</span>
+        </a>
+      }
+    </div>
+  </div>
+</section>

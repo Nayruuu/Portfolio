@@ -36,6 +36,11 @@ const langChildren = (): Routes => [
       import('./features/series/series.routes').then((module) => module.SERIES_ROUTES),
   },
   {
+    path: 'projects',
+    loadChildren: () =>
+      import('./features/projects/projects.routes').then((module) => module.PROJECTS_ROUTES),
+  },
+  {
     path: 'about',
     loadComponent: () =>
       import('./features/about/about.component').then((module) => module.AboutComponent),

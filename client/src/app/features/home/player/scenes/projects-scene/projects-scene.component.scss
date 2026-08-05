@@ -10,12 +10,12 @@
 }
 
 .scene-projects-rich__head {
-	margin-bottom: 18px;
+	margin-bottom: 12px;
 }
 
 .scene-projects-rich__sub {
 	font-family: var(--f-mono);
-	font-size: 17px;
+	font-size: 15px;
 	color: var(--text-dim);
 }
 
@@ -31,7 +31,7 @@
 	background: rgb(20 20 22 / 55%);
 	border: 1px solid var(--border);
 	border-radius: var(--r-lg);
-	padding: 22px 26px;
+	padding: 16px 20px;
 }
 
 // Montage: hide every card but the one currently being typed.
@@ -58,7 +58,7 @@
 
 .proj-card__num {
 	font-family: var(--f-mono);
-	font-size: 38px;
+	font-size: 32px;
 	font-weight: 700;
 	color: var(--accent);
 	line-height: 1;
@@ -66,7 +66,7 @@
 
 .proj-card__tag {
 	font-family: var(--f-mono);
-	font-size: 15px;
+	font-size: 13px;
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 	color: var(--text-dim);
@@ -84,7 +84,7 @@
 }
 
 .proj-card__name {
-	font-size: 27px;
+	font-size: 24px;
 	font-weight: 600;
 	letter-spacing: -0.01em;
 	color: var(--text);
@@ -93,7 +93,7 @@
 
 .proj-card__metric {
 	font-family: var(--f-mono);
-	font-size: 18px;
+	font-size: 16px;
 	color: var(--ok);
 	white-space: nowrap;
 	padding: 3px 11px;
@@ -106,9 +106,9 @@
 
 .proj-card__role {
 	font-family: var(--f-mono);
-	font-size: 16px;
+	font-size: 14px;
 	color: var(--text-faint);
-	margin-top: 8px;
+	margin-top: 6px;
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
 	display: block;
@@ -116,22 +116,22 @@
 }
 
 .proj-card__desc {
-	font-size: 21px;
+	font-size: 19px;
 	color: var(--text-dim);
-	margin-top: 10px;
-	line-height: 1.4;
+	margin-top: 8px;
+	line-height: 1.35;
 }
 
 .proj-card__stack {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 7px;
-	margin-top: 16px;
+	gap: 6px;
+	margin-top: 12px;
 }
 
 .stack-chip {
 	font-family: var(--f-mono);
-	font-size: 16px;
+	font-size: 14px;
 	letter-spacing: 0.04em;
 	color: var(--text);
 	background: var(--surface-2);

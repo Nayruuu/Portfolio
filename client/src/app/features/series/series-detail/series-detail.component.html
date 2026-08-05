@@ -1,6 +1,6 @@
 @let content = i18n.content();
 @let currentSeries = series();
-<article class="series-detail" data-screen-label="12 Series detail">
+<article class="series-detail" data-screen-label="13 Series detail">
   <div class="article-detail__topbar">
     <a class="btn btn--ghost btn--sm" [routerLink]="['/', i18n.lang(), 'series']">
       <span class="article-detail__topbar-arrow">←</span>
@@ -89,11 +89,9 @@
               [style.borderColor]="row.article.accentColor + '60'"
               >{{ row.article.tag }}</span
             >
+            <span>{{ dateOf(row.article) }}</span>
+            <span>•</span>
             <span>{{ row.article.readTime }}</span>
-            <span>•</span>
-            <span>{{ row.article.reads }}</span>
-            <span>•</span>
-            <span>{{ row.article.ago }}</span>
           </div>
         </div>
         <div class="series-row__arrow">→</div>

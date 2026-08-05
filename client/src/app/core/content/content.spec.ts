@@ -22,8 +22,6 @@ describe('Content — cross-locale alignment', () => {
     'series',
     'chapters',
     'articleFilters',
-    'comments',
-    'projects',
     'featuredTags',
     'descriptionMeta',
     'descriptionMetaValues',
@@ -58,8 +56,8 @@ describe('article tag vocabulary', () => {
       }
     });
 
-    it(`${lang} has 3 semantic + ARTICLE_TAGS.length tag pills`, () => {
-      expect(LOCALES[lang].articleFilters.length).toBe(3 + ARTICLE_TAGS.length);
+    it(`${lang} has 2 semantic + ARTICLE_TAGS.length tag pills`, () => {
+      expect(LOCALES[lang].articleFilters.length).toBe(2 + ARTICLE_TAGS.length);
     });
   }
 });

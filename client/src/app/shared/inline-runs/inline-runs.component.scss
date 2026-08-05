@@ -9,6 +9,7 @@
 		background: var(--surface-2, #1a1a1e);
 		font-family: var(--f-mono);
 		font-size: 0.9em;
+		overflow-wrap: anywhere; // long identifiers must break, not overflow the 360px column
 	}
 
 	&__link {

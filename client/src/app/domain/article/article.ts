@@ -5,8 +5,6 @@ export interface Article {
   slug: string;
   tag: ArticleTag;
   title: string;
-  reads: string;
-  ago: string;
   readTime: string;
   accentColor: string;
   symbol: string;

@@ -22,10 +22,5 @@
 	width: 40px;
 	height: 40px;
 	border-radius: 999px;
-	background: radial-gradient(circle at 30% 25%, oklch(72% 0.18 22deg), oklch(32% 0.12 22deg) 70%);
-	display: grid;
-	place-items: center;
-	font-family: var(--f-mono);
-	font-weight: 700;
-	color: #0a0a0b;
+	background: var(--surface) url('/avatar.jpg') center / cover;
 }

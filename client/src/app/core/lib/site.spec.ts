@@ -1,37 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import {
-  AUTHOR,
   DEFAULT_OG_IMAGE,
   OG_LOCALE,
+  PERSON,
+  PERSON_ID,
   SITE_NAME,
   SITE_ORIGIN,
+  SOCIAL_URLS,
   absUrl,
-  articleDescription,
   pathInLang,
 } from '.';
-import type { Article } from '../../domain';
-
-const art = (over: Partial<Article> = {}): Article => ({
-  slug: 'title',
-  tag: '.NET',
-  title: 'Title',
-  reads: '1k',
-  ago: '1d',
-  readTime: '5 min',
-  accentColor: '#fff',
-  symbol: 'x',
-  date: '2026-01-01',
-  description: 'd',
-  ...over,
-});
 
 describe('site constants', () => {
   it('origin / name / image standardize on super-dev.app', () => {
     expect(SITE_ORIGIN).toBe('https://super-dev.app');
     expect(SITE_NAME).toBe('super-dev.app');
     expect(DEFAULT_OG_IMAGE).toBe('https://super-dev.app/og-default.png');
-    expect(AUTHOR.url).toBe(SITE_ORIGIN);
-    expect(AUTHOR.name.length).toBeGreaterThan(0);
+    expect(SOCIAL_URLS.every((url) => url.startsWith('https://'))).toBe(true);
+  });
+
+  it('PERSON is the one canonical entity (stable @id, name, alternateName, sameAs)', () => {
+    expect(PERSON['@id']).toBe(PERSON_ID);
+    expect(PERSON_ID).toBe(`${SITE_ORIGIN}/#stephane`);
+    expect(PERSON['@type']).toBe('Person');
+    expect(PERSON.url).toBe(SITE_ORIGIN);
+    expect(PERSON.name.length).toBeGreaterThan(0);
+    expect(PERSON.alternateName).toBe('Nayruuu');
+    expect(PERSON.sameAs).toEqual([...SOCIAL_URLS]);
+    expect(PERSON.jobTitle.length).toBeGreaterThan(0);
   });
 
   it('OG_LOCALE covers every supported language', () => {
@@ -61,26 +57,5 @@ describe('pathInLang', () => {
   it('swaps the bare language root (segment boundary)', () => {
     expect(pathInLang('/fr', 'en')).toBe('/en');
     expect(pathInLang('/de/stack', 'fr')).toBe('/fr/stack');
-  });
-});
-
-describe('articleDescription', () => {
-  it('returns the base when under the cap', () => {
-    expect(articleDescription(art({ tag: '.NET', title: 'Short', readTime: '5 min' }))).toBe(
-      '.NET · Short · 5 min',
-    );
-  });
-
-  it('strips the "$ " shell prefix from the title', () => {
-    expect(
-      articleDescription(art({ tag: '.NET', title: '$ deploy.azure()', readTime: '8 min' })),
-    ).toBe('.NET · deploy.azure() · 8 min');
-  });
-
-  it('truncates with an ellipsis when over the cap', () => {
-    const description = articleDescription(art({ title: 'A'.repeat(300) }), 50);
-
-    expect(description.length).toBeLessThanOrEqual(50);
-    expect(description.endsWith('…')).toBe(true);
   });
 });

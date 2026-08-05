@@ -15,15 +15,18 @@ import { I18nService } from '../../../core/services/i18n/i18n.service';
 import { IconComponent } from '../../../shared/icon/icon.component';
 import { CodeBlockComponent } from '../../../shared/code-block/code-block.component';
 import { InlineRunsComponent } from '../../../shared/inline-runs/inline-runs.component';
+import { LikeBarComponent } from '../../../shared/like-bar/like-bar.component';
 import {
-  DEFAULT_OG_IMAGE,
   articleDescription,
   articleIdxsForSeries,
+  articleOgImage,
+  formatArticleDate,
   parseMarkdown,
   seriesIdxForArticle,
 } from '../../../core/lib';
 import { ARTICLE_BODIES } from '../../../core/content/article-bodies';
 import { SeoService } from '../../../core/services/seo/seo.service';
+import { ShareService } from '../../../core/services/share/share.service';
 import type { Article } from '../../../domain';
 
 @Component({
@@ -32,7 +35,7 @@ import type { Article } from '../../../domain';
   styleUrl: './article-detail.component.scss',
   templateUrl: './article-detail.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IconComponent, CodeBlockComponent, InlineRunsComponent, RouterLink],
+  imports: [IconComponent, CodeBlockComponent, InlineRunsComponent, LikeBarComponent, RouterLink],
 })
 export class ArticleDetailComponent {
   protected readonly i18n = inject(I18nService);
@@ -70,8 +73,11 @@ export class ArticleDetailComponent {
   });
 
   protected readonly progress = signal(0);
+  protected readonly copied = signal(false);
 
   private readonly seo = inject(SeoService);
+  private readonly shareService = inject(ShareService);
+  private copiedTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
     const isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
@@ -119,23 +125,52 @@ export class ArticleDetailComponent {
         description,
         path,
         lang,
-        image: DEFAULT_OG_IMAGE,
+        image: articleOgImage(article.slug, lang),
         type: 'article',
       });
-      this.seo.setArticleJsonLd({
-        title: article.title,
-        description,
-        path,
-        lang,
-        image: DEFAULT_OG_IMAGE,
-        type: 'article',
-        // Single publish date per article (showcase data); modified mirrors published until/unless a separate field is needed.
-        datePublished: article.date,
-        dateModified: article.date,
-      });
+      const tabs = this.i18n.content().tabs;
+
+      this.seo.setArticleJsonLd(
+        {
+          title: article.title,
+          description,
+          path,
+          lang,
+          image: articleOgImage(article.slug, lang),
+          type: 'article',
+          // Single publish date per article (showcase data); modified mirrors published until/unless a separate field is needed.
+          datePublished: article.date,
+          dateModified: article.date,
+        },
+        // tabs[0]/tabs[1] = the localized Home / Articles labels (order = TAB_SEGMENTS).
+        [
+          { name: tabs[0], path: `/${lang}` },
+          { name: tabs[1], path: `/${lang}/articles` },
+          { name: article.title, path },
+        ],
+      );
     });
 
     inject(DestroyRef).onDestroy(() => this.seo.clearJsonLd());
+  }
+
+  protected async share(): Promise<void> {
+    const article = this.article();
+    const outcome = await this.shareService.share({
+      title: article.title,
+      text: articleDescription(article),
+      url: location.href,
+    });
+
+    if (outcome === 'copied') {
+      this.copied.set(true);
+      clearTimeout(this.copiedTimer);
+      this.copiedTimer = setTimeout(() => this.copied.set(false), 2000);
+    }
+  }
+
+  protected dateOf(article: Article): string {
+    return formatArticleDate(article.date, this.i18n.lang());
   }
 
   protected heroBg(article: Article): string {

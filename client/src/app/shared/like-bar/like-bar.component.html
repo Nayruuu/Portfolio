@@ -1,0 +1,28 @@
+<div class="likebar-wrap">
+  <div class="likebar">
+    <button
+      [class.is-on]="tally()?.mine === 'up'"
+      (click)="cast('up')"
+      [attr.aria-label]="i18n.content().aria.like"
+    >
+      <sd-icon name="thumbs-up" [size]="16" />
+      @if (counted()) {
+        <span class="likebar__count">{{ tally()?.up }}</span>
+      }
+    </button>
+    <span class="likebar__divider"></span>
+    <button
+      [class.is-on]="tally()?.mine === 'down'"
+      (click)="cast('down')"
+      [attr.aria-label]="i18n.content().aria.dislike"
+    >
+      <sd-icon name="thumbs-down" [size]="16" />
+      @if (counted()) {
+        <span class="likebar__count">{{ tally()?.down }}</span>
+      }
+    </button>
+  </div>
+  @if (empty()) {
+    <span class="likebar__prompt">{{ i18n.content().beFirst }}</span>
+  }
+</div>

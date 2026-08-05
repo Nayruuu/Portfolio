@@ -1,3 +1,5 @@
+@use 'breakpoints' as bp;
+
 .vfilters {
 	display: flex;
 	gap: 6px;
@@ -165,7 +167,7 @@
 	}
 
 	&__title {
-		font-size: 14px;
+		font-size: 15px;
 		font-weight: 600;
 		line-height: 1.35;
 		letter-spacing: -0.005em;
@@ -211,4 +213,11 @@
 	background: var(--text);
 	color: var(--bg);
 	border-color: var(--text);
+}
+
+// Mobile-first readability bump (same rationale as video-meta).
+@include bp.from(md) {
+	.vgrid-card__title {
+		font-size: 14px;
+	}
 }
