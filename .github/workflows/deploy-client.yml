@@ -2,13 +2,13 @@ name: Deploy - Client
 
 on:
   workflow_dispatch:
-  # The front auto-deploys on every push to main. No `paths:` filter on purpose: in the
-  # mono-commit/force-push phase a force-push replaces history, so GitHub's path filtering is
-  # unreliable (it sees every file as changed) — and every mono-commit carries `client/` anyway.
-  # infra/api keep their `push:` triggers OFF so a force-push never fires a destructive Terraform
-  # apply or container deploy. Re-add `paths: [client/**]` once the repo uses normal git history.
+  # The front auto-deploys when client/ changes on main. On a force-push GitHub's path filtering
+  # may see every file as changed and over-trigger — benign (an idempotent SSG redeploy).
+  # infra/api keep their `push:` triggers OFF so a push never fires a destructive Terraform
+  # apply or function deploy; they run via workflow_dispatch.
   push:
     branches: [main]
+    paths: [client/**]
 
 jobs:
   deploy:
