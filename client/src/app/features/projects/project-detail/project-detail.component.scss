@@ -1,0 +1,131 @@
+@use 'breakpoints' as bp;
+
+.proj-detail {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	max-width: 760px;
+}
+
+.proj-detail__back {
+	align-self: flex-start;
+	font-family: var(--f-mono);
+	font-size: 12px;
+	color: var(--text-dim);
+	text-decoration: none;
+
+	&:hover {
+		color: var(--accent);
+	}
+}
+
+.proj-detail__head {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.proj-detail__overline {
+	font-family: var(--f-mono);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--accent);
+}
+
+.proj-detail__name {
+	margin: 0;
+	font-size: 26px;
+	font-weight: 700;
+	line-height: 1.15;
+
+	@include bp.from(md) {
+		font-size: 32px;
+	}
+}
+
+.proj-detail__role {
+	margin: 0;
+	font-size: 13px;
+	color: var(--text-faint);
+}
+
+.proj-detail__lead {
+	margin: 0;
+	font-size: 15px;
+	line-height: 1.6;
+	color: var(--text-dim);
+}
+
+.proj-detail__metric {
+	margin: 0;
+	padding: 12px 16px;
+	border: 1px solid var(--border);
+	border-left: 3px solid var(--accent);
+	border-radius: var(--r-md);
+	background: var(--surface);
+	font-family: var(--f-mono);
+	font-size: 13px;
+	color: var(--text);
+}
+
+.proj-detail__section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.proj-detail__label {
+	margin: 0;
+	font-family: var(--f-mono);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+}
+
+.proj-detail__stack {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.proj-detail__chip {
+	padding: 3px 9px;
+	border: 1px solid var(--border-soft);
+	border-radius: var(--r-sm);
+	background: var(--surface-2);
+	font-family: var(--f-mono);
+	font-size: 12px;
+	color: var(--text-dim);
+}
+
+.proj-detail__links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.proj-detail__link {
+	padding: 8px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	background: var(--surface);
+	font-family: var(--f-mono);
+	font-size: 12px;
+	color: var(--text);
+	text-decoration: none;
+	transition: border-color 0.15s ease;
+
+	&:hover {
+		border-color: var(--accent);
+	}
+}
+
+.proj-detail__link--article {
+	border-color: var(--accent);
+	color: var(--accent);
+}

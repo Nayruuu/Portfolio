@@ -20,12 +20,14 @@
       <span>{{ content.playerRestore }}</span>
     </button>
   } @else if (game.running()) {
-    <sd-game
-      (exited)="exitGame()"
-      [fullscreen]="fullscreen()"
-      [fullscreenAvailable]="nativeFullscreen"
-      (fullscreenToggle)="toggleFullscreen()"
-    />
+    @defer (on immediate) {
+      <sd-bsp-demo
+        (exited)="exitGame()"
+        [fullscreen]="fullscreen()"
+        [fullscreenAvailable]="nativeFullscreen"
+        (fullscreenToggle)="toggleFullscreen()"
+      />
+    }
   } @else {
     <sd-player-stage />
 

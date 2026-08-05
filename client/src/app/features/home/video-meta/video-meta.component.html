@@ -3,18 +3,17 @@
   <h2 class="video-meta__title">{{ content.featuredTitle }}</h2>
   <div class="video-meta__row">
     <div class="video-meta__author">
-      <div class="video-meta__author-av">S</div>
+      <div class="video-meta__author-av" role="img" [attr.aria-label]="content.author"></div>
       <div class="video-meta__author-meta">
         <span class="video-meta__author-name">{{ content.author }} <span>✓</span></span>
-        <span class="video-meta__author-sub"
-          >{{ content.subscribersCount }} {{ content.subscribers }}</span
-        >
       </div>
     </div>
     <div class="video-meta__actions">
       <sd-like-bar />
       <button class="btn btn--sm"><sd-icon name="share" [size]="14" /> {{ content.share }}</button>
-      <button class="btn btn--sm"><sd-icon name="download" [size]="14" /> {{ content.cv }}</button>
+      <a class="btn btn--sm" [href]="content.cvUrl" download
+        ><sd-icon name="download" [size]="14" /> {{ content.cv }}</a
+      >
     </div>
   </div>
 

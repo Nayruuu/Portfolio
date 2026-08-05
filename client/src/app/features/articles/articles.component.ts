@@ -3,7 +3,8 @@ import { RouterLink } from '@angular/router';
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import { SearchService } from '../../core/services/search/search.service';
 import { IconComponent } from '../../shared/icon/icon.component';
-import { ARTICLE_FILTER, selectArticles } from '../../core/lib';
+import { ARTICLE_FILTER, formatArticleDate, selectArticles } from '../../core/lib';
+import type { Article } from '../../domain';
 
 @Component({
   selector: 'sd-articles',
@@ -36,4 +37,8 @@ export class ArticlesComponent {
         article.description.toLowerCase().includes(query),
     );
   });
+
+  protected dateOf(article: Article): string {
+    return formatArticleDate(article.date, this.i18n.lang());
+  }
 }

@@ -1,11 +1,10 @@
 // super-dev — shared infra constants (storage keys / DOM attributes). Domain value sets
 // (LANG / THEME) live in `domain/` — they are domain primitives, not infra config.
 
-/** localStorage keys shared by the i18n / theme / reviews services. */
+/** localStorage keys shared by the i18n / theme services. */
 export const STORAGE_KEYS = {
   LANG: 'super-dev-lang',
   THEME: 'super-dev-theme',
-  REVIEWS: 'super-dev-reviews',
 } as const;
 
 /** `<html data-theme="…">` attribute name driving the CSS overrides. */

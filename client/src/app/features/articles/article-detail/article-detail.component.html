@@ -1,6 +1,6 @@
 @let content = i18n.content();
 @let currentArticle = article();
-<article class="article-detail" data-screen-label="11 Article detail">
+<article class="article-detail" data-screen-label="12 Article detail">
   <div class="article-detail__progress" [style.width]="progress() * 100 + '%'"></div>
 
   <div class="article-detail__topbar">
@@ -9,8 +9,11 @@
       {{ content.articlesUi.back }}
     </a>
     <div class="article-detail__topbar-actions">
-      <button class="btn btn--ghost btn--sm">
-        <sd-icon name="share" [size]="14" /> {{ content.share }}
+      <button type="button" class="btn btn--ghost btn--sm" (click)="share()">
+        @if (!copied()) {
+          <sd-icon name="share" [size]="14" />
+        }
+        {{ copied() ? content.copyDone : content.share }}
       </button>
     </div>
   </div>
@@ -40,12 +43,12 @@
       >
       <h1 class="article-detail__title">{{ currentArticle.title }}</h1>
       <div class="article-detail__byline">
-        <div class="video-meta__author-av">S</div>
+        <div class="video-meta__author-av" role="img" [attr.aria-label]="content.author"></div>
         <div>
           <div class="article-detail__byline-name">{{ content.author }} <span>✓</span></div>
           <div class="article-detail__byline-meta">
-            {{ currentArticle.ago }} • {{ currentArticle.readTime }} {{ content.articlesUi.read }} •
-            {{ currentArticle.reads }}
+            {{ dateOf(currentArticle) }} • {{ currentArticle.readTime }}
+            {{ content.articlesUi.read }}
           </div>
         </div>
       </div>
@@ -134,8 +137,12 @@
       }
     }
     <div class="article-detail__signature">
-      <span>•</span> {{ content.author }} — portfolio{{ content.brandTld }}
+      <span>•</span> {{ content.author }} — super-dev{{ content.brandTld }}
     </div>
+  </div>
+
+  <div class="article-detail__react">
+    <sd-like-bar />
   </div>
 
   @if (suggested().length > 0) {
@@ -157,7 +164,9 @@
             </div>
             <div>
               <div class="rel-card__title">{{ row.article.title }}</div>
-              <div class="rel-card__meta">{{ row.article.readTime }} • {{ row.article.reads }}</div>
+              <div class="rel-card__meta">
+                {{ dateOf(row.article) }} • {{ row.article.readTime }}
+              </div>
             </div>
           </a>
         }

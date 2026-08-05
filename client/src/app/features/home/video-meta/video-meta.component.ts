@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { I18nService } from '../../../core/services/i18n/i18n.service';
 import { PlayerService } from '../../../core/services/player/player.service';
 import { IconComponent } from '../../../shared/icon/icon.component';
-import { LikeBarComponent } from '../like-bar/like-bar.component';
+import { LikeBarComponent } from '../../../shared/like-bar/like-bar.component';
 
 @Component({
   selector: 'sd-video-meta',

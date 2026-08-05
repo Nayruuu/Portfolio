@@ -9,7 +9,7 @@
 
 .about-bio {
 	&__p {
-		font-size: 15px;
+		font-size: 16px;
 		line-height: 1.65;
 		color: var(--text);
 		margin: 0 0 18px;
@@ -121,5 +121,12 @@
 @include bp.from(md) {
 	.about-grid {
 		grid-template-columns: minmax(0, 1fr) 320px;
+	}
+}
+
+// Mobile-first readability bump (same rationale as video-meta).
+@include bp.from(md) {
+	.about-bio__p {
+		font-size: 15px;
 	}
 }

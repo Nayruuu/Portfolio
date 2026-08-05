@@ -72,11 +72,6 @@
 	color: var(--accent);
 }
 
-[data-theme='light'] .comment__name-tag {
-	background: var(--surface);
-	border-color: var(--border);
-}
-
 [data-theme='light'] .tab[aria-selected='true'] {
 	border-bottom-color: var(--accent);
 }

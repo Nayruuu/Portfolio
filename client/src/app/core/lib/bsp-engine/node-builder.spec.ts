@@ -3,12 +3,10 @@ import { buildBsp, locateSubSector } from './node-builder';
 import { SAMPLE_MAP } from './sample-map';
 import type { NodeChild, Seg } from './types';
 
-/** Total length of a seg set (for the split-conservation invariant). */
 function totalLength(segs: readonly Seg[]): number {
   return segs.reduce((sum, s) => sum + Math.hypot(s.v2.x - s.v1.x, s.v2.y - s.v1.y), 0);
 }
 
-/** Walk every node, asserting each child's bounds sit within the parent's union bounds. */
 function eachNode(
   child: NodeChild,
   visit: (node: Extract<NodeChild, { kind: 'node' }>['node']) => void,
@@ -25,7 +23,7 @@ describe('buildBsp', () => {
   it('compiles the sample map into a non-trivial BSP tree with subsectors', () => {
     const compiled = buildBsp(SAMPLE_MAP);
 
-    expect(compiled.root.kind).toBe('node'); // the room+platform is not convex → must split
+    expect(compiled.root.kind).toBe('node');
     expect(compiled.subsectors.length).toBeGreaterThan(1);
     expect(compiled.segs.length).toBeGreaterThan(0);
   });
@@ -33,12 +31,10 @@ describe('buildBsp', () => {
   it('locates known points in the correct sector via the tree', () => {
     const { root } = buildBsp(SAMPLE_MAP);
 
-    // Inside the raised diamond platform (sector 1).
     expect(locateSubSector(root, 8, 5).sector).toBe(1);
-    // Out in the room (sector 0), sampled in several corners.
-    expect(locateSubSector(root, 3, 5).sector).toBe(0); // left, beside the platform
-    expect(locateSubSector(root, 1, 9).sector).toBe(0); // top-left
-    expect(locateSubSector(root, 14, 2).sector).toBe(0); // lower-right, near the free-angle wall
+    expect(locateSubSector(root, 3, 5).sector).toBe(0);
+    expect(locateSubSector(root, 1, 9).sector).toBe(0);
+    expect(locateSubSector(root, 14, 2).sector).toBe(0);
   });
 
   it('produces single-sector, non-empty convex leaves', () => {
@@ -53,18 +49,15 @@ describe('buildBsp', () => {
   it('conserves total seg length across splits (no seg lost or duplicated)', () => {
     const compiled = buildBsp(SAMPLE_MAP);
 
-    // 5 one-sided outer walls + a 3-ring dais (3 diamonds × 4 edges × 2 sides) = 5 + 24 = 29 segs.
     const initialLength =
-      // outer loop perimeter
       10 +
       12 +
       Math.hypot(4, 4) +
       6 +
       16 +
-      // three concentric diamond perimeters, each counted twice (two-sided portals)
-      2 * (Math.hypot(4, 3) * 4) + // outer diamond edge Δ(4,3)
-      2 * (Math.hypot(3, 2) * 4) + // middle diamond edge Δ(3,2)
-      2 * (Math.hypot(2, 1) * 4); // inner diamond edge Δ(2,1)
+      2 * (Math.hypot(4, 3) * 4) +
+      2 * (Math.hypot(3, 2) * 4) +
+      2 * (Math.hypot(2, 1) * 4);
 
     expect(totalLength(compiled.segs)).toBeCloseTo(initialLength, 6);
   });

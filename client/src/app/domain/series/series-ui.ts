@@ -4,7 +4,6 @@ export interface SeriesUi {
   countLabel: string;
   articles: string;
   updatedPrefix: string;
-  updatedSuffix: string;
   openSeries: string;
   back: string;
   overline: string;

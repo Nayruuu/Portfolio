@@ -20,16 +20,44 @@ are ordered from innermost (depends on nothing) to outermost (depends on everyth
 | Layer | Path | Role | May import |
 |---|---|---|---|
 | **domain** | `client/src/app/domain/` | Types, interfaces, value sets (incl. the `LANG` set). The multilingual `Content` contract. **The innermost layer.** | **nothing** (no Angular, no RxJS, no other layer) |
-| **core** | `client/src/app/core/` | UI-less client/infra logic: `api/`, `services/`, `lib/`, `content/`. | `domain` (+ Angular/3rd-party infra) |
-| **shared** | `client/src/app/shared/` | Cross-feature *presentational* components (`icon`, `code-block`, `inline-runs`). | `core`, `domain` |
+| **core** | `client/src/app/core/` | UI-less client/infra logic: `api/`, `services/`, `lib/`, `content/`. **One bounded exception** — `core/lib/game` is a self-contained embedded game engine that owns browser host code (callout below). | `domain` (+ Angular/3rd-party infra) |
+| **shared** | `client/src/app/shared/` | Cross-feature components (`icon`, `code-block`, `inline-runs` — presentational; `like-bar` — the interactive vote bar, on both home and articles). | `core`, `domain` |
 | **layout** | `client/src/app/layout/` | The app shell: `nav`, `prefs`, `channel-header`, `tabs-bar`. | `core`, `domain`, `shared` |
-| **features** | `client/src/app/features/` | One folder per feature (`home`, `articles`, `series`, `about`, `stack`, `contact`), **lazy-loaded**. | `core`, `domain`, `shared` |
+| **features** | `client/src/app/features/` | One folder per feature (`home`, `articles`, `series`, `projects`, `about`, `stack`, `contact`), **lazy-loaded**. | `core`, `domain`, `shared` |
 
 The root files (`app.component.*`, `app.config.ts`, `app.config.server.ts`, `app.routes.ts`,
 `app.routes.server.ts`) compose the shell and wire routing; they sit above `layout`/`features`.
 
 **Screaming architecture**: the folder names announce *what the app is* (a domain layer full of
 articles/series/player/contact types; features named after the pages), not *what framework it uses*.
+
+### Core is UI-less — with one bounded, documented exception: `core/lib/game`
+
+The rest of `core` (`api/`, `services/`, the other `lib/` pure functions, `content/`) is strictly UI-less
+infra logic, as the table says. `core/lib/game` is the deliberate exception: it is a **self-contained,
+framework-agnostic embedded game engine** — a portable module that owns its **own rendering and browser
+host adapters** (canvas, WebGPU, `SharedArrayBuffer` `Worker`s, DOM-input, `Image`). That browser code
+lives in `core/lib/game` (not in the feature) *because* the engine is portable and owns its host seam; the
+feature is only a mount point (§4). This is an **intentional, bounded exception, not a layering violation** —
+three guardrails keep it honest:
+
+1. **Honest test split.** The pure game *logic* stays **100 %-unit-covered** by the `core/` guard; the
+   browser/canvas *host adapters* — the `render/` worker pool + WebGPU backend + host/texture code, the four
+   `painters/`, and `presentation/`'s `DoomHud` / `WeaponView` / `loaded-image` — ride `coverageExclude`: they
+   are dropped from the 100 % *threshold*, **not** from the test run. Their irreducible `Worker` / GPU /
+   raw-canvas paths have no DOM-free seam and are proven by running the engine in a real browser; several of
+   them (`render-host`, `load-textures`, the two composited painters, `DoomHud`, `WeaponView`) still carry unit
+   specs on their mockable seams — they simply aren't held to 100 %. A documented split, **not** a coverage
+   dodge. (Exact list → `testing.md`.)
+2. **Off the barrel.** Those browser modules (`render/`, `input/`, `boot/`, `painters/`) are kept **off**
+   both the `game/` sub-barrel and the `core/lib` root barrel; the mount component imports them by
+   **direct path** (§3). So the ~11 SSR-prerendered components — which pull `core/lib` through its barrel —
+   never transitively evaluate a `Worker` / `navigator.gpu` at prerender, and `make build-ssg` stays green.
+3. **Scoped to `core/lib/game`.** Nothing else in `core` may hold browser/UI code; the exception does not
+   widen.
+
+Note this exception is about the layer's *nature* (it may contain browser host code), **not** its import
+direction: the engine still imports only inward (§2) — it reaches nothing in `features` / `layout` / `shared`.
 
 ---
 
@@ -53,7 +81,8 @@ This is the one rule that makes the architecture hold together. State it exactly
 
 ### Forbidden import directions
 
-- `core` → `features` / `layout` / `shared` ❌ (core is UI-less; it never reaches up into the UI)
+- `core` → `features` / `layout` / `shared` ❌ (core never reaches up into the UI layers — even the
+  `core/lib/game` engine, the one layer that owns browser host code (§1), imports nothing outward)
 - `domain` → anything ❌ (it would no longer be the innermost layer)
 - `shared` → `features` / `layout` ❌
 - `layout` → `features` ❌
@@ -92,9 +121,9 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
 
 - **One** barrel only: `domain/index.ts`. It `export *` from **every** domain file (one
   `export * from './sub/file';` line per file), plus the root `content.ts` contract.
-- The sub-domain folders (`about/`, `article/`, `code/`, `comment/`, `contact/`, `i18n/`, `player/`,
-  `project/`, `series/`, `stack/`, `aria/`) are **internal organization only** — there is **no
-  per-folder barrel**.
+- The sub-domain folders (`about/`, `article/`, `code/`, `contact/`, `discuss/`, `game/`, `i18n/`,
+  `player/`, `project/`, `review/`, `series/`, `stack/`, `aria/`) are **internal organization only** —
+  there is **no per-folder barrel**.
 - **Consumers** (anything in `core`/`shared`/`layout`/`features`) import from the folder:
   `import { Article, Lang, Content } from '…/domain';` — never from a deep file path.
 - **Intra-domain** imports go **file → file directly** (`from './article-tag'`), **never through the
@@ -103,19 +132,51 @@ file path**. Get this exactly right — it is load-bearing for both ergonomics a
 ### `core/lib/` — a single barrel for pure functions
 
 - **One** barrel: `core/lib/index.ts`, `export *` from each `lib/` file (one line per file). A cohesive
-  multi-file engine may live in a **sub-folder with its own sub-barrel** re-exported as one line — e.g.
-  `core/lib/raycaster/` (the game's pure map/DDA/collision/the per-kind enemy AI
-  (`ENEMY_CONFIG` — rush/turret/kite)/fire/floor-cast/step/`knockback` (axis-separated wall-clamped
-  shove) + projectile (`ProjectileSkin`: `'invite'|'paper'|'memo'`)/vitals/pickup combat modules + the
-  **keycards/locked doors** (`keys`) + the HR `playerSlow` mechanic + the
-  **procedural level generator** (`generate-level`) + **seeded PRNG** (`rng`; mulberry32
-  `makeRng`/`randInt`/`pick`) + the level/theme data (`Theme`/`THEME_CYCLE`; office themes
-  openspace/meeting/executive; the ASCII `LEVELS`/`parseCells` and hand-authored maps are gone —
-  level data is now **generated**; the only `Math.random` lives in `GameService` as the per-run seed)) →
-  `export * from './raycaster'`.
+  multi-file engine may live in a **sub-folder with its own sub-barrel**. The BSP game uses two:
+  - `core/lib/game/` — **the whole self-contained embedded game engine** (§1 callout), grouped into **17**
+    sub-folders by concern. The **pure logic** (100 %-tested): `enemy/` (the roster + the pure AI), `combat/`
+    (hitscan / projectile / per-frame combat), `doors/`, `controls/`, `zone/` (the zone snapshot), `level/`
+    (the `Level` contract), `levels/` (the hand-authored floors + `demo-map`), `registry/` (`level-select`),
+    `weapons/` (the magazine / fire-rate / reload subsystem + the fists-only ownership progression),
+    `telemetry/` (frame-stats + the render governor), `world/` (the state-owning runtimes — zone / combat /
+    pickup / motion / enemy — + the feature model types), `sprites/` (world → `Sprite[]`). The
+    **presentation** helpers in `presentation/` (the `DoomHud` / `WeaponView` / `ClimbView` imperative canvas
+    classes + the `weapons` / `effects` JSON-bridge data + the `gaze` turn-EMA helper + `climb-frames` /
+    `loaded-image`) — engine-agnostic, formerly `shared/game`. And the **browser host adapters** kept off the
+    barrel: `render/` (the `SharedArrayBuffer` worker pool `render-pool` + `render.worker`, the WebGPU
+    `gpu-renderer`, `render-host`, `load-textures`), `input/` (the DOM-event `input-controller`), `boot/`
+    (the `Image` `asset-loader`), `painters/` (the `<canvas>` painters). Plus the top-level `types.ts`
+    (`KeycardColor` / `KEYCARD_COLORS`, …) and **`game-tuning.ts`** — the central gameplay balance/feel sheet
+    (movement / look / combat / enemy / pickup / door / timing constants). The barrel (`game/index.ts`)
+    re-exports the logic + presentation, but is deliberately **NOT re-exported through the `core/lib` root
+    barrel**: every eager consumer of the root barrel (the SEO service, i18n, the shell components) would
+    otherwise drag the whole engine graph into the **initial bundle** (~190 kB raw measured). Game consumers
+    (the lazy mount component) import from `…/core/lib/game` (or deeper) by direct path — in practice today
+    every consumer goes deeper, so the sub-barrel currently has no importer: it is retained as the engine's
+    **public-surface declaration** (what is logic + presentation vs host adapter), not as a routing point. The **browser host
+    modules (`render/`, `input/`, `boot/`, `painters/`) are additionally kept off the `game/` sub-barrel** and
+    imported by direct path (§1 guardrail 2 — this keeps `Worker` / WebGPU out of the SSR-prerendered bundle). The
+    `presentation/` helpers, by contrast, sit **on** the barrel and are SSR-safe *by construction* — plain
+    classes whose `<canvas>` / `new Image()` calls are runtime-only and DOM-guarded, never run at import.
+    Barrel placement is orthogonal to the coverage split: `DoomHud` / `WeaponView` / `loaded-image` ride the
+    barrel yet are still `coverageExclude`d as canvas/`Image` adapters. `loaded-image` is left off the
+    `presentation/` **sub**-barrel purely for **encapsulation** — an internal helper of `DoomHud` /
+    `WeaponView` / `ClimbView`, imported directly by them, needed by nothing outside `presentation/` — **not**
+    for SSR (the class is SSR-safe and already reachable transitively through those three).
+  - `core/lib/bsp-engine/` — the from-scratch DOOM-style **BSP software engine**: the map data model +
+    node builder (the BSP compiler), the front-to-back BSP walk + textured wall/floor/ceiling `renderer`
+    (incl. the transparent-glass pass — tinted panes, textured windows, double sliding doors — and the
+    live **zone-portal** pass: a seam's opening renders a neighbouring zone's map via a translated
+    depth-1 recursive walk), `frame-commands` (the same walk recording GPU-ready per-column span/glass/
+    sprite command buffers for the WebGPU backend), `camera` projection, hitscan `raycast` (with a
+    glass-blocking mode for projectiles), player `physics` (slide + step-up + auto-mantle + opt-in
+    seamless crossing of passable zone-portal seams), the directional-prop rendering (`sprite-rotation`
+    view-angle cells, `voxel-carve` visual-hull grids for the voxel-volume props), and procedural `texture`s.
+    Big and feature-scoped, it is **not** folded into the root barrel; consumers import it directly through
+    its own sub-barrel, `…/core/lib/bsp-engine`.
 - **Consumers** import from the folder: `import { parseMarkdown, STORAGE_KEYS } from '…/core/lib';`.
-- **Intra-`lib`** imports go **file → file directly** (`select-articles.ts` →
-  `import { readCount } from './read-count';`), **never the barrel**.
+- **Intra-`lib`** imports go **file → file directly** (`article-description.ts` →
+  `import { truncateAtWord } from './truncate-at-word';`), **never the barrel**.
 
 ### Everything else in `core` — no barrel; import the file directly
 
@@ -142,6 +203,21 @@ by relative path within the feature.
 
 ## 4. Folder layout
 
+### Group by category — nest, don't dump
+
+A folder holds **a few files or sub-folders grouped by category**, never a flat pile. As a unit grows,
+split it into named sub-folders by concern — the way `domain/` already groups by sub-domain and
+`core/services/` by service. Rule of thumb: **past ~4–5 files in one folder, group them.** The game module
+was decomposed into this shape: `core/lib/game/` — the whole embedded engine — splits into **17** categorized
+sub-folders (`boot/ combat/ controls/ doors/ enemy/ input/ level/ levels/ painters/ presentation/ registry/
+render/ sprites/ telemetry/ weapons/ world/ zone/`), while `features/bsp-demo/` is now just the thin **mount
+component** (`bsp-demo.component.{ts,html,scss}` — nothing else). `core/lib/bsp-engine/` (~18 source files) is
+the one remaining FLAT module — a cohesive engine kept whole for now; it may yet split by concern
+(walk / geometry / voxel / gpu). Every new file lands grouped, not at
+the root. Sub-folders are wired through the module's **existing sub-barrel** (§3): the barrel re-exports the
+nested files, so consumers still import from the one barrel — the nesting is internal organization, not
+new public surface. (Folder-level companion to the one-file-one-responsibility rule in `code.md §1`.)
+
 ### `domain/` — one file per type, grouped by sub-domain
 
 One **type / interface / value-set** per file. Files are grouped into sub-domain folders so the
@@ -155,11 +231,13 @@ domain/
   aria/     aria.ts
   article/  article.ts article-block.ts article-tag.ts articles-ui.ts indexed-article.ts inline-run.ts
   code/     code-lang.ts token.ts
-  comment/  comment.ts
-  contact/  contact.ts contact-kind.ts contact-method.ts availability.ts form-labels.ts
+  contact/  contact.ts contact-kind.ts contact-method.ts contact-form-state.ts contact-submission.ts form-labels.ts
+  discuss/  discuss.ts
+  game/     weapon-id.ts                   # WEAPON_IDS value-set + the derived WeaponId union (the game domain)
   i18n/     lang.ts theme.ts
   player/   chapter.ts metric.ts scene-id.ts scene-{intro,stack,projects,timeline,outro}.ts stack-card.ts timeline-row.ts up-next.ts
-  project/  project-scene.ts project-thumb.ts
+  project/  project-scene.ts projects-ui.ts
+  review/   review.ts reviews-block.ts
   series/   series.ts series-ui.ts
   stack/    stack-tab.ts stack-tech.ts stack-tier.ts
 ```
@@ -173,19 +251,22 @@ domain/
 
 ```
 core/
-  api/        api.token.ts  content-api.service.ts          # the API module (the .NET-API seam)
-  services/   content/  game/  i18n/  player/  reviews/  search/  seo/  theme/  viewport/  # one folder per service (+ its .spec)
+  api/        api.token.ts  content-api.service.ts  contact-api.service.ts  feedback-api.service.ts   # the API module (the .NET-API seam)
+  services/   content/  game/  i18n/  player/  search/  seo/  share/  theme/  # one folder per service (+ its .spec)
   content/    content.<lang>.ts + content.<lang>.json (one per Lang)  json-content.ts  article-bodies.ts (generated)
-  lib/        index.ts + one pure function per file (+ constants.ts, + the raycaster/ sub-module) — 100 % tested
+  lib/        index.ts + one pure function per file (+ constants.ts, + the bsp-engine/ engine and the game/ embedded-engine sub-modules) — 100 % tested, except game's browser host adapters (§1 callout / testing.md)
 ```
 
-- `core/api/` holds **everything API-related**, kept separate from `services/`. To wire a real .NET
-  API, the single file to change is `content-api.service.ts`.
+- `core/api/` holds **everything API-related**, kept separate from `services/`: the content seam
+  (`content-api.service.ts`) plus the live `contact-api.service.ts` and `feedback-api.service.ts`
+  that call the .NET API (`POST /api/contact`, `POST /api/feedback`).
 - `core/services/<name>/` — reactive DI state, **one folder per service**, each with its `.spec.ts`.
 - `core/content/` — **all text lives here as JSON** (one `content.<lang>.json` per `Lang`), exposed
   through a typed bridge (§5). Article **bodies** are real Markdown kept *out* of the JSON, under
   `client/src/content/articles/<slug>.<lang>.md`, imported as text by the **generated** `article-bodies.ts`
-  (`make gen-article-bodies`). Non-FR locales are AI-translated from FR (`make i18n`, committed).
+  (`make gen-article-bodies`); each article's `readTime` is **derived** from its body word count by
+  `gen-read-times.mjs` (wired into `build:ssg`), never hand-authored. Non-FR locales are AI-translated
+  from FR (`make i18n`, committed).
 - `core/lib/` — **pure** functions + infra constants, one declaration per file, barrelled, held to
   **100 % coverage** (the `core/` guard).
 
@@ -198,26 +279,33 @@ in its own folder** with its co-located template + styles (+ spec):
 ```
 features/home/
   home.component.{ts,html}                 # feature root — flat (no own scss)
-  comment/  comments/  like-bar/  up-next/  video-meta/   # one folder per sub-component
+  lets-talk/  reviews/  up-next/  video-meta/   # one folder per sub-component (like-bar is shared/)
   player/   player.component.{ts,html,scss}
             player-stage/  player-stage.component.{ts,html,scss}  # bg + scenes, reused inline + in the mini
             mini-player/   mini-player.component.{ts,html,scss}   # floating PiP, rendered at the shell
             typed/   typed.component.{ts,html,scss}      # no-reflow per-string typewriter (sd-typed)
-            game/    game.component.{ts,html,scss}  game-input.ts  game-renderer.ts  game-textures.ts  game-audio.ts  doom-hud.ts  weapon-view.ts  weapons.ts  loaded-image.ts  # DOOM: Return To Office raycaster: shell + co-located helpers (input · canvas paint · procedural art · Web Audio · composited image HUD · data-driven weapon viewmodel)
             scenes/  intro-scene/ stack-scene/ projects-scene/ timeline-scene/ outro-scene/
+features/bsp-demo/                                 # the hidden BSP game (OPEN SPACE.EXE) — a top-level lazy feature
+  bsp-demo.component.{ts,html,scss}                # sd-bsp-demo — the thin MOUNT component, and NOTHING else; served at /bsp AND mounted in the player. The whole engine (logic + render + input + boot + painters + presentation) lives in core/lib/game; the component imports each module it needs by direct path.
 ```
 
 Features with internal routing keep a `*.routes.ts` at the feature root and a `*-detail/` folder for
-the detail component (`articles/articles.routes.ts` + `article-detail/`; same for `series/`).
+the detail component (`articles/articles.routes.ts` + `article-detail/`; same for `series/` and
+`projects/project-detail/`).
 
 > **Rule:** each component lives in its own folder with its template, styles, and spec co-located —
 > except a *feature-root* component, which sits flat at the feature root.
 
 ### `shared/` and `layout/` — folder per component
 
-`shared/icon/`, `shared/code-block/`, `shared/inline-runs/`; `layout/nav/`, `layout/prefs/`,
-`layout/channel-header/`, `layout/tabs-bar/`. Each is a folder holding the component + its
-co-located template/styles/spec.
+`shared/icon/`, `shared/code-block/`, `shared/inline-runs/`, `shared/like-bar/`; `layout/nav/`,
+`layout/prefs/`, `layout/channel-header/`, `layout/tabs-bar/`. Each is a folder holding the component +
+its co-located template/styles/spec. `shared/` holds **only** these cross-feature `sd-` UI components
+(presentational, plus the interactive `like-bar` vote widget) — there is **no `shared/game/`**. The game's presentational helpers (the `DoomHud` /
+`WeaponView` / `ClimbView` imperative classes + the `weapons` / `effects` JSON-bridge data + the `gaze`
+turn-EMA helper + the `climb-frames` / `loaded-image` support modules, each with its `.spec.ts` where
+DOM-light) now live inside the embedded engine at **`core/lib/game/presentation/`** (§1 callout, §3
+barrel) — engine-agnostic still, but owned by the engine that draws with them.
 
 ---
 
@@ -299,8 +387,10 @@ A **cohesive constant group** may share one file when the constants are a single
 
 - `core/lib/constants.ts` — infra constants grouped together (`STORAGE_KEYS`, `DATA_THEME_ATTR`).
 - `core/lib/site.ts` — the SEO/site constant set (`SITE_ORIGIN`, `SITE_NAME`, `DEFAULT_OG_IMAGE`,
-  `AUTHOR`, `OG_LOCALE` over all `LANGS`) grouped as one site-config unit; `lang-path.ts` holds the
-  `pathInLang` helper.
+  `SOCIAL_URLS`, `PERSON` / `PERSON_ID`, `OG_LOCALE` over all `LANGS`) grouped as one site-config unit;
+  `lang-path.ts` holds the `pathInLang` helper.
+- `core/lib/projects.ts` — the open-source project metadata set (`ProjectMeta` + the `PROJECTS` map +
+  `PROJECT_SLUGS`) grouped as one projects-config unit.
 
 The content bridge (`content.fr.ts`) co-locating the private `JsonContent` helper type with the `FR`
 export is also fine — the helper exists only to type the single export.
@@ -317,16 +407,26 @@ These are *cohesive groups*, not grab-bags: every member shares one purpose. Whe
 apart in concern, split them. A pure function never shares a file with another pure function — each
 `core/lib/*.ts` holds exactly one (its `.spec.ts` co-located alongside).
 
-A component may also own one or more **co-located imperative helper classes**, each in its own file — a
-stateful, browser-only engine that is neither a pure `core/lib` function nor an Angular service (DI would
-imply the wrong sharing). `sd-game` is the reference: it stays a thin shell (lifecycle + the `rAF` loop +
-the DOM-event boundary) by delegating to five such helper classes — `GameInput` (input → `MoveIntent`),
-`GameRenderer` (canvas paint), `GameAudio` (Web Audio music + sfx), `DoomHud` (the composited image HUD
-bar — the burnt-out developer face is one of its zones), `WeaponView` (the FPS weapon sprite + swing
-animation) — plus the `game-textures` module of procedural-art generators (functions, not a class — no
-state to own; `loaded-image.ts` is the shared async image loader `DoomHud` + `WeaponView` reuse). One class per file, `.spec.ts`
-alongside, instantiated with `new` by the component. Splitting a component this way (rather than letting
-it grow) keeps each unit small and unit-testable in isolation.
+A unit may also own one or more **imperative helper modules** — each in its own file, a stateful
+browser-only class or render module that is neither a pure `core/lib` function nor an Angular service (DI
+would imply the wrong sharing). The BSP game is the reference: `sd-bsp-demo` stays a thin **mount** shell
+(lifecycle + the `rAF` loop + the DOM/touch-event boundary + the run state) and delegates everything to the
+self-contained engine in **`core/lib/game`** (§1 callout), importing each module it needs by direct path.
+The **pure** engine + combat live in `core/lib/bsp-engine` + the logic sub-folders of `core/lib/game`
+(100 %-tested, no DOM); the **browser host adapters** live in the engine's `render/` / `input/` / `boot/` /
+`painters/` sub-folders — `render.worker.ts` (a worker painting one band of the frame), `render-pool.ts`
+(`createRenderPool` — the `SharedArrayBuffer` multi-worker pool, with a single-threaded main-thread
+fallback), `gpu-renderer.ts` (the WebGPU compute backend — the default execution, consuming `frame-commands`
+buffers), and `load-textures.ts` (decoding the WebP art over the procedural base). For the on-screen chrome
+the engine instantiates the **presentation** helper classes from `core/lib/game/presentation/` with `new` —
+`DoomHud` (the composited image status bar, the burnt-out-developer face one of its zones), `WeaponView`
+(the FPS weapon sprite + fire/reload animation) and `ClimbView` (the two-handed mantle overlay) — all built
+on the `loaded-image` loader. One class/module per file, `.spec.ts` alongside wherever it is pure or
+DOM-light; the mount component + the browser/canvas host adapters (`render-pool` / `render.worker` /
+`gpu-renderer` / `render-host` / `load-textures`, the `painters/`, and `presentation/`'s `doom-hud` /
+`weapon-view` / `loaded-image`) are coverage-excluded as browser-only code and proven in a real browser —
+see `testing.md`. Splitting a unit this way (rather than letting the component grow) keeps each part small
+and unit-testable in isolation.
 
 ---
 
@@ -339,7 +439,9 @@ Routing and SEO are wired at the root and in `core` — they obey the same bound
   (`resolve: { lang }`) that syncs `I18nService` before render. It is **not** a `:lang` param — a
   parameter-first parent route breaks Angular's native prerenderer (empty `<router-outlet>`). The
   generated trees keep **literal-path** configs, preserving this. `/` and unknown paths redirect to
-  `/${DEFAULT_LANG}` (a const-template string, build-evaluable). All trees share the same **lazy**
+  `/${DEFAULT_LANG}` (a const-template string, build-evaluable) — client-side navigations only; in
+  production, direct hits on `/` (301 → `/fr`) and unknown URLs (real 404) are answered at the edge
+  (`staticwebapp.config.json`, see `PRODUCT.md` §2.4 Hosting). All trees share the same **lazy**
   children (`langChildren()`). `app.routes.server.ts` enumerates prerender routes per `Lang` the same way.
 - The **route is the source of truth for language**: `routerLink`s are prefixed with `i18n.lang()`;
   the language **picker** navigates to the same path in the chosen `Lang` (`pathInLang`, swap segment 0),
@@ -348,8 +450,13 @@ Routing and SEO are wired at the root and in `core` — they obey the same bound
 - **Detail routes** read `:slug` through `input()` via `withComponentInputBinding()`; the feature
   resolves the entry by `findIndex(x.slug === slug())`.
 - **SEO logic lives in `core`**: `core/services/seo/seo.service.ts` sets title/OG/canonical/hreflang
-  + `BlogPosting` JSON-LD (hreflang alternates + `og:locale:alternate` looped over `LANGS`), using pure
-  helpers in `core/lib/site.ts` / `abs-url.ts` / `lang-path.ts` / `article-description.ts`. `AppComponent`
+  (hreflang alternates + `og:locale:alternate` looped over `LANGS`) + a route-shaped JSON-LD `@graph`
+  (`BlogPosting` + `BreadcrumbList` on articles, `WebSite` + `Person` on the home, `WebSite` +
+  `ProfilePage` + `Person` on about, a `SoftwareSourceCode` (authored by that `Person`) +
+  `BreadcrumbList` on a project detail and `WebSite` + `CollectionPage` + `Person` on the projects
+  list — one canonical `Person @id` reused as the author everywhere); the root
+  + service SEO wiring uses pure helpers in `core/lib/site.ts` / `abs-url.ts` / `lang-path.ts` /
+  `article-description.ts` / `truncate-at-word.ts` / `tab-segments.ts` / `og-image.ts`. `AppComponent`
   sets the baseline; article-detail sets its own. The SEO service depends inward (on `core/lib` +
   `domain`) like any other `core` service.
 - **Build-time config**: `client/src/environments/environment{,.prod}.ts` (`apiBaseUrl`), swapped by

@@ -17,9 +17,15 @@
 	cursor: pointer;
 	transition: all 0.15s;
 	white-space: nowrap;
+	text-decoration: none;
 
-	&:hover {
+	&:hover:not(:disabled) {
 		filter: brightness(1.15);
+	}
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 
 	&--primary {

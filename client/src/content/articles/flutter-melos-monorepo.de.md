@@ -1,6 +1,16 @@
-## In Packages aufteilen
+Ein etwas ambitioniertes Flutter-Produkt passt selten in ein einziges Package. Es gibt die
+Anwendung, ein gemeinsames Design-System, einen API-Client, manchmal ein Modul pro Team. Auf
+separate Repositories verteilt, zwingen diese Packages bei jeder übergreifenden Änderung zu
+einer Abfolge von Veröffentlichungen und Versionssprüngen, die von Hand geordnet werden müssen.
+Melos, das Tool von Invertase, verwaltet den anderen Ansatz: ein einziges Dart/Flutter-Repository,
+mehrere Packages, Befehle, die in einem Durchgang über den gesamten Graphen ausgeführt werden.
 
-Die Packages werden in einem Ordner (oft `packages/`) abgelegt und im Root deklariert. Jedes behält seine eigene `pubspec.yaml`; die App referenziert die anderen als **Pfadabhängigkeiten**, und Melos verknüpft alles lokal:
+## Ein Repository, mehrere Packages
+
+Die Packages liegen unter einem Ordner der Wurzel, meist `packages/`, jedes mit seiner eigenen
+`pubspec.yaml`. Die Anwendung und die Module referenzieren sich gegenseitig über Pfadabhängigkeiten
+(`path: ../core_api`), und Melos löst diese Verknüpfungen lokal auf, statt die auf pub.dev
+veröffentlichten Versionen zu holen.
 
 ```dart
 // packages/feature_auth/lib/feature_auth.dart
@@ -10,47 +20,148 @@ class AuthRepository {
   AuthRepository(this._api);
   final ApiClient _api;
 
-  Future<Session> signIn(String email, String password) {
-    return _api.post('/auth/login', {'email': email, 'password': password});
-  }
+  Future<Session> signIn(String email, String password) =>
+      _api.post('/auth/login', {'email': email, 'password': password});
 }
 ```
 
-Die Grenze zwischen Packages wird zur **Architekturgrenze**: `feature_auth` hängt von `core_api` ab, nie umgekehrt. Der Abhängigkeitsgraph ist explizit, überprüfbar und bricht die Kompilierung, sobald er verletzt wird.
+Diese Aufteilung trägt eine Architektur-Vorgabe. `feature_auth` hängt von `core_api` ab, umgekehrt
+kompiliert es nicht. Der Abhängigkeitsgraph ist schwarz auf weiß in den `pubspec.yaml`-Dateien
+festgehalten, und eine verbotene Abhängigkeit fällt sofort auf: Sie löst sich nicht auf. Ein
+einziges Repository hält diese Grenzen intakt und macht ihr Überschreiten nur dann einfacher, wenn
+es legitim ist.
 
-## Die melos.yaml-Datei
+## Die Datei melos.yaml
 
-Der Kern der Konfiguration deklariert die Packages und wiederverwendbare **Scripts**, die über den gesamten Graphen ausgeführt werden:
+Die Konfiguration liegt in einer `melos.yaml` in der Wurzel (die aktuellen Versionen akzeptieren
+auch einen Schlüssel `melos:` in der `pubspec.yaml` der Wurzel). Sie deklariert die Packages des
+Workspace und benannte Skripte, die sowohl lokal als auch in der CI wiederverwendbar sind.
 
 ```yaml
 name: my_app
+
 packages:
   - app
   - packages/**
 
+command:
+  version:
+    linkToCommits: true       # add commit links in each CHANGELOG
+    workspaceChangelog: true  # also aggregate a root CHANGELOG.md
+  bootstrap:
+    hooks:
+      post: melos run generate  # run codegen once linking is done
+
 scripts:
   analyze:
-    run: melos exec -- dart analyze .
+    exec: dart analyze .
+    description: Static analysis in every package.
+
   test:
-    run: melos exec --dir-exists=test -- flutter test
-    description: Lance les tests de chaque package qui en a.
+    exec: flutter test
+    description: Test only packages that ship a test/ directory.
+    packageFilters:
+      flutter: true
+      dirExists: test
+
+  generate:
+    exec: dart run build_runner build --delete-conflicting-outputs
+    description: Regenerate sources in packages that use build_runner.
+    packageFilters:
+      dependsOn: build_runner
 ```
 
-`melos exec` führt einen Befehl in jedem Package aus; Filter wie `--dir-exists=test` oder `--diff` zielen auf eine Teilmenge ab — beispielsweise **nur die seit dem Hauptbranch geänderten Packages**, was die CI erheblich beschleunigt.
+Ein Skript in Form `exec:` startet seinen Befehl in jedem berücksichtigten Package, und
+`packageFilters` schränkt die Menge vor der Ausführung ein. Hier schließt `flutter: true` reine
+Dart-Packages aus, und `dirExists: test` überspringt jene ohne Testordner, was einen lauten
+Fehlschlag bei einem Package ohne Testsuite vermeidet. Der Abschnitt `command:` konfiguriert die
+eingebauten Befehle; unter `version` fügt `workspaceChangelog` zusätzlich zum Changelog jedes
+Packages ein aggregiertes Changelog in der Wurzel hinzu.
 
-## Bootstrap und Verknüpfung
+Ein Skript wird über `melos run analyze` ausgelöst oder, ohne Argument, über ein `melos run`, das
+die Liste der Skripte zur Auswahl per Tastatur anbietet. Der Befehl `melos exec` bleibt der Ausweg
+für alles, was kein zugeordnetes Skript hat.
 
-`melos bootstrap` (oder `melos bs`) ist der Schlüsselbefehl: Er installiert die Abhängigkeiten aller Packages **und** löst die Pfadabhängigkeiten zwischen ihnen auf. Kein manuelles `flutter pub get` Package für Package, keine desynchronisierten Versionen mehr. Man führt ihn nach jedem `git clone` und nach jeder Änderung an `pubspec.yaml` aus. Die [Melos-Dokumentation](https://melos.invertase.dev/) beschreibt jeden Filter und jeden Hook.
+## Bootstrap und lokale Verknüpfung
 
-## Versionierung und CI
+`melos bootstrap` (abgekürzt `melos bs`) ist der erste Befehl, den man nach einem Klon ausführt.
+Er holt die Abhängigkeiten aller Packages auf einmal und verdrahtet die Pfadabhängigkeiten
+zwischen ihnen, ohne dass man `flutter pub get` Package für Package aneinanderreihen muss.
 
-Melos setzt auf **Conventional Commits**: `melos version` liest die Historie, berechnet den Bump für jedes betroffene Package, aktualisiert die `CHANGELOG.md` und propagiert die neuen Versionen an abhängige Packages. Ein `fix:` in `core_api` erhöht `core_api` **und** alles, was davon abhängt, konsistent.
+Konkret schreibt Melos in jedes Package eine `pubspec_overrides.yaml`, die die internen
+Abhängigkeiten auf ihren lokalen Ordner verweisen lässt:
 
-- `melos bootstrap` → installiert und verknüpft alles
-- `melos run analyze` → statische Analyse überall
-- `melos run test` → Tests über den gesamten Graphen
-- `melos version` → Bumps + Changelogs aus den Commits
+```yaml
+# packages/feature_auth/pubspec_overrides.yaml (generated by Melos, git-ignored)
+dependency_overrides:
+  core_api:
+    path: ../core_api
+```
 
-In der CI ist die typische Abfolge `bootstrap`, dann `analyze`, dann `test` — oft auf die geänderten Packages via `--diff=origin/main` beschränkt, um nicht bei jedem Push alles erneut durchzuführen.
+Diese Datei ist ein nativer Mechanismus von Dart, keine Erfindung von Melos: `pub` liest sie als
+Überlagerung der `pubspec.yaml` und bevorzugt die angegebene lokale Version. Man lässt sie außerhalb
+der Versionskontrolle und führt `bootstrap` nach jeder Änderung einer `pubspec.yaml` erneut aus.
+Bei den aktuellen Dart-Versionen kann sich Melos auch auf die nativen Workspaces von `pub`
+(`resolution: workspace`) stützen, um dieselbe lokale Auflösung zu erhalten.
 
-> Ein Monorepo ist nicht nur eine Ordnerstruktur: Es ist das Versprechen, dass eine übergreifende Änderung **ein einziger Commit, ein einziger Build, ein einziges Review** bleibt. Melos hält dieses Versprechen für Flutter.
+Der `post`-Hook der obigen Konfiguration wird am Ende von `bootstrap` ausgelöst. Das ist der
+natürliche Ort für die Codegenerierung, die in einem Flutter-Projekt mit `freezed`,
+`json_serializable` oder einem Provider-Generator sehr präsent ist: Der Klon ist ab dem ersten
+Befehl kompilierbar, ohne einen vergessenen manuellen Schritt. Der Filter `dependsOn: build_runner`
+beschränkt die Generierung auf die Packages, die sie tatsächlich benötigen.
+
+## Eine Teilmenge ansteuern: die Filter
+
+Derselbe Filtermechanismus versorgt `melos exec`, das einen beliebigen Befehl auf einem Teil des
+Graphen ausführt. Die Filter lassen sich kombinieren:
+
+```bash
+# Run tests only in packages changed since main
+melos exec --diff="origin/main" -- flutter test
+
+# Analyze core_api and everything that depends on it
+melos exec --scope="core_api" --include-dependents -- dart analyze .
+
+# List which packages would run, without executing anything
+melos list --diff="origin/main"
+```
+
+`--diff` vergleicht den Arbeitsbaum mit einer Git-Referenz und behält nur die betroffenen Packages.
+`--scope` und `--ignore` filtern nach Namen mit Globs. `--depends-on` und `--include-dependents`
+folgen den Kanten des Graphen, um auch die Packages vor- oder nachgelagert zu einer Änderung zu
+erfassen. In der CI ist `--diff="origin/main"` der Hebel, der verhindert, dass bei jedem Push die
+Analyse und die Tests des gesamten Repositorys erneut durchlaufen: Nur der geänderte Teilgraph
+läuft, und der Rest behält sein vorheriges Ergebnis.
+
+## Koordinierte Versionierung
+
+`melos version` übersetzt Conventional Commits in Versionsänderungen. Es liest die
+Git-Historie seit dem letzten Tag jedes Packages, leitet daraus den Bump ab (`fix:` als Patch,
+`feat:` als Minor, ein `BREAKING CHANGE:` als Major), aktualisiert das Feld `version:` der
+betroffenen `pubspec.yaml` und schreibt ihre `CHANGELOG.md`. Das gesetzte Tag trägt den Namen des
+Packages, zum Beispiel `core_api-v1.4.0`.
+
+Der Punkt, der das Tool rechtfertigt, ist die Weitergabe. Ein `fix(core_api): ...` hebt `core_api`
+an, aber auch die Packages, die davon abhängen: Melos passt deren Versionsbeschränkung an und
+wendet ihnen einen Inkrement an. Das Ganze bleibt kohärent, ohne dass ein Package auf eine Version
+eines Nachbarn verweist, die noch nicht existiert. Der Scope in Klammern (`core_api`) ordnet den
+Commit dem richtigen Package zu, wenn dieselbe Änderung mehrere betrifft.
+
+Sobald die Versionen gesetzt und getaggt sind, schiebt `melos publish` die veröffentlichbaren
+Packages auf pub.dev. Der Befehl läuft standardmäßig im Trockenlauf und wird erst mit
+`--no-dry-run` wirklich aktiv, und er überspringt von sich aus die mit `publish_to: none`
+markierten Packages, wie die Flutter-Anwendung selbst.
+
+## Der Ablauf in der CI
+
+Eine Pipeline greift diese Bausteine in der Reihenfolge auf. `melos bootstrap` installiert und
+verknüpft, dann laufen `melos run analyze` und `melos run test` über die geänderten Packages via
+`--diff`, und der Release-Branch fügt `melos version` und dann `melos publish` hinzu. Jeder Schritt
+verwendet dieselbe Skriptdefinition wie die der Entwickler lokal, was die Abweichung zwischen CI
+und Arbeitsplatz vermeidet: Was auf einer Maschine läuft, läuft auch in der Pipeline, mit demselben
+Befehl.
+
+> Ein Monorepo bemisst sich am Preis einer übergreifenden Änderung. Mit Melos passt das Anfassen
+> eines gemeinsamen Packages und seiner Konsumenten in einen einzigen zu prüfenden und zu
+> mergenden Branch, während separate Repositories eine von Hand geordnete Warteschlange von
+> Veröffentlichungen erzwingen würden.

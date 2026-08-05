@@ -1,10 +1,9 @@
 import type { Article } from '../../domain';
+import { truncateAtWord } from './truncate-at-word';
 
-/** Plain-text, length-capped description (strips the `$ ` shell prefix from titles). */
+/** The entry's human-written description, word-boundary capped for meta/OG/JSON-LD use. */
 export function articleDescription(article: Article, maxLength = 160): string {
-  const description = `${article.tag} · ${article.title.replace(/^\$\s*/, '')} · ${article.readTime}`;
-
-  return description.length <= maxLength
-    ? description
-    : `${description.slice(0, maxLength - 1).trimEnd()}…`;
+  return article.description.length <= maxLength
+    ? article.description
+    : `${truncateAtWord(article.description, maxLength - 1)}…`;
 }

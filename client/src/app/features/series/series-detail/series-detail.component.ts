@@ -11,7 +11,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { I18nService } from '../../../core/services/i18n/i18n.service';
 import { IconComponent } from '../../../shared/icon/icon.component';
-import { articleIdxsForSeries, seriesTotalRead } from '../../../core/lib';
+import { articleIdxsForSeries, formatArticleDate, seriesTotalRead } from '../../../core/lib';
 import type { Article } from '../../../domain';
 
 @Component({
@@ -78,5 +78,9 @@ export class SeriesDetailComponent {
 
   protected pad(value: number): string {
     return String(value).padStart(2, '0');
+  }
+
+  protected dateOf(article: Article): string {
+    return formatArticleDate(article.date, this.i18n.lang());
   }
 }

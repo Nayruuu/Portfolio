@@ -8,8 +8,6 @@ function art(slug: string, series?: string, seriesOrder?: number): Article {
     slug,
     tag: '.NET',
     title: slug,
-    reads: '1k',
-    ago: '1 j',
     readTime: '5 min',
     accentColor: '#fff',
     symbol: '#',

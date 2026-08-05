@@ -25,7 +25,11 @@ box-shadow: var(--sh-2);   box-shadow: 0 6px 24px rgb(0 0 0 / 50%);
 ```
 
 A token's **value** is written in **exactly two** places: `_tokens.scss` (`:root`, dark = default) and
-`_theme-light.scss` (`[data-theme='light']`, the re-declaration). Everywhere else is `var(--…)`.
+`_theme-light.scss` (`[data-theme='light']`, the re-declaration). Everywhere else is `var(--…)`. A
+**theme-invariant** token — the same under both themes (`--ok`/`--warn`/`--info`, the fonts/radii, and the
+always-dark **`--code-*`** code-panel group) — is declared **once** in `:root` and deliberately *not*
+re-declared in `_theme-light.scss`, inheriting that single value (`docs/PRODUCT.md §3.1` marks these
+`(inherited)`).
 
 **Narrow, sanctioned exceptions** (a raw value is allowed only when it is genuinely not a token):
 - The token **definitions** themselves (`_tokens.scss`, `_theme-light.scss`).
@@ -146,7 +150,7 @@ established order is:
 ```
 tokens → base → boot → buttons → tabs → layout → tabview → feature-bits
        → theme-light → overlays → scenes → scene-rich → code-block → dots
-       → likebar → comment → cards → symbol-box → loadbar
+       → likebar → cards → symbol-box → loadbar
 ```
 
 Adding a partial: insert it where its cascade demands (overrides after what they override, theme
@@ -166,7 +170,7 @@ Decide where a class's rules live by **how many components render it**:
 - **Single-component classes** (`.player`, `.articles`, `.series-row`, `.vgrid-card`, `.about-side`, …)
   → the component's own `.scss`. Scoping (Emulated) keeps them local.
 - **Cross-component classes** (`.btn*`, `.tabs`/`.tab`, `.tabview*`, `.scene*`, `.code-block*`,
-  `.comment*`, `.likebar*`, `.article-detail__topbar`, `.video-meta__author-av`) → a global partial.
+  `.likebar*`, `.article-detail__topbar`, `.video-meta__author-av`) → a global partial.
   Emulated scoping would **break** these if declared in one component, so they must be global.
 
 A class that starts single-component but gets rendered by a second component **moves up** to a global

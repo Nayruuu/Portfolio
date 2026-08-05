@@ -1,0 +1,39 @@
+@use 'breakpoints' as bp;
+
+.lets-talk {
+	margin-top: 24px;
+	padding: 20px;
+	border: 1px solid var(--border-soft);
+	border-radius: var(--r-lg);
+	background: var(--surface);
+
+	&__heading {
+		margin: 0;
+		font-family: var(--f-mono);
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--text);
+	}
+
+	&__body {
+		margin: 8px 0 0;
+		color: var(--text-dim);
+		font-size: 14.5px;
+		line-height: 1.55;
+		max-width: 560px;
+	}
+
+	&__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-top: 14px;
+	}
+}
+
+// Mobile-first readability bump (same rationale as video-meta).
+@include bp.from(md) {
+	.lets-talk__body {
+		font-size: 13.5px;
+	}
+}

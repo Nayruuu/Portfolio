@@ -1,10 +1,9 @@
 @let content = i18n.content();
-<section class="tabview" data-screen-label="06 Tab — articles">
+<section class="tabview" data-screen-label="07 Tab — articles">
   <div class="tabview__head">
     <div>
       <h2 class="tabview__title">
-        <span>// </span>
-        {{ content.articlesUi.title }}
+        <span>{{ content.articlesUi.title }}</span>
       </h2>
       <p class="tabview__sub">{{ filtered().length }}{{ content.articlesUi.subCount }}</p>
     </div>
@@ -61,7 +60,7 @@
           </div>
           <h3 class="vgrid-card__title">{{ article.title }}</h3>
           <div class="vgrid-card__sub">{{ content.author }} <span>✓</span></div>
-          <div class="vgrid-card__stats">{{ article.reads }} • {{ article.ago }}</div>
+          <div class="vgrid-card__stats">{{ dateOf(article) }} • {{ article.readTime }}</div>
         </div>
       </a>
     }

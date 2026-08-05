@@ -9,6 +9,8 @@
  * pas un test e2e. Pour CHAQUE slug d'article × CHAQUE langue, ce script vérifie :
  *   - le fichier `index.html` existe ;
  *   - le JSON-LD contient `"@type":"BlogPosting"` et la `datePublished` du JSON ;
+ *   - la carte sociale `og/<slug>.<lang>.jpg` existe dans le build ET est référencée
+ *     par la page (les cartes sont générées par `make og` et committées) ;
  *   - la région `article-detail__body` contient du texte substantiel (le parser
  *     Markdown a bien tourné au prérendu, pas juste une coquille) ;
  *   - aucun Markdown brut n'a fui dans le corps (pas de `**` littéral = le gras a
@@ -16,7 +18,7 @@
  * Affiche un résumé `✓`/`✗` et `process.exit(1)` au moindre échec. À lancer APRÈS
  * le build statique (`ng build --configuration production && npm run gen:seo`).
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 const BROWSER_DIR = 'dist/super-dev-portfolio/browser';
 const CONTENT_DIR = 'src/app/core/content';
@@ -70,6 +72,14 @@ for (const article of articles) {
     }
     if (!html.includes(`"datePublished":"${article.date}"`)) {
       failures.push(`  ${label} → datePublished "${article.date}" absente du JSON-LD`);
+    }
+
+    const card = `og/${article.slug}.${lang}.jpg`;
+    if (!existsSync(`${BROWSER_DIR}/${card}`)) {
+      failures.push(`  ${label} → carte sociale manquante (${card} — lancer \`make og\`)`);
+    }
+    if (!html.includes(`/${card}`)) {
+      failures.push(`  ${label} → og:image ne référence pas ${card}`);
     }
 
     const region = bodyRegion(html);

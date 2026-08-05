@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { WritableSignal, Signal } from '@angular/core';
+import { Signal } from '@angular/core';
 import { ChannelHeaderComponent } from './channel-header.component';
 import { I18nService } from '../../core/services/i18n/i18n.service';
 import { FETCH_DELAY_MS } from '../../core/api/content-api.service';
 
 /** Test view onto the protected members of ChannelHeaderComponent. */
 interface ChannelInternals {
-  subscribed: WritableSignal<boolean>;
   terminal: Signal<[string, string][]>;
+  copied: Signal<boolean>;
+  share: () => Promise<void>;
 }
 
 describe('ChannelHeaderComponent', () => {
@@ -25,15 +26,6 @@ describe('ChannelHeaderComponent', () => {
     await fixture.whenStable();
   });
 
-  /** The subscribe button is the last action button (the only [class]-bound one). */
-  function subscribeButton(): HTMLButtonElement {
-    const buttons = fixture.nativeElement.querySelectorAll(
-      '.profile__actions button',
-    ) as NodeListOf<HTMLButtonElement>;
-
-    return buttons[buttons.length - 1];
-  }
-
   it('mounts without error and renders content', async () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent.trim().length).toBeGreaterThan(0);
@@ -46,7 +38,7 @@ describe('ChannelHeaderComponent', () => {
     const lines = component.terminal();
 
     expect(lines[0]).toEqual(['$ ', 'uptime']);
-    expect(lines[1]).toEqual(['', '  9 ans, 47k commits']);
+    expect(lines[1]).toEqual(['', '  9 ans, de la conception au run']);
     expect(lines[2]).toEqual(['$ ', 'stack --top']);
     expect(lines[3]).toEqual(['', '  .net  angular  azure  flutter']);
   });
@@ -59,54 +51,59 @@ describe('ChannelHeaderComponent', () => {
 
     const lines = component.terminal();
 
-    expect(lines[1]).toEqual(['', '  9 years, 47k commits']);
-    // Lines without a language branch stay identical.
+    expect(lines[1]).toEqual(['', '  9 years, from design to run']);
     expect(lines[0]).toEqual(['$ ', 'uptime']);
     expect(lines[3]).toEqual(['', '  .net  angular  azure  flutter']);
   });
 
-  it('subscribed starts at false (initial state)', () => {
-    expect(component.subscribed()).toBe(false);
+  type MutableNavigator = {
+    share?: (data: { url?: string }) => Promise<void>;
+    clipboard?: { writeText: (text: string) => Promise<void> };
+  };
+
+  it('share() hands the current URL to the native share sheet when available', async () => {
+    const shared: Array<{ url?: string }> = [];
+
+    (navigator as unknown as MutableNavigator).share = (data) => {
+      shared.push(data);
+
+      return Promise.resolve();
+    };
+
+    await component.share();
+
+    expect(shared).toHaveLength(1);
+    expect(shared[0].url).toBe(location.href);
+    expect(component.copied()).toBe(false);
+    (navigator as unknown as MutableNavigator).share = undefined;
   });
 
-  it('toggle via click flips the signal, the class and the icon', async () => {
-    const content = i18n.content();
-    const button = subscribeButton();
+  it('share() swallows a cancelled native share', async () => {
+    (navigator as unknown as MutableNavigator).share = () => Promise.reject(new Error('cancelled'));
 
-    expect(component.subscribed()).toBe(false);
-    expect(button.classList.contains('btn--primary')).toBe(true);
-    expect(button.classList.contains('btn--grow')).toBe(true);
-    expect(button.querySelector('sd-icon')).toBeNull();
-    expect(button.textContent?.trim()).toContain(content.subscribe);
+    await expect(component.share()).resolves.toBeUndefined();
 
-    button.click();
-    await fixture.whenStable();
-
-    expect(component.subscribed()).toBe(true);
-    const subscribedButton = subscribeButton();
-
-    expect(subscribedButton.classList.contains('btn--primary')).toBe(false);
-    expect(subscribedButton.classList.contains('btn--grow')).toBe(true);
-    expect(subscribedButton.querySelector('sd-icon')).not.toBeNull();
-    expect(subscribedButton.textContent?.trim()).toContain(content.subscribed);
-
-    subscribeButton().click();
-    await fixture.whenStable();
-
-    expect(component.subscribed()).toBe(false);
-    const unsubscribedButton = subscribeButton();
-
-    expect(unsubscribedButton.classList.contains('btn--primary')).toBe(true);
-    expect(unsubscribedButton.querySelector('sd-icon')).toBeNull();
+    (navigator as unknown as MutableNavigator).share = undefined;
   });
 
-  it('direct signal update reflects the class in the template', async () => {
-    component.subscribed.set(true);
-    await fixture.whenStable();
-    expect(subscribeButton().classList.contains('btn--primary')).toBe(false);
+  it('share() copies the link and flags "copied" when native share is unavailable', async () => {
+    (navigator as unknown as MutableNavigator).share = undefined;
+    let copiedText = '';
 
-    component.subscribed.set(false);
-    await fixture.whenStable();
-    expect(subscribeButton().classList.contains('btn--primary')).toBe(true);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          copiedText = text;
+
+          return Promise.resolve();
+        },
+      },
+    });
+
+    await component.share();
+
+    expect(copiedText).toBe(location.href);
+    expect(component.copied()).toBe(true);
   });
 });

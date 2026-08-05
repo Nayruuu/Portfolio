@@ -39,12 +39,6 @@
 		}
 	}
 
-	&__author-sub {
-		font-size: 11.5px;
-		color: var(--text-faint);
-		font-family: var(--f-mono);
-	}
-
 	&__actions {
 		margin-left: auto;
 		display: flex;
@@ -56,7 +50,7 @@
 	&__bio {
 		margin: 8px 0 0;
 		color: var(--text-dim);
-		font-size: 13px;
+		font-size: 14px;
 		line-height: 1.55;
 	}
 }
@@ -74,7 +68,7 @@
 	border: 1px solid var(--border-soft);
 	border-radius: var(--r-md);
 	padding: 14px 16px;
-	font-size: 13.5px;
+	font-size: 14.5px;
 	color: var(--text-dim);
 	line-height: 1.6;
 
@@ -125,7 +119,7 @@
 	border-radius: 6px;
 	cursor: pointer;
 	font-family: var(--f-mono);
-	font-size: 13px;
+	font-size: 14px;
 	color: var(--text);
 
 	&:hover {
@@ -154,4 +148,15 @@
 /* Light theme overrides (co-located). */
 :host-context([data-theme='light']) .description {
 	background: var(--surface-2);
+}
+
+// Mobile-first readability bump: phones read at 14/14.5px, the denser desktop sizes return at md.
+@include bp.from(md) {
+	.description {
+		font-size: 13.5px;
+	}
+
+	.chap {
+		font-size: 13px;
+	}
 }
