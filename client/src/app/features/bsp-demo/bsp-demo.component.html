@@ -1,0 +1,81 @@
+@let content = i18n.content();
+<div class="bsp-demo">
+  <div class="bsp-demo__viewport">
+    <canvas #canvas class="bsp-demo__canvas" width="1280" height="720"></canvas>
+
+    <!-- Vignette: darkens the edges toward the centre for an oppressive/claustrophobic mood. Ordered after
+         the canvas but before the HUD/buttons so those paint on top of it. Decorative → aria-hidden. -->
+    <div class="bsp-demo__vignette" aria-hidden="true"></div>
+    <canvas #hud class="bsp-demo__hud" aria-hidden="true"></canvas>
+
+    <!-- Compact keyboard-controls recap (top-left), shown when mounted in the player. The i18n string is
+         ` · `-split into one row per control. Decorative → aria-hidden. -->
+    <div class="bsp-demo__controls" aria-hidden="true">
+      @for (control of content.gameControls.split(' · '); track $index) {
+        <span class="bsp-demo__control">{{ control }}</span>
+      }
+    </div>
+
+    <button
+      class="bsp-demo__exit"
+      type="button"
+      [attr.aria-label]="content.aria.gameExit"
+      (click)="exited.emit()"
+    >
+      <sd-icon name="exit" [size]="20" />
+    </button>
+
+    @if (fullscreenAvailable()) {
+      <button
+        class="bsp-demo__fullscreen"
+        type="button"
+        [attr.aria-label]="fullscreen() ? content.aria.exitFullscreen : content.aria.fullscreen"
+        (click)="fullscreenToggle.emit()"
+      >
+        <sd-icon [name]="fullscreen() ? 'full-exit' : 'full'" [size]="20" />
+      </button>
+    }
+
+    <output class="bsp-demo__fps">
+      {{ fps() }} FPS · {{ frameMs() }} ms (max {{ frameMaxMs() }}) · {{ threads() }}/{{
+        poolSize()
+      }}
+      thread(s) · {{ backend() }} · textures:
+      {{ texturesLoaded() ? 'WebP' : 'procedural' }}
+    </output>
+
+    <!-- Twin-stick touch controls (mobile only — CSS reveals them under `pointer: coarse`). Decorative
+         duplicates of the keyboard/mouse controls → aria-hidden + out of the tab order. The move/look zones
+         are the canvas halves; only these small buttons + the floating joystick are DOM overlays. -->
+    @if (joystick(); as j) {
+      <div
+        class="bsp-demo__joystick"
+        aria-hidden="true"
+        [style.left.px]="j.baseX"
+        [style.top.px]="j.baseY"
+      >
+        <div
+          class="bsp-demo__thumb"
+          [style.transform]="'translate(' + j.thumbDx + 'px, ' + j.thumbDy + 'px)'"
+        ></div>
+      </div>
+    }
+
+    <button #fire class="bsp-demo__fire" type="button" aria-hidden="true" tabindex="-1"></button>
+
+    <button #weaponBtn class="bsp-demo__weapon" type="button" aria-hidden="true" tabindex="-1">
+      <sd-icon name="layers" [size]="22" />
+    </button>
+
+    <!-- Portrait block (mobile): a twin-stick FPS needs landscape. In portrait we cover the game with a
+         "rotate your phone" prompt (CSS-shown under `pointer: coarse` + `orientation: portrait`). Being an
+         opaque overlay above the controls, it also swallows touches so the sticks stay dormant until the
+         phone is turned — then the query stops matching and the game is playable. -->
+    <div class="bsp-demo__rotate">
+      <sd-icon class="bsp-demo__rotate-icon" name="gamepad" [size]="56" aria-hidden="true" />
+      <p class="bsp-demo__rotate-text">{{ content.gameRotate }}</p>
+    </div>
+  </div>
+
+  <p class="bsp-demo__hint">{{ content.gameControls }}</p>
+</div>

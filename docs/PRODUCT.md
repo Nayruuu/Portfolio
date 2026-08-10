@@ -1,0 +1,1068 @@
+# Product spec — what super-dev.app *is*
+
+Companion to `CLAUDE.md` (the *how*: stack, architecture). This doc is the ***what***: the concept,
+the route/tab inventory, the distinctive mechanisms, the data tables, **and the design source of
+truth** — exact token **values**, per-screen pixel spacing, the font-size ladder, and keyframes. It is
+exhaustive enough that, given the visual design, a from-scratch rebuild lands **pixel-identical**.
+
+Division of labour (single-source — each fact lives in exactly one place):
+
+- **`.claude/conventions/design.md`** owns the SCSS/design **rules** (BEM nesting, tabs, `@use` order,
+  shared-vs-co-located, `:host-context` overrides). It does **not** restate any value below.
+- **This file** owns every **value**: the token palette (dark + light), spacing/px, font sizes,
+  layout grids, keyframes, and the data tables (chapters, slugs, tags, series mapping).
+- All user-facing **copy** lives in the multilingual content store; this doc describes **structure +
+  behavior + measurements**, not the strings.
+- This is a **product/design spec, in prose** — not a code transcript. Each screen, route, and
+  capability is described by its behavior and structure, never by its source.
+
+---
+
+## 1. Concept
+
+A multilingual (FR/EN, extensible via `LANG`) **"YouTube-channel" portfolio** for a **.NET / Angular / Azure** technical lead
+(brand `super-dev` + `.app` TLD, warm-red "play button" identity). The home page mimics a
+YouTube **watch page**; its "video" is a **simulated, autoplaying, looping player** whose frames are
+five timed, animated **scenes** — there is no real video element. Aesthetic: dark "cinema" + terminal/
+code-editor motifs (shell prompts, traffic-light window dots, monospace, a faint scanline texture).
+
+**Default theme is LIGHT** (warm paper). Dark ("cinema") is opt-in — but the player stage, the
+code-block panel, and the contact form stay dark in both themes on purpose (see §4.1, §7, §8, §9).
+
+---
+
+## 2. App shell & navigation
+
+The app shell (`sd-app`) is: a top progress bar (shown only while content is loading), the nav, the
+channel header, the tabs bar, then the routed page inside a `.main` wrapper, the mini-player, the
+functional `.konami` keyboard-shortcut hint at the bottom (home route only), and the mobile-only
+`.prefs-dock` (the floating theme + language pill, §2.1.1). The theme is applied on load (writing `data-theme` onto the document)
+and **baseline SEO** is wired: on every navigation the page title is **per-route** — a tab page gets
+`{tab label} — super-dev.app` with its own `tabDescriptions` entry as meta description (**except
+about**, the ProfilePage, which is name-first but differentiated — `{author} — {about tab label}`, so
+it never shares a title with the home), a
+series-detail URL gets `{series title} — super-dev.app` (and the series description), a
+**project-detail** URL `{project name} — super-dev.app` and the **projects list**
+`{projectsUi.title} — super-dev.app`, and the home
+**leads with the name** — `{author} — {metaTitle}` with `tabDescriptions[0]` (the strongest page must
+present the person first for a "{author}" query; any other URL falls back to the same
+title + the bio); the page type is `website`, and the structured-data follows the route (a home URL
+gets the site-level `WebSite` + `Person` graph, the **about** URL a `WebSite` + `ProfilePage` → the
+canonical `Person`, a **project-detail** URL a `SoftwareSourceCode` — authored by the canonical
+`Person`, with `codeRepository` + `sameAs` to the real NuGet/docs/live — plus a `BreadcrumbList`, the
+**projects list** a `WebSite` + `CollectionPage` (`ItemList` of the projects) + `Person`, any other
+non-article URL clears it) — **except** on an article-detail URL
+(`/{lang}/articles/{slug}`), which sets its own SEO. (This runs during
+prerendering too, so the static build captures it.)
+
+The `.konami` hint (`tip: [k] play/pause · [j/l] ±10s · [/] search`) is **functional**: global
+keydown handlers wire `[k]` (play/pause) and `[j]`/`[l]` (seek ∓10 s) on the player and `[/]` (open the
+⌘K command palette) — all ignored while typing in a field. The player keys only exist where the player
+does, so the hint is rendered **only on the home route** (`app.isHome`). Keyboard-only, so it is also
+**hidden on phones** (restored at `md`), and uses `--text-faint` so it stays legible.
+
+### 2.1 Nav (`sd-nav`, `.nav`) — desktop only
+
+Sticky `top:0 z-index:50`, `height:56px`, flex, `gap:24px`, `padding:0 24px`, dark
+`background:rgb(10 10 11 / 86%)` + `backdrop-filter:blur(12px)`, bottom border `--border-soft`. Light
+theme: `background:rgb(250 249 246 / 88%)`. **Hidden below `md`** (`display:none`) — on phones the top
+bar is dropped so the player owns the top of the screen; theme + language relocate to the floating
+`.prefs-dock` (§2.1.1) and the search/brand/avatar are desktop-only. The sticky bar returns at
+`bp.from(md)`.
+
+Members left→right (visual notes):
+
+- **Brand** (`.nav__brand`, mono 14px, `letter-spacing:-0.01em`): a 28px accent-filled square mark
+  `>_` (`--r-sm`, `color:#0a0a0b`, a `::after` white→transparent gloss gradient) + the word `super-dev`
+  (a fixed literal, like the `>_` glyph) + a `--text-faint` TLD span (the `.app` TLD comes from
+  content).
+- **Search trigger** (`.nav__search`, now a `<button aria-haspopup="dialog">`, `flex:1; max-width:560px;
+  margin-left:auto`, pill, `height:36px`, `--surface` bg, mono 12.5px): search icon (16px) + placeholder
+  text span + a `/` kbd chip (`.nav__search-kbd`, 10.5px, bordered, `--bg`). Kept visually identical to the
+  old input. Clicking it — or `⌘K`/`Ctrl+K`/`/` — opens the desktop command palette (next bullet). Focus
+  ring `border-color:--accent-deep`.
+- **Command palette** (`sd-command-palette`, desktop-only): a fixed scrim (`rgb(0 0 0 / 55%)` + blur) over a
+  `--surface` dialog (`max-width 600px`, near top); a 16px search input with a descriptive placeholder;
+  grouped results (Aller à / Articles / Séries / Projets / Actions) whose mono line-icons are **tinted per
+  item** (articles/series carry their brand colour, pages/projects/actions a curated hue), matched chars in
+  `--accent`, the active row `--accent-glow` + an inset `--accent` left bar; articles capped at 4 + a "see
+  all results" row that seeds `SearchService.query` and routes to `/articles` (the grid still filters cards
+  live on title/tag/description; an empty query shows all). `Esc` or a scrim tap closes; the hidden game is
+  never listed.
+- **Actions** (`.nav__actions`, gap 8px): the **`<sd-prefs>`** cluster (theme toggle + language picker,
+  §2.1.1) then the **photo avatar** (32px circle, `/avatar.jpg` as a `center/cover` CSS background
+  over `--surface` — same identity as the channel-header avatar — 2px border).
+
+### 2.1.1 Preferences — theme + language (`sd-prefs`, `.prefs__*`)
+
+One reusable cluster (`:host{display:inline-flex; gap:8px}`), rendered **twice**: inline in the desktop
+nav's actions, and in the mobile `.prefs-dock`. It holds, left→right:
+
+- **Theme toggle** (`.prefs__icon-btn`, 36px circle, transparent → hover `--surface`): moon icon in
+  light / sun in dark, title + aria from content; flips `<html data-theme>`.
+- **Language picker** (`.prefs__lang`, a **dropdown**: a `.prefs__lang-toggle` showing the current lang +
+  `chevron-down`, opening a `.prefs__lang-menu` of `.prefs__lang-item`s built `@for` over `LANGS` — one
+  per `Lang`, the active one accent-colored; closes on select, Escape, or an outside click). Selecting
+  one **navigates** to the same path in the chosen language by replacing only the first URL segment (the
+  destination tree then syncs the language before render), it does **not** switch the language directly.
+
+**Mobile dock** (`.prefs-dock`, owned by `_layout.scss`): a `position:fixed` rounded pill bottom-right,
+`bottom:calc(72px + env(safe-area-inset-bottom))` (above the fixed tab bar), `right:12px`, `--surface-2`
+bg / `--border` / `--sh-2`; its `.prefs__lang-menu` opens **upward** (it sits near the bottom).
+`display:none` at `bp.from(md)` (the nav hosts the prefs there) and while a player is fullscreen.
+
+### 2.2 Channel header (`sd-channel-header`, `.channel`)
+
+A two-part section: a banner and a profile card, plus two fixed pieces of brand art — the ASCII status
+box below and a prompt/value terminal readout (only the uptime value is from content; the other rows
+are literals).
+
+- **Banner** (`.banner`, `height:200px`, `--r-lg`): two radial gradients (warm-red ellipse at 80% 50%
+  + a blue ellipse at 10% 100%) over `#0e0e10`; a masked grid overlay (`.banner__grid`, alternating
+  1px lines at **32px** intervals); a fixed **ASCII status box** (`.banner__ascii`, `<pre>`,
+  `user-select:none`):
+
+  ```
+     ┌─────────────────────┐
+     │  $ super-dev.app  │
+     │  > status: online   │
+     │  > role: tech lead  │
+     └─────────────────────┘
+  ```
+
+  and a right-aligned **terminal readout** (`.banner__terminal`):
+  `$ uptime` / `{uptime value from content}` / `$ stack --top` / `  .net  angular  azure  flutter`.
+- **Profile** (`.profile`, grid `128px | 1fr | auto`, `align-items:center`): 128px avatar
+  (`.profile__avatar`, the `/avatar.jpg` photo as a `center/cover` CSS background over `--surface`,
+  4px `--bg` border, `--sh-2` — no status dot: a personal *presence* indicator would be a
+  fabricated claim; the banner's ASCII `status: online` describes the **site**, which genuinely is)
+  · meta:
+  `h1 "{author} — <span>tech lead</span>"` (the `tech lead` span is accent, fixed brand art),
+  handle line (`@super-dev · {featured category without #}`), stats line
+  (`{joined} <b>{joined year}</b>` — real facts only, no fabricated audience numbers), bio paragraph · actions: **Share** + **Download-CV**
+  (both `btn btn--ghost btn--sm`, 14px icons). **Share** opens the native share sheet when available,
+  otherwise copies the page URL to the clipboard and flashes a `✓ copied` label for ~2s.
+
+**Below `md` on non-home pages** the header collapses to a **slim identity row**: the banner, the terminal readout, the handle line, the stats line, the bio, and the Share/CV ghost actions are all hidden; only a **40px avatar** and the `{author} — tech lead` name remain. All of these are restored at `md` (the full two-part section described above).
+
+**On the home route below `md`** the whole channel-header is **hidden** (`_layout.scss`:
+`:root:has(sd-home) sd-channel-header { display: none }`, restored to `block` at `md` — route-aware
+via `:has()`, no TS): the phone home reads like the YouTube-app **watch page** (§4), where the
+channel info lives in `video-meta` (incl. the mobile-only bio) instead.
+
+### 2.3 Tabs bar (`sd-tabs-bar`, `.tabs`, `role="tablist"`)
+
+The `.tabs`/`.tab` chrome is global (in `styles/_tabs.scss`), so the component carries no styles of
+its own. It renders six language-aware tab links from the fixed segment order, each highlighting when
+its route is active (Home matched exactly, the rest fuzzy) and exposing `aria-selected` accordingly.
+
+**6 tabs, fixed order = route order**. Segments `['', 'articles', 'projects', 'about', 'stack',
+'contact']`; labels from content (FR: `Accueil`, `Articles`, `Réalisations`, `À propos`, `Stack`,
+`Contact`). The Home tab links to `/{lang}`; each other tab to `/{lang}/{segment}`. **`series` has no
+tab of its own** — it shares the *Articles* tab via the route-backed `sd-content-tabs` toggle atop both
+list pages (both `/articles` and `/series` stay real, prerendered routes; the Articles tab reads active
+on `/series` too).
+
+**Below `md`** the bar becomes a **fixed bottom navigation bar** (`position: fixed; bottom: 0; z-index: 40`, `env(safe-area-inset-bottom)` inset): each of the 6 tabs is an `<sd-icon>` over a `.tab__label`, active tab highlighted with accent, background override in `_theme-light.scss` for the light theme. Each tab carries a section icon that is **hidden at `md`** (`.tab .tab__icon { display: none }`). At `md`+ the bar returns to the top text row exactly as described above (the `overflow-x:auto` §3.5 chrome, labels only, no icons).
+
+### 2.4 Cross-cutting
+
+- **`data-screen-label`**: every screen-level section carries a numbered authoring marker (`00 Top
+  nav`, `01 Channel header`, `02 Channel tabs`, `03 Video meta`, `04 Reviews`, `05 Let's talk`,
+  `06 Recent articles sidebar`, `09/10/11 Tab — about/stack/contact`, `14/15 Tab — projects / Project
+  detail`, …). **No CSS, renders nothing** — keep it.
+- **Theme**: light unless the stored theme preference is `'dark'`; applied as `<html data-theme>`;
+  `index.html` carries a pre-paint anti-flash script (same stored key, defaults light).
+- **Baseline SEO**: on each navigation **except** an article-detail URL (which sets its own), the
+  title is per-route — `{tab label} — super-dev.app` on a tab page (with its `tabDescriptions`
+  entry as meta description; **about** is name-first but differentiated — `{author} — {about tab label}`),
+  `{series title} — super-dev.app` (+ the series description) on a
+  series detail, **name-first** `{author} — {metaTitle}` on the home (+ `tabDescriptions[0]`; any other URL
+  keeps that title with the bio as description); the type is `website`, and the structured-data
+  follows the route — the `WebSite` + `Person` graph on a home URL, a `WebSite` + `ProfilePage` →
+  `Person` on the about URL, a `SoftwareSourceCode` (authored by that `Person`) + `BreadcrumbList` on
+  a project-detail URL and a `WebSite` + `CollectionPage` + `Person` on the projects list, cleared on
+  any other non-article URL. The `Person` is ONE canonical entity: a stable
+  `@id` (`…/#stephane`), `jobTitle` / `knowsAbout` / `alternateName "Nayruuu"` and the
+  GitHub/LinkedIn/**Malt** `sameAs` profiles, reused as the author of every article so engines fold
+  them into a single person.
+- **Hosting (Azure SWA, `staticwebapp.config.json`)**: URLs are extensionless and slash-less
+  (`trailingSlash: never`), `/` 301-redirects to `/fr` at the edge, an unknown URL serves the static
+  branded `404.html` **with a real 404 status** (no soft-404 rewrite), the hidden `/bsp` route ships
+  an `X-Robots-Tag: noindex` header (the easter egg stays out of search results until the vitrine
+  launch), and hashed build assets (`js`/`css`) get a one-year immutable cache header. The generated
+  sitemap lists **every locale URL** (each carrying the full hreflang cluster) with **real
+  `lastmod` dates**: the article's own date on its page, the newest member date on a series page,
+  the newest article date on the evolving pages (home + the two lists), and none on
+  about/stack/contact. After each successful deploy, the `deploy-client` workflow **pings IndexNow**
+  (Bing/DuckDuckGo/Yandex/Naver) with the full sitemap URL list — the committed key file in
+  `client/public/` proves ownership; Google is not on IndexNow and follows the sitemap's `lastmod`
+  instead. The ping is non-blocking: a failed hint never fails a succeeded deploy.
+
+### 2.5 Routing & app config (the param-less static-tree shell)
+
+Language is a **URL prefix via one explicit static tree per `Lang`** (`/fr`, `/en`, …),
+**generated from `LANGS`** — **never** a `:lang` param (a parameter-first parent route breaks Angular's
+native prerenderer → empty `<router-outlet>`). Adding a language is a one-line change to the `LANG` set.
+
+- **Routes**: one top-level tree per `Lang` (built by `LANGS.map(...)`, literal paths), each reading its
+  own leading path segment to sync the language before the routed component renders (the **only** place
+  routing changes the language), and sharing the **same lazy children**, built fresh per tree, in order:
+  Home `''` (lazy component), `articles`, `series` and `projects` (lazy sub-trees — each a list +
+  detail), then `about`, `stack`, `contact` (lazy components). `projects` is surfaced as the
+  **Réalisations** tab; `series` has **no tab of its own** — it shares the *Articles* tab via the
+  route-backed `content-tabs` toggle (both `/articles` and `/series` stay real, prerendered, indexed
+  routes). The `/about` "Projets" card remains a secondary entry to projects. Root `''` and any unknown path redirect to
+  `/${DEFAULT_LANG}` with a **const-template static** string (build-evaluable for the static prerender)
+  — this router redirect covers **client-side** navigations only; a direct hit on an unknown URL is
+  answered at the edge with the real 404 (§2.4, Hosting).
+- **Nested feature routes** (articles, series and projects, all lazy): a list at `''` and a detail at
+  `':slug'`; the `:slug` segment feeds the detail page as a required string input via
+  component-input-binding.
+- **App config**: zoneless change detection, the router (with component-input-binding), and client
+  hydration with event replay. The server config merges in server rendering with the prerender
+  routes.
+- **Prerender manifest**: the detail routes (`<lang>/{articles,series,projects}/:slug`, looped over
+  `LANGS`) are prerendered with their slugs enumerated from the **FR** content (project slugs from the
+  `PROJECT_SLUGS` set); a final catch-all prerenders the
+  explicit static pages (`/fr`, `/en`, `/en/about`, …). `setLang` swaps content synchronously (`peek`)
+  so each prerendered route is captured **in its own language**.
+
+---
+
+## 3. Design system — tokens & primitives (the visual source of truth)
+
+### 3.1 Color tokens (`styles/_tokens.scss` `:root` = dark default; `_theme-light.scss` = light)
+
+| Token | Dark (`:root`) | Light (`[data-theme='light']`) |
+|---|---|---|
+| `--bg` | `#0a0a0b` | `#faf9f6` |
+| `--surface` | `#131316` | `#fff` |
+| `--surface-2` | `#1a1a1e` | `#f3f1ec` |
+| `--surface-3` | `#232328` | `#e7e4dc` |
+| `--border` | `#2a2a30` | `#d4d0c7` |
+| `--border-soft` | `#1f1f24` | `#e6e3d9` |
+| `--text` | `#f1f1ef` | `#1a1a1a` |
+| `--text-dim` | `#a4a4a8` | `#555` |
+| `--text-faint` | `#85858c` | `#6b6b6b` |
+| `--text-mute` | `#45454a` | `#b0aea7` |
+| `--accent` | `oklch(66% 0.22 22deg)` | `oklch(56% 0.21 22deg)` |
+| `--accent-hot` | `oklch(74% 0.24 28deg)` | `oklch(62% 0.23 28deg)` |
+| `--accent-deep` | `oklch(42% 0.18 22deg)` | `oklch(38% 0.18 22deg)` |
+| `--accent-glow` | `oklch(66% 0.22 22deg / 18%)` | `oklch(56% 0.21 22deg / 12%)` |
+| `--ok` | `oklch(78% 0.16 145deg)` | (inherited) |
+| `--warn` | `oklch(82% 0.16 80deg)` | (inherited) |
+| `--info` | `oklch(72% 0.13 230deg)` | (inherited) |
+| `--sh-1` | `0 1px 2px rgb(0 0 0 / 40%)` | `0 1px 2px rgb(20 18 12 / 6%)` |
+| `--sh-2` | `0 6px 24px rgb(0 0 0 / 50%)` | `0 8px 28px rgb(20 18 12 / 8%)` |
+| `--code-bg` | `#131316` | (inherited) |
+| `--code-head` | `#1a1a1e` | (inherited) |
+| `--code-border` | `#2a2a30` | (inherited) |
+| `--code-text` | `#f1f1ef` | (inherited) |
+| `--code-dim` | `#a4a4a8` | (inherited) |
+| `--code-mute` | `#83838a` | (inherited) |
+| `--code-comment` | `#8a8a90` | (inherited) |
+| `--code-kw` | `oklch(78% 0.16 22deg)` | (inherited) |
+| `--code-str` | `oklch(82% 0.13 145deg)` | (inherited) |
+| `--code-name` | `oklch(78% 0.14 250deg)` | (inherited) |
+| `--code-attr` | `oklch(78% 0.14 280deg)` | (inherited) |
+
+The **`--code-*`** group is deliberately **never** re-declared in `_theme-light.scss`, so the code panel
+stays **dark under both themes** — its syntax palette (`--code-kw/str/name/attr/comment`) is tuned for a
+dark surface. `code-block` uses `--code-*` for **every colour** — never the theme-flipping
+`--surface`/`--text`/… (only the theme-invariant `--r-*` / `--f-mono` besides).
+
+### 3.2 Non-color tokens (theme-invariant)
+
+- **Fonts**: `--f-sans: 'IBM Plex Sans', system-ui, sans-serif` · `--f-mono: 'JetBrains Mono', 'IBM
+  Plex Mono', ui-monospace, monospace` (Google Fonts, weights 400/500/600/700, `display=swap`).
+- **Layout**: `--page-w: 1440px` · `--pad: 16px` **mobile-first base** → restored to **`32px` from
+  `md`** (900px up).
+- **Breakpoints** (mobile-first tiers; **Sass map**, not CSS tokens — the mechanism and the
+  `var()`-in-`@media` rationale are in `design.md §11`): `sm 600px` (large phones) · `md 900px` (tablet —
+  stacked sidebars and 2-col grids return) · `lg 1100px` (desktop — the main content + 380px-sidebar grid
+  returns).
+- **Radii**: `--r-sm: 6px` · `--r-md: 10px` · `--r-lg: 14px` · `--r-xl: 18px`.
+
+### 3.3 Base / global primitives
+
+- **Body**: `margin:0`, `font-family:--f-sans`, **`font-size:14px`** (flat — the old 13px mobile
+  nudge was dropped in the mobile-readability pass), `line-height:1.5`, `-webkit-font-smoothing:antialiased`,
+  `text-rendering:optimizeLegibility`. `* { box-sizing:border-box }`.
+- **Scanline overlay** (`body::before`): fixed full-viewport, `pointer-events:none`,
+  `repeating-linear-gradient(0deg, rgb(255 255 255 / 1.2%) 0 1px, transparent 1px 3px)`,
+  `z-index:999`, `opacity:0.6`. Light flips it to **black** lines at `opacity:0.5`.
+- **`::selection`** = `--accent-glow` on `--text`.
+- **Explicit `display`** on every `sd-*`: most `block`; **`display:contents`** on `sd-home`,
+  `sd-up-next`, and all five `sd-scene-*` (so they don't break the parent grid).
+- **`.main` grid** (`_layout.scss`): `max-width:--page-w`, `margin:0 auto`, **`gap:28px`**; the
+  `<router-outlet>` itself is `display:none`. Padding is `24px --pad` on the sides; the **bottom**
+  padding is mobile-first `calc(72px + env(safe-area-inset-bottom))` to clear the fixed bottom nav bar
+  (§2.3), reset to **`80px`** at `md`. **Mobile-first**: the base is a
+  **single column** (`grid-template-columns: minmax(0, 1fr)` — NEVER bare `1fr`: a `1fr` track can't
+  shrink below its content's min-content, so one long unbreakable code line would widen the page past
+  the phone viewport); the content + **380px** sidebar 2-col grid (`minmax(0,1fr) 380px`) returns only
+  at **`lg`** (1100px up), so on the phone the sidebar stacks under the content. A **`.tab-pane`**
+  child (`grid-column:1/-1`) collapses `.main` to a single `minmax(0, 1fr)` column at every width
+  (`:has(.tab-pane)`) — that host class is on every simple/list/detail tab page.
+- **`.cursor`** (typewriter caret): `8px` wide, `currentcolor`, `height:1em`, `vertical-align:-3px`,
+  `animation: blink 1s steps(1) infinite`. `@keyframes blink { 50% { opacity:0 } }`.
+- **`.loadbar`**: fixed top, `height:2px`, `z-index:100`, accent sweep gradient
+  (`background-size:40% 100%`), `@keyframes loadbar` translating `-40%→140%` over `0.9s`.
+- **Favicon**: rounded dark square + warm-red play triangle.
+
+### 3.4 Buttons (`.btn`, `_buttons.scss`)
+
+Pill: `--bg:--surface-2; --bd:--border; --fg:--text`, `display:inline-flex`, `gap:8px`,
+`padding:0 16px`, **`height:38px`**, `border-radius:999px`, `font-weight:500`, **`font-size:13px`**,
+`transition:all 0.15s`; hover `filter:brightness(1.15)`. Modifiers: `--primary` (`--bg:--text;
+--fg:#0a0a0b; weight 600`; light flip → `--bg:#1a1a1a; --fg:#fff`, hover `#000`); `--accent`
+(`--bg/--bd:--accent; --fg:#0a0a0b`; light → `color:#fff`); `--ghost` (`--bg:transparent`); `--sm`
+(`height:32px; font-size:12px; padding:0 12px`).
+
+### 3.5 Tabs / tabview chrome (shared `_tabs.scss` + `_tabview.scss`)
+
+- `.tabs`: `padding:4px --pad 0`, flex `gap:4px`, bottom `1px --border-soft`, `overflow-x:auto`.
+- `.tab`: `padding:12px 16px`, mono 12px, uppercase, `letter-spacing:0.06em`, `--text-faint`, 2px
+  transparent bottom border, `margin-bottom:-1px`; hover `--text-dim`; selected `--text` +
+  accent bottom border.
+- `.tabview` (every simple/list page header): `padding:8px 4px 40px`; `&__head` flex space-between,
+  `gap:24px`, `margin-bottom:24px`, `padding-bottom:18px`, bottom border `--border-soft`;
+  `&__title` mono **22px** weight 600 (a `<span>` inside = accent); `&__sub` mono 12.5px `--text-dim`;
+  `&__count-v` mono **32px** weight 700 accent; `&__count-lbl` 11px uppercase faint.
+
+### 3.6 Shared window dots (`_dots.scss`)
+
+macOS traffic lights, shared verbatim by the code-block head and the contact form:
+`10px` circles — `--red #ff5f57` · `--yellow #febc2e` · `--green #28c840`.
+
+---
+
+## 4. Home — the watch page + the player (centerpiece)
+
+**Layout**: the home page stacks `<sd-player>` + `<sd-video-meta>` + `<sd-reviews>` + `<sd-lets-talk>` as the main
+column and a sibling `<sd-up-next>` aside — both `display:contents`, so the `.main` 2-col grid
+(`1fr / 380px`) owns the placement. The home page itself has no logic beyond composing those four.
+
+**On phones** (below `md`) the home reads like the **YouTube-app watch page**: the shell
+channel-header is hidden on this route (§2.2), so the column is `nav → tabs → full-bleed 16/9 player
+→ video-meta (one info block, incl. the mobile-only bio) → the Malt reviews → the let's-talk CTA → up-next` — the
+single-column `.main` stacking from §3.3, with the watch-page specifics below.
+
+### 4.1 The simulated player
+
+- **The player clock**: a single source of truth for the playhead time (starting at 0) and a
+  playing/paused state (autoplay on). The chapter list and total duration come from content; the
+  current chapter is the last chapter whose start time is at or before the playhead, and the
+  per-chapter elapsed time is the playhead minus that chapter's start. While playing, the playhead
+  advances in **0.1s steps every 100ms**, wrapping back to 0 at the total duration. It can be
+  toggled, played, paused, sought (clamped to the valid range), or advanced to the next chapter
+  (wrapping past the last).
+- **Chapters / timeline** (from content, **total duration = 160s**; the dense scenes' windows are
+  sized to absorb the per-card `SCENE_CARD_DWELL` — re-timed when the scene content went CV-real,
+  so every scene finishes typing comfortably inside its window):
+
+  | id | seconds | timestamp | scene |
+  |---|---|---|---|
+  | `intro` | 0 | `00:00` | `sd-scene-intro` |
+  | `stack` | 15 | `00:15` | `sd-scene-stack` |
+  | `projects` | 52 | `00:52` | `sd-scene-projects` |
+  | `timeline` | 104 | `01:44` | `sd-scene-timeline` |
+  | `outro` | 147 | `02:27` | `sd-scene-outro` |
+
+  The set of valid scene ids is exactly those 5; each matches its `sd-scene-{id}` element.
+- **Scene switching**: all 5 scenes are mounted simultaneously, absolutely stacked, and crossfaded —
+  `.scene` (`position:absolute; inset:0; place-items:center; padding:24px 32px 70px; opacity:0;
+  pointer-events:none; transition:opacity 0.35s`) → `.scene--on` (`opacity:1`). Each scene is told
+  whether it is active (its id is the current chapter) and how far into the chapter it is — **inactive
+  scenes get an elapsed of 0**, so their typewriter/reveal effects reset and replay each loop.
+- **Mobile scale-to-fit** (`.scene--fit`, on **all five** scene roots): on phones the scenes are a
+  "downscaled video" — each keeps its fixed desktop layout at a `760px`-wide, `16/9` reference box
+  and is shrunk to the real player width with `transform: scale(tan(atan2(var(--scene-fit), 1px)))`
+  (`transform-origin: top left`, `bottom: auto`). The `tan(atan2(a, b)) = a/b` trick divides the
+  container width by `760` to get the scale: `@property --scene-fit` (a registered `<length>`) carries
+  `calc(100cqw / 760)` — `100cqw` reads the player's width via its `container-type: size`, and the
+  registration forces it to a concrete length **before** `atan2` runs, which sidesteps a WebKit/iOS
+  Safari bug that miscomputes a container-query unit fed straight into `atan2` (it blanked the player on
+  iPhone). At `md` every one of those properties is reset (`inset:0; width:auto;
+  aspect-ratio:auto; transform:none; transform-origin:initial`), collapsing `.scene--fit` back to a
+  plain `.scene` — desktop identical.
+- **Mobile "montage" for the dense scenes** (`projects`, `stack`, `timeline`): within that same
+  downscaled `16/9` box, packing every card/row at once stayed illegible on a phone — so on mobile
+  these three scenes show **one item at a time, blown up to fill the frame**, advancing card-by-card
+  like a video montage (the player aspect is unchanged). Each scene derives the focused item from the
+  playhead — `focusIndex = focusedIndex(elapsed, [each item's start offset])` (a pure `core/lib`
+  helper, so it stays scrub-deterministic) — and renders `[class.is-focus]` on the active card/row;
+  the scene SCSS is **mobile-first** (base = only `.is-focus` shown at ~2× type; the full compact
+  grid/list returns at `bp.from(md)`). `intro` and `outro` are lighter and keep plain scale-to-fit.
+  Each card/row is also pushed past the previous by `SCENE_CARD_DWELL` (its start += `cardIndex ×
+  dwell`), so a finished item lingers before the montage advances — it never flicks to the next too
+  fast (and the desktop reveal paces likewise); the chapter windows above are sized to absorb it.
+  And **within** a card, each sub-element carries `[class.is-pending]` until its own typing starts
+  (`elapsed < at`) — on mobile it's `display:none`, so the card **grows item-by-item** (the frame
+  appears little by little) instead of standing as a half-empty box; restored at `bp.from(md)`,
+  where the full reserved layout shows at once. (The typewriter reserves each line's final height to
+  avoid reflow, which is why the collapse is needed to make the frame track the typed content.)
+- **Animation behavior** (shared, deterministic from the elapsed time):
+  - **Reveal**: an element fades in (opacity only — no vertical motion, since the text itself now
+    types in character-by-character) over a fixed fraction of the elapsed time past a per-element
+    start offset, with a short ease. Used to stagger each scene's pieces into view.
+  - **Typewriter**: text types in left-to-right at a fixed characters-per-second rate, empty before
+    its start offset. Each scene's headline types shortly after the scene becomes active (at 0.2 s,
+    30 cps). The scene **body** types **strictly sequentially — one element at a time, a single caret
+    walking the scene** (the `sd-typed` component, `SCENE_BODY_CPS` = 30 cps): start times are
+    computed by the `typingSchedule` chain (`core/lib`) — each text starts when the previous finishes
+    at 30 cps, plus a 0.15 s breath; the chain begins when the headline finishes
+    (`0.2 s + headline length / 30 cps + 0.4 s`). The untyped remainder is held
+    invisible-but-space-holding so the layout never reflows. Structural containers
+    (cards/rows/pills) and the decoration-prefixed lines (`→` subtitles, `•`/`›`/`▸` items) fade in
+    via `reveal()` exactly as their first text starts typing — 0.3 s; the intro tagline and the outro
+    subtitle/cta/sign type only (no fade). The whole animation is a pure function of the playhead, so
+    **seeking the timeline lands mid-frappe** — finished texts full, the in-flight one partial with
+    its caret, later ones empty (and it un-types backward).
+  - **Time display**: the playhead and total are shown as zero-padded `MM:SS`.
+
+#### Per-scene scripts (typing order and schedule rule — load-bearing for the look)
+
+All five scenes share the **same skeleton** — a `sd-scene-{id}` element, told whether it is active and
+how far into its chapter, reading its own slice of content, with a typed headline. Each renders a
+single `.scene` block that gains `.scene--on` when active, with the typed headline followed by a
+blinking `cursor` span. Body text types strictly sequentially via `sd-typed` (30 cps); starts are
+computed by the `typingSchedule` chain, beginning when the red headline finishes
+(`0.2 s + headline length / 30 cps + 0.4 s`). Structural containers (cards/rows/pills) and the
+decoration-prefixed `→`/`•`/`›`/`▸` lines fade via `reveal()` exactly when their first text starts
+typing (0.3 s); the intro tagline and the outro subtitle/cta/sign are reveal-free (type only). The
+typing order (body chain in visual order, headlines at 0.2 / 30 cps):
+
+- **intro** (`scene-intro`, max-width 720px): `hi` headline (accent mono 14px) → **name** (`h2`
+  `.scene-intro__name`, **64px** weight 700, `letter-spacing:-0.04em`, `#fff→#888` clipped gradient;
+  h2 fades when name starts) → **role** (`<span>` accent) → **tagline** (type only, no fade) →
+  **tags** in order (each `.tag` bordered pill, fades when text starts) → per metric: **value**,
+  **label** (each `.metric` fades when value starts).
+- **stack** (`scene-stack-rich`, 720px): `title` headline → **subtitle** (`→` prefix, fades when
+  text starts) → per card: **title** (card fades when title starts; accent border `accent + '40'`,
+  accent-colored header) → **main label** → **items** (each `li` `•` accent, fades when text starts).
+- **projects** (`scene-projects-rich`, 760px): `heading` headline → **subtitle** (fades when text
+  starts) → per project: **number** (project card fades when number starts), **tag**, **name**,
+  **metric**, **role**, **description**, **chips** (each pill fades as its text starts).
+- **timeline** (`scene-timeline-rich`, 720px): `title` headline → **subtitle** (`→` prefix, fades
+  when text starts) → a rail (`.tl-rich__rail`) + per row: **year** (row fades when year starts),
+  **role**, **company**, **bullets** (each `li` `›`, fades when text starts).
+- **outro** (`scene-outro-rich`, centered): `#` headline → **subtitle** (`.scene-outro-rich__sub`,
+  **26px** weight 600, type only) → **CTA** (type only) → **links** (`.scene-outro__link`, bordered
+  pill, `▸` accent; each fades when text starts) → **sign-off** (type only).
+
+Shared rich-scene chrome (`_scene-rich.scss`): `__cmd` (mono 13px accent) + `__sub span` (`--text-
+mute`). `_scenes.scss` holds the cross-component scene element styles.
+
+#### Player chrome & timeline (`.player`, `player.component.scss`)
+
+The player (`sd-player`) tracks a chrome auto-hide (idle) state and a progress-bar scrub-preview
+position; from the scrub position it derives the hovered chapter and the hover percent, and it
+displays the play progress as a percentage. Clicking the stage toggles play **except** when the click
+lands inside the controls row, the live badge, or the quality badge; mouse movement wakes the chrome
+(resetting a 4500ms idle timer); the progress bar maps clicks to a seek (the click fraction of the
+total duration) and hover to the scrub-preview position. Global keydown shortcuts (`[k]` play/pause,
+`[j]`/`[l]` seek ∓10 s) drive it, ignored while a field is focused.
+
+- **Stage** (`.player`): `aspect-ratio:16/9`, `background:#000`, 1px `--border-soft`, `--sh-2`.
+  **Mobile-first base = full-bleed** (the YouTube-app watch look): `margin-inline:
+  calc(-1 * var(--pad))` cancels the `.main` side padding, `border-radius:0`, and
+  `container-type:size` makes the player the query container `.scene--fit` scales against; at `md`
+  the rounded card returns (`margin-inline:0`, `--r-lg`, `container-type:normal`). **Stays dark in
+  light theme** (`:host-context([data-theme='light']) .player` re-declares the full dark palette).
+  `__bg` = radial ellipse over `#060607`; `__bg-grid` = 1px lines at **40px**.
+- **Live/quality badges**: top-left `.player__live` (`14px` inset, mono 10.5px uppercase,
+  `rgb(0 0 0 / 50%)`, blur 8px, a pulsing 7px accent `__live-dot` with glow) shows `LIVE`/`PAUSED`;
+  top-right `.player__quality` static `4K · HDR`. Both are **hidden on the full-bleed phone player**
+  (they would overlap the scaled-down scene header) and restored at `bp.from(md)` — note this is `md`,
+  not the `sm` of the control-row trim below.
+- **Center play** (`.player__center-play`): 72px circle, visible when `.is-paused` **and not**
+  `.is-resting` (opacity 0→1); hover `scale(1.05)`. Clicking it resumes playback. It fades once the
+  viewer goes idle (even while paused) so it never permanently occludes the scene's centered content
+  (e.g. the outro CTAs); a mouse move brings it back.
+- **Chrome auto-hide**: waking on `mousemove` resets a **4500ms** idle timer. The idle flag drives two
+  classes: `.is-idle` (idle **and** playing) fades `__chrome` `opacity:0` (`transition 0.25s`), and
+  `.is-resting` (idle, any play state) fades the center-play. `__chrome-bg` = 120px bottom gradient.
+- **Progress** (`.player__progress`, 14px tall hit area): `__progress-track` 4px (→6px on hover)
+  `rgb(255 255 255 / 18%)`; `__progress-fill` accent, width = the play-progress percent; `__progress-
+  thumb` 12px accent (scales 0→1 on hover) positioned at the play-progress percent; **hover-scrub**
+  `__progress-hover` width = the scrub-preview percent; **chapter ticks** for every chapter after the
+  first, at `(seconds / total duration)·100%` (2px×8px); **tooltip** `__chapter-tooltip` (hovered
+  chapter title + `<small>` timestamp) at the scrub-preview percent. Click → seek to the click
+  fraction of the total duration.
+- **Controls row** (`.player__row`, gap 8px → **12px at `sm`**, `color:#fff`): play/pause (22px) ·
+  next-chapter (20px, wraps) · `mm:ss / mm:ss` time + `· <b>{current chapter title}</b>` (accent-hot,
+  `__chapter-now`) · spacer · two `__btn--aux`: **⚙️ settings** — opens a **playback-speed menu**
+  (`.player__settings`, popover above the row: `0.5× / 1× / 1.5× / 2×`, active one accent-hot) that drives
+  `PlayerService.rate`, which scales the tick increment (`0.1 × rate`); closes on select, on Escape, or
+  on a stage click — and **⛶ pip** (`aria.pip`), which **detaches the player into the floating
+  mini-player** (`player.toggleMini()`) · the **🎮 gamepad** button (`aria.gameStart`, a plain
+  `player__btn`, **not** an `--aux` control, so it survives the phone trim — the game must be reachable on
+  mobile) which **enters game mode** (`enterGame()` → `GameService`) · the **working
+  fullscreen toggle** (icon `full` ↔ `full-exit`, label `aria.fullscreen` ↔ `aria.exitFullscreen`;
+  native `requestFullscreen`, **falling back to the CSS fullscreen** if the browser rejects/lacks it —
+  so the button always responds). **Phone trim** (all restored at `sm`): the chapter-now label and the
+  two aux buttons (`__btn--aux`: settings, pip) are hidden so play/next/time/**gamepad**/fullscreen fit
+  unclipped. All icon-button accessibility labels come from content.
+  (The former inert **captions** button was removed — language is changed via the prefs picker: the nav
+  on desktop, the floating `.prefs-dock` on mobile, §2.1.1.)
+- **Fullscreen** (the `full` button): native Fullscreen API where available; iOS Safari (no
+  `requestFullscreen` on a `<div>`) gets a fixed-overlay CSS fallback. One state class
+  (`.player.is-fullscreen`, a signal synced from `fullscreenchange`) drives everything: black
+  full-viewport room, stage letterboxed to a centered 16/9 size-container
+  (`min(100cqw, 100cqh·16/9)`), scenes upscaled by the same `.scene--fit` math at every width,
+  body scroll locked behind (`body:has(…)`, `_layout.scss`). Esc exits (native, or the scoped
+  fallback handler). **Landscape**: entering *native* fullscreen best-effort-locks landscape
+  (`screen.orientation.lock`, Android — rejected and ignored elsewhere), unlocked on exit; iOS
+  Safari has no orientation lock, so the *fallback* path forces it visually — in portrait,
+  `.player.is-fullscreen:not(:fullscreen)` rotates the player 90° (`transform: rotate`, sized
+  `100dvh × 100dvw`) so the 16/9 fills the screen sideways like the YouTube app (the box is
+  measured pre-transform, so the letterbox/scale still hold); turning the device drops the
+  rotation and the overlay fills the now-landscape viewport.
+- **Mini-player / PiP** (the `pip` button → `PlayerService.mini`): the player **detaches into a floating
+  bottom-right frame** (`sd-mini-player`, rendered at the app shell so it persists across navigation,
+  `z-index 100`, `min(480px, 92vw)` 16/9, a **seekable progress bar** (`.mini-player__progress`, click →
+  `seek`) pinned to the frame bottom, and a play/pause + restore control bar). The frame is a
+  **size-query container**, so the `.scene--fit` math is re-asserted to **downscale** the fixed-width
+  scenes into it (the same mechanism fullscreen uses to *upscale* — see §4.1). The animated **scene
+  layer is an extracted `sd-player-stage`** (bg + the five scenes, driven by `PlayerService`) reused by
+  both the inline player and the mini — so there is no duplicated scene wiring. While the mini is active the
+  inline player shows a **`.player__popped` placeholder** (click → `closeMini`, label `playerRestore`).
+  Conditional (`@if player.mini()`, default off) → zero prerender/baseline impact.
+- **Game mode — OPEN SPACE.EXE** (the hidden game behind the player's `gamepad` button →
+  `enterGame()` → `GameService.enter()`): a hidden **DOOM-style corporate-satire FPS**, tone **straight
+  horror** — the humour lives only in the office↔hell juxtaposition (a possessed printer, a demonic
+  manager), never in jokey UI. Premise: a burnt-out developer, force-recalled by a **Return-To-Office
+  mandate**, finds MegaCorp's tower — the **Universal Algorithmic Corporation (UAC)**, a DOOM homage —
+  fallen to a rogue corporate AI, **the Overseer** (a.k.a. *The Algorithm*), which has turned the
+  open-space into hell and enslaved colleagues as demons; the player descends floor by floor to the
+  datacenter to destroy it. In the player, the frame **swaps the scene layer** (`sd-player-stage`) for the
+  game component **`sd-bsp-demo`**, mounted `@if (game.running())`; the same component is also served
+  standalone at **`/bsp`** (a dev harness with an FPS/thread readout). Entering **pauses** playback;
+  **Esc** or the in-canvas **exit button** returns to the video, resuming if it was playing —
+  `GameService` is now a thin toggle (`enter` / `exit` / `running`, pausing then resuming `PlayerService`),
+  and the game component owns its own level lifecycle. **Browser-only**: `mode` stays `'video'` on the
+  server, so the game canvas never prerenders — the static HTML keeps the video poster (no-JS + SEO
+  intact) and the live canvas is masked in the visual baselines.
+
+  The engine is a **from-scratch DOOM-style BSP software renderer** — not the old uniform-grid raycaster.
+  A level is authored as **vertices / linedefs / sidedefs / sectors / things** (a `MapSource`) and
+  compiled by a **node builder** into a **BSP tree of convex subsectors**; the renderer walks the tree
+  **front-to-back** and, per screen column, paints the near sector's **textured ceiling**, the **wall** (a
+  one-sided solid, or a two-sided portal's upper/lower bands), and the **textured floor** — each
+  distance-shaded through a per-column occlusion window — then draws **sprites** depth-tested per pixel
+  against the wall z-buffer: camera-facing **billboards** (enemies, pickups, projectiles; directional
+  decor carries a 1×4 **rotation sheet** whose cell follows the view angle vs the prop's authored
+  facing). The four directional decor props go further: at load their rotation sheets are **carved into
+  voxel grids** (a visual-hull intersection of the four views — no new assets) and rendered as
+  **world-anchored voxel volumes**, ray-marched per pixel with an exact 3D DDA and per-face shading,
+  z-tested AND depth-written like real geometry — the prop never turns with the camera, every orbit
+  angle is true perspective; where no grid decoded (SSR, procedural fallback) the same def stays the
+  cell-switched rotation billboard. Because
+  every **sector carries its own floor and ceiling height**, the world has real **steps, raised daises,
+  sunken pits and variable-height rooms**, and walls sit at **any free angle** (no grid); the camera
+  also supports
+  **pitch** (look up/down via a horizon shear). **Physics** slides the player along solid walls and
+  **steps up** through a climbable portal; a too-tall-but-still-climbable ledge **auto-mantles** — the
+  two-handed pull `ClimbView` overlay plays over the vault.
+
+  Rendering is **one engine with three executions**. The default is the **WebGPU compute backend**: the CPU
+  keeps the DOOM algorithm (the BSP walk, clipping, per-column span extraction — ~0.5 ms) and emits a compact
+  **command buffer**; a hand-written **WGSL compute shader** executes the per-pixel work (texture sampling,
+  shading, layered glass, portal phases, sprites) massively parallel — no triangle rasterization anywhere,
+  measured **99.4–99.98 % pixel-identical** to the CPU reference per scene at integration time. When WebGPU is unavailable (or via
+  `?renderer=cpu`) it falls back to the **multi-threaded software rasteriser**: a **`SharedArrayBuffer`
+  worker pool** splits the frame into N horizontal bands painting into one shared framebuffer + z-buffer
+  (needs COOP/COEP), governed under CPU contention by a **workers-only ladder** (measured shrink trials with
+  audit/revert — the image never blurs: **render resolution never adapts**); and when SAB is unavailable too
+  (or during SSR) it falls back to **single-threaded** main-thread rendering, so `/bsp` always works. The
+  framebuffer renders **below display resolution** and is upscaled **pixelated** for the authentic software
+  look; on `/bsp` a readout shows **FPS · frame ms · thread count · backend · texture source** (WebP vs
+  procedural). Textures have a **procedural fallback** baked in code (brick / metal /
+  floor / ceiling / …) so the world renders with no assets, and the real **WebP art is decoded and swapped
+  in over that base** at runtime; assets **preload** up front so nothing pops in mid-play.
+
+  Systems already built: a **per-zone texture palette** (walls BRICK / METAL / RACKS / CUBICLE / SCREEN /
+  PILLAR / PILLAR_LOBBY / DAMAGED / GLASS / GLASS_INT / LOBBY / WOOD / RECEPTION / TURNSTILE / ELEVATOR /
+  KITCHEN / EXEC; floors FLOOR / STEP / CARPET / TILE / MARBLE / LOBBY_FLOOR / COUNTER_TOP / GRATING /
+  SLAB; ceilings CEIL / CEIL_LUX / CONCRETE / TECHNICAL / NEON / CEIL_DAMAGED; doors DOOR_RED / DOOR_BLUE /
+  DOOR_YELLOW / DOOR_GLASS; exterior backdrops CITY / CITY_STREET / CITY_PLAZA), so each floor reads as its
+  own office district; **transparent glass** — tinted see-through panes, textured curtain-wall windows
+  (`glassPane`, mullions opaque / glass clear onto a painted exterior view) and automatic **double sliding
+  glass doors** (two leaves parting from the centre, proximity-driven, auto-closing), all blocking movement
+  and projectiles while enemies still see through; a **3-tier keycard/badge** access system (employee =
+  blue, manager = yellow, director = red) gating colour-matched doors, with a **HUD card bay**; rotating
+  **turntable pickups** — health (medkit / plant) and mental (figurine / card) **vitals**, **ammo
+  boxes** (each box's cap read from `weapons.json`) and **weapon pickups** (the run starts FISTS-ONLY;
+  every other weapon is found in a level, unlocks for the whole run — ownership travels zones — grants one
+  ammo box and auto-equips on first collection); a **data-driven arsenal** of eight DOOM-archetype
+  weapons (fist / pistol / shotgun / chaingun / plasma / rocket / bfg / chainsaw) with per-weapon
+  **magazine + reload** (`stepArsenal`), a shared FPS **`WeaponView`** sprite/animation, **weapon
+  switching** (1–8 / mouse wheel, unowned slots skipped) and **reload** (R / right-click); an **office bestiary** of enemies;
+  **decor props** (the potted plant, water cooler and explosive barrel as plain billboards; the crashed
+  reception monitor, directory totem, whiteboard and office chair as **voxel volumes carved at load**
+  from their 1×4 **rotation sheets** — green-screen art under `public/game/props/` — with the
+  view-angle billboard as their no-grid fallback); **animated doors** (keycard doors open in place); and the **open-building
+  zone system** — the tower is a graph of per-floor maps (`exits` walk-into transitions → named `entries`,
+  short fade) with **per-zone world-state persistence** (kills, taken pickups and opened doors survive a
+  round trip; the player's inventory travels), so badges collected on one floor open doors on another and
+  backtracking is real. Zone seams can be **live portals** (`zonePortal` linedefs): the opening renders the
+  NEIGHBOURING zone's actual map through it — a recursive translated BSP walk clipped to the seam's columns,
+  depth-1, z-buffer-coherent (local glass tints what the portal shows) — something the original 1993 engine
+  never did. A **passable** seam goes further: the player walks straight through it — an instant zone swap
+  (~1 ms, no fade, view-continuous since both sides are mirrored) — while the **warm neighbour** behind a
+  visible seam stays alive (its enemies simulate and render through the window); enemies and shots never
+  cross a seam. The status bar is the composited DOOM-1993
+  image HUD (**`DoomHud`**): the **health / mental** red-digit screens, the **burnt-out-developer reactive
+  face** (its gaze tracks your turn, grimacing when you take damage), the **ARMS** weapon grid, the weapon
+  bay, and the **keycard** slots.
+
+  Controls: desktop uses **WASD/ZQSD + arrows** to move/strafe with **pointer-lock mouse-look**, **click**
+  to fire, **1–8 / wheel** to switch weapons, **R / right-click** to reload, and **F** to toggle
+  fullscreen (doors are proximity-automatic — there is no use key); the
+  game's movement + wheel are `preventDefault`ed so they never scroll the page, and inside the player an
+  in-canvas **controls recap** (from the `gameControls` string, split on ` · `) is shown. On a
+  coarse-pointer device the game becomes a **fixed full-viewport overlay** (`.player:has(sd-bsp-demo)`)
+  with the page behind **scroll-locked** and the bottom bars (tabs + prefs-dock) hidden
+  (`body:has(.player sd-bsp-demo)`), and a **twin-stick touch** scheme takes over: a floating left-thumb
+  **joystick** for analog move, a right-half **drag** for look, plus **fire** + **weapon-switch** buttons
+  (the desktop keyboard recap is hidden). A twin-stick FPS needs landscape, so in **portrait** the game is
+  replaced by an opaque **rotate-your-phone cover** (the `gameRotate` string under a gamepad icon) instead
+  of being rotated — the touch zones only calibrate in true landscape.
+
+  **Built vs planned.** Built today: the BSP engine + the systems above, **`level-m1-lobby`** (the episode
+  opener — a premium corporate ground floor: two-door glass entrance sas onto a street view, marble-inlay
+  concourse under a luminous cornice ceiling, reception → turnstiles → dead elevator bank, wood-panelled
+  lounge, lateral staircase to the upper reception hall), **`level-m2-openspace`** (the employee floor
+  above it, reached through the LIVE M1 ⇄ M2 passable seam — cubicle farm, sunken collab pit, mezzanine
+  with glass offices, the episode's first badge gate), **`level-m3-hr`** (the HR floor below, reached
+  through the M2 ⇄ M3 graph airlock — filing hall, sunken interview pit, mezzanine offices, the yellow
+  badge on the DRH desk, two secrets incl. the condemned-archives lift down to M9), **`level-m4-meetings`**
+  (meeting hell — glass war rooms, a tiered amphi, the red DIRECTOR badge, and the boardroom arena whose
+  boss slot awaits the Middle-Manager), **`level-m5-cafeteria`** (the grimy kitchen breather),
+  **`level-m6-direction`** (the C-suite — rank as altitude, the CEO tier behind the thematic red door),
+  **`level-m7-serveurs`** (the server room — the glass core shaft descent, and the BFG earned across the
+  generator-hall climax), **`level-m8-datacenter`** (the AI core — the glass-ringed orbit around the boss
+  rotunda, an empty slot awaiting the Overseer's spider, and the episode's WIN exit up the epilogue
+  stairs) and the SECRET floor **`level-m9-archives`** (the condemned archives, reached by the dead
+  freight lift behind M3's secret — a dense derelict maze where the light LIES: the bright pools are
+  ambushes, the true path is the dim one; it pays the detour with the plasma PX-1 prototype), and the
+  earlier **worked-example levels** —
+  `level-accueil` (a hand-authored reception→climax techbase), **`level-hangar`** (a large original
+  techbase showcasing a spiral staircase + verticality), the engine-showcase `demo-map`, and the
+  URL-only `level-showroom` prop gallery (the permanent art bench — every prop/pickup/weapon, zero enemies).
+  Planned: the **two
+  bosses**, **audio** (music + SFX), and the **menu / intertitle screens**. The per-level canon (the 9-floor table,
+  palettes, badges, beats AND each level's built/planned status) lives in the `level-designer` agent —
+  this doc doesn't duplicate it.
+
+### 4.2 Video-meta · like-bar · reviews · let's-talk · up-next
+
+- **video-meta** (`sd-video-meta`): the featured title as an `h2`; author row (the 40px photo avatar
+  `.video-meta__author-av` (`/avatar.jpg` CSS background), `{author}` + `✓` — no sub-line)
+  + actions (`<sd-like-bar>`, **Share**, **Download-CV** — the two buttons are `btn btn--sm`). **Mobile-only bio** (`.video-meta__bio`, between the
+  author row and the description card: `margin:8px 0 0`, `--text-dim`, 14px / 1.55, hidden at `md`)
+  — the same `content.bio` the channel-header shows; on the phone watch page (§2.2 hides the
+  channel-header on home) this makes `video-meta` the **single** channel-info block.
+  **Description card**: a mono meta strip pairing each
+  description-meta label with its value + a `tags:` row (the featured tags joined as `#tag …`) + the
+  description body + the **chapters list** — each `.chap` row seeks to its chapter's start time and
+  gets `.is-active` (accent) while it is the current chapter.
+- **like-bar** (`sd-like-bar`, `.likebar` inside a `.likebar-wrap`): pill `height:36px`, `--surface-2`,
+  two buttons (👍 / 👎, 16px icons, `aria.like`/`aria.dislike` labels) split by a 1px `__divider`; the
+  caller's active choice → accent (`.is-on`). **Real per-page vote counts**: on render the bar loads
+  its `{ up, down, mine }` tally from `GET /api/feedback` and shows `up` / `down` (mono, tabular-nums
+  `__count`) beside each thumb; a click casts the vote (`POST`), a re-click on the active thumb retracts
+  it, and every call returns the fresh server tally. The server is **authoritative** — dedup by hashed
+  IP, nothing cached client-side, no number fabricated. The vote key is **language-agnostic** — the
+  leading `/<lang>` segment is stripped so all locales of a page share one tally (`/fr/articles/x` and
+  `/en/articles/x` count together). Counts stay hidden until the first vote (no `0 / 0` shown).
+  Reused verbatim on the **article page** (centered below the body), not only the home watch page.
+- **reviews** (`sd-reviews`, `.reviews`/`.review`): **three real Malt recommendations, republished
+  in full with attribution** (Adrien Verschaere — Full-Stack Developer at Giraudy; Marc — CIO at
+  Giraudy; Nicolas — Cloud Architect at Dcube) — the honest successor of the deleted fake
+  testimonials, kept **deliberately discreet**: a single **collapsed toggle row** by default
+  (Malt's own pattern) — three overlapping 22px initial discs (data-driven `[style.background]`,
+  `-6px` stack), the one-line `reviews.teaser`, a bordered `via Malt` chip and a
+  `chevron-down`/`chevron-up` icon, `aria-expanded` on the full-width reset button. Expanding
+  reveals the mono subtitle (notes the non-FR locales are translations) with the
+  `reviews.linkLabel ↗` link to the public Malt profile (`target="_blank" rel="noopener"`), then
+  each `.review` (grid `40px 1fr`): 40px initial disc, name + mono `role` pill (`--surface-2`),
+  body 14.5px on phones / 13.5px from `md` (`pre-line` — keeps the authors' paragraph breaks).
+- **let's talk** (`sd-lets-talk`, `.lets-talk`): the honest CTA that **replaced the simulated
+  comments section** (fabricated testimonials from invented people don't survive real visitors). A
+  bordered `--surface` card: mono `discuss.heading` (terminal-flavored, e.g. `$ ./discutons.sh`),
+  one-line `discuss.body`, then an actions row — a primary `discuss.cta` button routing to
+  `/{lang}/contact` (mail icon) + the **LinkedIn and GitHub** links pulled from
+  `contact.altMethods` (single data source, opened `target="_blank" rel="noopener"`).
+- **up-next** aside (`sd-up-next`): header (up-next title · `<b>{read-next}</b>`) + the **first 5**
+  articles as `.vid-card` rows
+  (grid `168px 1fr`, gap 12px) linking to each article's detail. Thumb 16:9: background
+  `radial-gradient(circle at 30% 30%, {accent}40, transparent 60%), #0a0a0c` + `__thumb-grid` (16px
+  dotted overlay, shared `_cards.scss`) + 32px symbol + tag + a `__thumb-dur` read-time badge; then a
+  tag pill, a 2-line title, `{author} ✓`, and `{localized date} • {read time}`.
+
+---
+
+## 5. Articles
+
+A lazy list at `''` and a detail at `':slug'`, where **`:slug` = the article's slug** (kebab-case,
+ASCII, identical across locales, = the Markdown filename stem), bound as a required string input; the detail
+page resolves the matching article (falling back to the first).
+
+**23 articles, 7 filter pills** (2 semantic + 5 tag); source order = `date` descending (newest first).
+
+- **Filtering**: pill 0 = ALL (source order), pill 1 = RECENT (first 6), pills ≥2 = TAG, matched by
+  **pill position** (locale-independent) against the tag list at `index − 2`.
+- **Tag set** (a fixed, closed list): `['.NET', 'ANGULAR', 'AZURE', 'FLUTTER', 'DEVOPS']`.
+  Distribution `.NET`×8, `ANGULAR`×6, `AZURE`×3, `FLUTTER`×3, `DEVOPS`×3. Localized pill
+  labels (FR `Tout/Récent/.NET/Angular/Azure/Flutter/DevOps`) match by **position**,
+  not text.
+- **Card meta**: every article card shows `{localized date} • {read time}` — the date is the
+  entry's real ISO `date` rendered by `formatArticleDate` (`Intl.DateTimeFormat`, UTC-pinned, short
+  month, e.g. `7 juil. 2026` / `Jul 7, 2026`). No fabricated read counts or fuzzy "ago" strings.
+- **Per-tag accent color** (one tag per article): `.NET #b4451c` · `ANGULAR #a2261c` · `AZURE
+  #1c5fb4` · `FLUTTER #1c8fb4` · `DEVOPS #1c7e4a`. Each article also has a mono
+  **glyph symbol** and a **read time DERIVED from its body word count** (`gen-read-times.mjs`,
+  ~200 wpm, run in the SSG build — never hand-authored, so it can never be inflated the way the old
+  hand-set labels were), plus routing/SEO fields (slug, ISO date, description) and an
+  optional series slug + 1-based series order. Author identity is the fixed `{author} ✓` (the real name, `Stéphane De Todaro`) + photo
+  avatar everywhere; `super-dev` stays as the BRAND (domain, handle, ASCII box), never as the person.
+
+### 5.1 Article slug → tag → symbol table (source order, newest-first)
+
+| # | slug | tag | symbol | series · order |
+|---|---|---|---|---|
+| 0 | `sql-externalise-migrations-ef-core` | .NET | `≡` | — |
+| 1 | `orchestration-sans-base-graphql-dotnet` | .NET | `⋈` | — |
+| 2 | `universe-map-moteur-eclipses` | ANGULAR | `◐` | — |
+| 3 | `ngsharp-moteur-templates-interprete` | .NET | `{{ }}` | — |
+| 4 | `moteur-doom-software-webgpu` | ANGULAR | `▓` | — |
+| 5 | `etrangler-le-monolithe-dotnet` | .NET | `{ }` | dotnet-moderne · 1 |
+| 6 | `angular-zoneless-signals` | ANGULAR | `◆` | angular-21-en-pratique · 1 |
+| 7 | `angular-ssg-azure-static-web-apps` | AZURE | `↻` | azure-devops-de-zero · 1 |
+| 8 | `angular-resource-httpresource` | ANGULAR | `⟐` | angular-21-en-pratique · 2 |
+| 9 | `pipeline-cicd-github-actions-azure` | DEVOPS | `>_` | azure-devops-de-zero · 2 |
+| 10 | `azure-container-apps-dotnet` | AZURE | `⬢` | azure-devops-de-zero · 3 |
+| 11 | `flutter-firebase-offline-first` | FLUTTER | `■` | flutter-en-production · 1 |
+| 12 | `docker-multistage-dotnet-angular` | DEVOPS | `⬚` | azure-devops-de-zero · 5 |
+| 13 | `angular-defer-control-flow` | ANGULAR | `⧉` | angular-21-en-pratique · 3 |
+| 14 | `flutter-riverpod-architecture` | FLUTTER | `≋` | flutter-en-production · 2 |
+| 15 | `minimal-api-ef-core-dotnet8` | .NET | `ƒ()` | dotnet-moderne · 2 |
+| 16 | `angular-signalstore-ngrx` | ANGULAR | `◈` | angular-21-en-pratique · 4 |
+| 17 | `cqrs-vertical-slices-dotnet` | .NET | `⊕` | dotnet-moderne · 3 |
+| 18 | `opentelemetry-observabilite-dotnet` | DEVOPS | `◎` | azure-devops-de-zero · 6 |
+| 19 | `azure-key-vault-managed-identity` | AZURE | `⚿` | azure-devops-de-zero · 4 |
+| 20 | `dotnet-grpc-microservices` | .NET | `⇄` | dotnet-moderne · 4 |
+| 21 | `flutter-melos-monorepo` | FLUTTER | `⬡` | flutter-en-production · 3 |
+| 22 | `dotnet-source-generators` | .NET | `λ` | dotnet-moderne · 5 |
+
+(Series order is independent of source/date order: `azure-devops-de-zero`'s six parts are complete and contiguous (1→6) but scattered down the date-sorted table — its order-4 member `azure-key-vault-managed-identity` lands after its order-5 and order-6 members, so the orders don't read sequentially.)
+
+### 5.2 List & visual anatomy (`articles.component`)
+
+The list page (`sd-articles`, `tab-pane` host) titles itself `$ ls articles/` (the language-neutral
+terminal command, whole title in the accent span — the unified tab-head style) and holds a
+**language-stable** selected filter index
+(default ALL) and shows the articles filtered by it; the filter pills change the selection; each card
+links to that article's detail.
+
+Filter pills `.vfilter` (mono 11.5px, pill, `--surface`; `.is-on` = inverted `--text`/`--bg` fill)
+wrap with 6px gap, 24px bottom margin. **`.vgrid`** = `repeat(auto-fill, minmax(280px, 1fr))`,
+`gap:18px 14px`. Each `.vgrid-card` (a real `<a>` link — the whole card navigates, keyboard-focusable):
+16:9 `__thumb` (`--r-md`, radial accent gradient via per-card `--accent` + `color-mix 25%` over
+`#0a0a0c`, + 16px dotted `__thumb-grid`, **56px** `__thumb-sym`, tag, `__dur` read-time badge, a 54px
+accent `__play` overlay (decorative `aria-hidden` span) scaling in on hover); meta row (tag chip +
+decorative `__more`), 2-line `__title` (15px on phones / 14px from `md`), `__sub` (`{author} ✓`), `__stats` (`{localized date} • {read time}`).
+When the active filter **and** the channel-search query leave no match, the grid is replaced by a
+`.vgrid-empty` line (`articlesUi.noResults`, mono 13px `--text-dim`).
+
+### 5.3 Detail (`article-detail`, `tab-pane`, `max-width:880px`)
+
+The detail page (`sd-article-detail`, `tab-pane` host) resolves the current article from the route
+slug, derives its parsed-Markdown body, its position within its series and the series' member list,
+up to 3 same-tag suggested articles, and a scroll-progress value. In the browser it listens for scroll
+to feed the progress and, on each article change, smooth-scrolls the article just under the sticky nav.
+It also drives per-article SEO (title `{title} — super-dev.app`, the entry's human-written
+description word-boundary capped at 160 chars, the `article` type, and a structured-data graph:
+`BlogPosting` with the article's own ISO date + a localized `BreadcrumbList`
+Home › Articles › title); the structured-data is cleared when the page is left.
+
+- **3px sticky reading-progress bar** `.article-detail__progress` pinned to the viewport **`top:0`** on
+  every breakpoint (over the nav, matching the design); accent, width = the scroll position over the
+  scrollable height, capped at 100% (browser-only).
+- On each article change, the page **smooth-scrolls** `.article-detail` to just under the sticky nav —
+  measured from the live `.nav` height, which is `0` on phones (the nav is hidden), so it scrolls flush
+  to the top there (browser-only).
+- **Topbar** `.article-detail__topbar` (flex **wrap**, gap 8px — the actions wrap under the back
+  link on phones — `padding:8px 0 16px`): a Back link (to the articles
+  list) + `__actions` (a single **Share** button, label from content).
+- **Hero**: `__art` **280px** tall (accent bg + 32px dotted grid + **96px** centered symbol + tag);
+  `__hero-inner` `padding:28px 32px` → tag pill (bordered, accent) + `__title` **36px** weight 700
+  (`letter-spacing:-0.025em`) + byline (the 36px photo avatar, `{author} ✓` name, mono meta in order
+  **{localized date} • {read time} read**).
+- **Series ribbon** `.series-ribbon` (only when the article is in a series): 40px `__sym` tile +
+  `__label` (`Article n of N`) + `__title` link (accent, links to the series detail) + `__sub`; a
+  `__nav` row (dashed top) with prev/next article pills (drawn from the series order, hidden at
+  boundaries via empty placeholder spans that keep the flex layout).
+- **Body** `.article-detail__body` (`max-width:680px`, centered below `lg` — inside the reading grid at
+  `bp.from(lg)` it fills its column instead; see the on-this-page rail): the article's Markdown rendered
+  block by block — headings, paragraphs, and quotes render as inline runs, lists render as accent
+  `›`-prefixed items, fenced code renders as a code-block panel. Each `h2`/`h3` carries a single accent
+  `#` permalink anchor (`.article-detail__anchor`, `scroll-margin-top:80px`) that marks the heading and,
+  on click, smooth-scrolls to it and writes the URL hash for sharing. Type ladder: `h2` mono 14px accent
+  with a dashed underline; `p` **16px** `line-height:1.72`, first `p` **44px** accent mono drop-cap;
+  `ul li` 15px; blockquote `border-left:3px --accent`, italic, 15px. A `__signature` line
+  (`• {author} — super-dev{brand TLD}`, mono 12px, dashed top).
+- **On-this-page rail** `.article-detail__toc` + the `.article-detail__reading` grid: a single column on
+  phone/tablet (the rail is `display:none`); at `bp.from(lg)` the reading area becomes a
+  `minmax(0,1fr) 232px` grid (40px gap, `align-items:start`) — body on the left, the sticky rail
+  (`top:80px`) on the right. The rail is a `__toc-label` (mono 11px uppercase, the `onThisPage` string —
+  "Sur cette page" / "On this page") over a `__toc-list` (left border, 12.5px items, `h3` entries
+  indented). The entry whose heading sits in the top viewport band gets `--active` (accent text + accent
+  left border), driven by an `IntersectionObserver` scroll-spy (`rootMargin -80px 0 -80% 0`,
+  browser-only); clicking an entry smooth-scrolls to its heading (the same handler as the `#` permalinks).
+- **"More in {tag}"** `__related` (only when there are same-tag suggestions): up to 3 `.rel-card`s
+  (grid `64px 1fr`, the 64px `__sym` tile from `_symbol-box.scss`).
+- **SEO**: per-article title `{title} — super-dev.app`, the entry's human-written `description`
+  (word-boundary capped at 160 chars) as meta description, a structured-data graph — a
+  `BlogPosting` whose publish/modified dates come from the article's own ISO date plus a localized
+  `BreadcrumbList` (Home › Articles › title, labels from `content.tabs`) — and a per-article
+  `og:image` card at `/og/{slug}.{lang}.jpg` (1200×630 JPEG, generated by `make og` and committed:
+  brand mark, tag pill in the tag's accent color, title with a length-stepped font size, faded
+  symbol watermark, ISO date + `▶ {readTime}` badge); cleared when the page is left.
+- **Bodies are real Markdown**: stored as raw `.md` files (one per slug **per `Lang`**, `<slug>.<lang>.md`),
+  imported as text and indexed by slug via the generated `article-bodies.ts`. An in-house Markdown subset is parsed into typed blocks — headings,
+  paragraphs, quotes, and list items as inline runs (plain / bold / inline-code / link), and fenced
+  code as a language + text. The same index feeds the runtime render and the prerender guard.
+
+---
+
+## 6. Series
+
+A lazy list at `''` (titled `$ ls series/` — the language-neutral terminal command, whole title in
+the accent span, same unified tab-head style as every tab) and a detail at `':slug'` (resolved by
+matching the slug). **4 fixed series**,
+each with a slug, title, description, three layer colors, and a symbol. **The member count and total
+read time are derived, not stored.**
+
+### 6.1 Series table + colors (the 3-layer stacked-card gradient, `colors[0..2]`)
+
+| slug | symbol | colors `[0, 1, 2]` | members (by slug, ordered) | count |
+|---|---|---|---|---|
+| `dotnet-moderne` | `▣` | `#7e1c1c · #b4451c · #5b2d1c` | etrangler-le-monolithe-dotnet, minimal-api-ef-core-dotnet8, cqrs-vertical-slices-dotnet, dotnet-grpc-microservices, dotnet-source-generators | 5 |
+| `angular-21-en-pratique` | `◆` | `#a2261c · #7e1c1c · #5a1f1c` | angular-zoneless-signals, angular-resource-httpresource, angular-defer-control-flow, angular-signalstore-ngrx | 4 |
+| `azure-devops-de-zero` | `↻` | `#1c7e4a · #1c5fb4 · #1c4a6f` | angular-ssg-azure-static-web-apps, pipeline-cicd-github-actions-azure, azure-container-apps-dotnet, azure-key-vault-managed-identity, docker-multistage-dotnet-angular, opentelemetry-observabilite-dotnet | 6 |
+| `flutter-en-production` | `■` | `#1c5fb4 · #2d4a8c · #1c8fb4` | flutter-firebase-offline-first, flutter-riverpod-architecture, flutter-melos-monorepo | 3 |
+
+The four project stories (`universe-map-moteur-eclipses`, `ngsharp-moteur-templates-interprete`, `moteur-doom-software-webgpu`, `orchestration-sans-base-graphql-dotnet`) belong to no series, as does the standalone pattern piece `sql-externalise-migrations-ef-core`. Members are
+**derived** from each article's series slug + series order (grouping articles under their series and
+sorting each group by series order); the per-series member count and total read time build on that
+grouping. The count is the number of members; the total read time sums each member's leading
+read-time minutes → `"MM min"` if under 60, else `"Xh YY"` (zero-padded).
+
+### 6.2 List & detail visual (the 3D stacked-card)
+
+The list page (`sd-series`, `tab-pane` host) shows each series augmented with its derived count,
+total read time and a **real "updated" date** (the newest member article's date via
+`formatArticleDate`; hidden for an empty series), and links each card to the series detail. The detail page (`sd-series-detail`, `tab-pane` host) resolves the
+current series from the route slug, lists its member articles in order, derives the total read time,
+and runs the same browser-only auto-scroll-under-nav as the article detail.
+
+The card art is a 3D **stacked-card** motif: three layers (`l3`/`l2`/`l1`) tinted `colors[2]`/`[1]`/`[0]`,
+offset down-right, with a centered mono symbol tinted `colors[0]` and a `text-shadow` glow (the top
+`l1` layer holds the symbol over a radial gradient; `l3`/`l2` use the raw colors).
+
+- **List** (`series.component`, `.pgrid` = `repeat(auto-fill, minmax(360px, 1fr))`, gap 16px): each
+  `.pcard` grid `200px 1fr`; `__thumb` 16:11, stack layers (`l3` inset `-6px -14px 14px 6px`
+  opacity .35; `l2` inset `-3px -7px 7px 3px` opacity .55; `l1` inset 0), **38px** `__stack-sym`, a
+  `__badge` (count + icon); body = `__title` 15px, mono `__meta`, 3-line clamped `__desc`, a `__cta`
+  pill.
+- **Detail** (`series-detail`, `max-width:920px`): hero grid `240px 1fr` (16:11 stack with **64px**
+  `__sym`, overline, **32px** `__title`, desc, stats `{count} articles · {total read}`); a
+  `Commencer` CTA **only if non-empty** (links to the first member); list `__list` of `.series-row`
+  (grid `48px 64px 1fr 24px`): **1-based zero-padded** ordinal `__n` (`01`, `02`…) + article symbol
+  tile (own accent color, 64px from `_symbol-box.scss`) + tag pill + mono meta (tag · `{localized
+  date}` · readTime) + hover `→` `__arrow`. Empty series → dashed `__empty`, no CTA. **Mobile-first**: on the phone the
+  hero stacks to one column and the per-row symbol tile is hidden; the `240px 1fr` hero and the symbol
+  column both return at `md`.
+
+---
+
+## 7. Stack · About · Contact · Projects
+
+Stack, About and Contact are simple `tab-pane` tabs (`sd-*`) rendering a `<section class="tabview">`;
+Projects is a lazy list + detail sibling, surfaced as the **Réalisations** tab (and still reachable from the About "Projets" card).
+
+- **Stack** (`sd-stack`, `10 Tab — stack`, `$ cat stack.full`): a heading-only `tabview__head` (**no
+  `__count` block**), then mastery tiers (seeded EXPERT / CONFIRMÉ / FAMILIER) — each a tier color
+  (4px bar / name / years), a subtitle, a tech count + label, and a tech grid
+  `repeat(auto-fill, minmax(260px, 1fr))` of cards (name 14.5px on phones / 13.5px from `md`, colored years mono, a mono note 12.5px / 11.5px from `md`).
+  `.stack-tier__head` grid `4px 1fr auto`.
+- **About** (`sd-about`, `09 Tab — about`, `$ cat about.md`): `.about-grid` 2-col `minmax(0,1fr) /
+  320px`, gap 32px (**mobile-first: one column on the phone** — the aside stacks under the bio — the
+  2-col split returns at `md`). Bio paragraphs (`.about-bio__p` 16px on phones / 15px from `md`, `line-height:1.65`, max-width 65ch, **38px**
+  accent mono drop-cap on the first letter) + a `• {author} — super-dev{brand TLD}` signature (dashed
+  top). Aside `.about-side` (14px gap): an **INFOS** card (a definition list of details, each row grid
+  `110px 1fr`) + a **LIENS** card (links rendered as **real anchors** — `href()` maps `mail` →
+  `mailto:`, a known profile → its exact canonical `sameAs` URL from `site.ts` so the visible link
+  matches the JSON-LD identity anchor, everything else → `https://{label}`; `›` accent prefix,
+  `target=_blank rel=noopener`) + a **PROJETS** card (`projectsUi.title`, one `›` link per open-source
+  project to `/{lang}/projects/{slug}`, then a "Tous les projets" link to the list — the profile→works
+  internal links). Below the grid, an expanded `sd-reviews` (`.about-reviews`, `[startExpanded]=true` —
+  the shared Malt-recommendations block, with a dashed top separator echoing the bio signature) surfaces
+  the three testimonials as a credibility band.
+- **Contact** (`sd-contact`, `11 Tab — contact`, `$ ./contact.sh`): a heading-only `tabview__head`
+  (no `__count`), then `.contact-grid` 2-col `minmax(0,1fr) / 300px`, gap 28px (**mobile-first: one column on the phone**,
+  so the terminal-window form runs **full-width**; the 2-col split returns at `md`). Left: a
+  response-time banner (`.contact-avail`, green gradient — availability claims and the
+  pulsing OPEN dot were removed with the fabricated social proof; only the response-time block
+  remains) + a **terminal-window form**
+  (`.contact-form`, traffic-light dots, `$`-sigil labels: name / email / subject `<select>` / message
+  `<textarea rows=6>`, plus a hidden honeypot input and an **invisible Altcha widget**). Submit is
+  **client-side validated first** (`NgForm` (`ngSubmit`): required name/message + Angular `email`
+  validator; an invalid submit is blocked and surfaces inline `.contact-form__error` `role="alert"`
+  messages with `aria-invalid` on the field). A valid submit **POSTs to the real `/api/contact` .NET
+  endpoint** (`ContactApiService`, carrying the solved Altcha token): idle → sending (the submit button
+  shows a spinner) → sent, where the whole form is replaced by a centered **"Message envoyé !" success
+  panel** (circled ✓, a reassurance line, and an "Envoyer un autre message" link that resets it) — or
+  → error, which surfaces an `aria-live` `.contact-form__status` message and lets the visitor retry.
+  **The form stays dark in light theme on purpose** (its `:host-context` overrides re-apply dark:
+  `#131316`/`#0a0a0b`/`#f1f1ef`). Right `.contact-side`: an other-channels head + alt-method rows
+  (grid `36px 1fr`) — a glyph per channel kind (`mail '@'` · `linkedin 'in'` · `github 'gh'` · `cal
+  '▽'` · fallback `'•'`, with an exhaustiveness check) + label + subtitle + a `// {pgp}` hint. These
+  channel links are real (`mailto:` for the email, `https://` for the rest — `linkOf()`), and the form
+  submits to the **live `/api/contact` endpoint** (see §9).
+- **Projects** (`sd-projects`, `14 Tab — projects`, `projectsUi.title`): a `tabview` list of the
+  open-source projects that carry a `slug` (all four projectScenes), each a `.proj-card` (tag · role ·
+  name · description · stack chips · CTA) linking to
+  `sd-project-detail` (`15 Project detail`): back link, overline + tag, name, role, lead, metric, an
+  optional **case study** — a *Le problème* / *L'approche* narrative (`problem` / `approach`), then a
+  signature *In practice* slot: either a **code-block** sample (`ProjectMeta.codeSample`, the always-dark
+  panel, for the two .NET libraries) or an *Aperçu* screenshot (`ProjectMeta.image`, translated alt text
+  in `ProjectScene.imageAlt`) for the visual projects — **OPEN SPACE.EXE** (the level map) and
+  **universe-map** (the Milky Way) — in place of the code sample; and a *Points clés* highlights
+  list (`highlights`), each section rendered **only** when the project carries that field (all four projects
+  now carry a case study) — then stack,
+  and a **Ressources** row of real external links — **Code source** (GitHub), **NuGet**,
+  **Documentation** (GitHub Pages), **Voir en ligne** — plus **Lire l'article** (internal routerLink)
+  when the project has an on-site deep-dive. **OPEN SPACE.EXE** (the hidden engine) links to its
+  article + its engine source in the public portfolio repo, but **never to the playable `/bsp` route** —
+  the easter egg's *location* stays hidden even though the engine is now a listed work. The display
+  fields come from the translated `projectScenes` (joined by `slug`); the canonical URLs +
+  `programmingLanguage` come from the code-side `PROJECTS` map, which also feeds the
+  `SoftwareSourceCode` JSON-LD (§2.4). Pages are concise landings that **link to** the articles, never
+  duplicate them.
+
+---
+
+## 8. Shared: code-block, inline-runs, icon
+
+- **`sd-code-block`** (a code string + a language) = a **macOS-window panel**, **always-dark chrome
+  under both themes** via the dedicated `--code-*` tokens (never re-declared in light — §3.1): 3
+  traffic-light dots + an uppercase language label (`csharp→C#`, `typescript→TypeScript`, `yaml→YAML`,
+  `dart→Dart`, `bash→Bash`, `sql→SQL`) + a **copy** button (copies to the clipboard, label flips to `✓ copied`
+  for **1400ms**, both labels from content). Mobile-first body lines (`11.5px` / `line-height 1.7` base
+  → `12px` / `1.8` from `md`): each line is a **flex row** of a right-aligned line number (`__no`,
+  `min-width 22px` → `28px` from `md`, `position: sticky` so it stays pinned as the code scrolls) and a
+  `.code-block__code` span of syntax-highlighted tokens. That span is `white-space: pre`, so a long line
+  keeps its indentation and **scrolls horizontally inside the block** — a visible thin scrollbar advertises
+  it — never wrapping, never widening the page. Syntax colors are the `--code-kw` / `--code-str` /
+  `--code-comment` / `--code-name` / `--code-attr` tokens (§3.1).
+- **Code highlighting**: a shared, line-based, per-language highlighter (csharp / typescript / yaml /
+  dart / bash / sql, each with its own hand-curated keyword set — SQL line-comments are `--`, the others
+  `//`/`#`; an unknown language falls back to csharp)
+  classifies each fragment as a comment, string, number, keyword, decorator, or plain identifier — the
+  classes the token colors above are keyed to.
+- **`sd-inline-runs`** (a list of inline runs, `display:contents`): renders each run by kind — plain
+  text, bold (→ `<strong>`), inline-code (→ `.inline-runs__code`, `--surface-2` bg, mono 0.9em), or
+  link (→ `.inline-runs__link` accent underline; external `http(s)` links get
+  `target=_blank rel=noopener noreferrer`).
+- **Markdown content model** (the parser's output): an **inline run** is plain text, bold, inline
+  code, or a link (with an optional href). A **block** is one of: a paragraph, an `h2` or `h3`
+  heading, or a quote (each carrying inline runs); an unordered list (carrying a list of inline-run
+  items); or a fenced code block (carrying a language + text).
+- **`sd-icon`** = a fixed inline-SVG set of **30** names: play, pause, next, gear, pip,
+  full, full-exit, thumbs-up, thumbs-down, share, download, search, bell, mail, more, menu, sun, moon,
+  chevron-up, chevron-down, home, articles, series, about, layers, gamepad, exit, volume, volume-off, projects — `viewBox 0 0 24 24`, a size input (default **18**), 2px `currentColor`
+  strokes (play/pause/more are `fill`), no fallback for unknown names. The SVG bodies are a
+  **PROVIDED design asset** — seeded into the workspace verbatim and never authored (un-inventable
+  vector paths, exactly like the token palette); the component only does the name → `<svg>` lookup.
+
+---
+
+## 9. Known quirks & intentional brand art (reproduce deliberately)
+
+- **No convention debt remains.** Article filler was replaced by **real per-article Markdown**; the
+  i18n / vanity-number / filter-vocabulary / series-count / og-image loose ends were closed in the
+  2026-06-04 sweep. Remaining dynamic style bindings are data-driven, pointer-tracked (the game joystick), or the deliberate reveal fade-in.
+- **Intentional, not debt** (fixed brand art / data — reproduce as-is): the channel-header h1 role
+  word `tech lead`, the decorative ASCII status box + terminal readout, the `@super-dev` handle
+  row, the `contact@super-dev.app` contact address, and the player's `4K · HDR` badge (the player's two
+  aux buttons are both wired now — ⚙️ gear → speed menu, ⛶ pip → mini-player).
+- **Deliberately dark in light theme**: the player stage, the code-block chrome, and the contact form
+  (each re-applies the dark palette via `:host-context([data-theme='light'])`).
+- **The contact form submits to a real backend** (`POST /api/contact` — a .NET Azure Function → Resend,
+  behind a honeypot + invisible Altcha), and its channel links are real too: `mailto:` for the email,
+  `https://` for the alt channels (GitHub / LinkedIn / Calendly).
+
+---
+
+## 10. Pure helpers (capability note)
+
+A set of small, pure, fully-tested helpers backs the screens above; this section is a capability
+note, not an interface spec.
+
+- **Player / animation**: the reveal (opacity fade-in), the typewriter (left-to-right text slice at a
+  fixed rate), the sequential `typingSchedule`, the mobile-montage `focusedIndex` (active item from the
+  playhead), and the `MM:SS` time formatter described in §4.1.
+- **Articles**: the localized card date (`formatArticleDate`), the all/recent/tag filter selection, and
+  the capped article description, all described in §5.
+- **Series ↔ article mapping**: the derived series→members grouping and the per-series total read time
+  described in §6.
+- **Markdown**: an in-house Markdown subset is parsed into the typed blocks of §8 (blank lines
+  skipped; fenced code, then `h3`/`h2`, then quotes, then lists, then paragraphs, in that precedence;
+  inline parsing prefers inline-code, then bold, then links).
+- **Code highlighting**: the per-language line tokenizer of §8 plus the language display labels.
+- **SEO / site**: a fixed site origin/name, the default OG image, the per-article social-card URL
+  (`articleOgImage` → `/og/{slug}.{lang}.jpg`), the author identity + public profiles, and
+  per-language OG locales (`OG_LOCALE` over all `LANGS`), plus helpers to absolutize a path and to
+  swap a URL's leading language segment to any `Lang` (`pathInLang`), and the canonical `PROJECTS` map
+  (repo / NuGet / docs / live per open-source project + `PROJECT_SLUGS`, the SSG prerender + sitemap source).
+- **Infra constants**: the localStorage keys for language + theme and the `data-theme` attribute name.
+
+---
+
+## 11. Reactive state & content gateway (capability note)
+
+A small set of always-available reactive services backs the UI; this is a capability note, not an
+interface spec.
+
+- **Content gateway**: the single API seam, **mocked** today — it exposes a synchronous peek that
+  returns the bundled per-locale content (a `Record<Lang, Content>` map) and an async fetch that
+  resolves the same after a ~300ms delay. This is the one place to change for a real .NET API. It reads
+  its base URL from the build environment.
+- **Content store**: a signal store holding the current language + content + a loading flag, seeded
+  from the stored language preference (localStorage-only; any persisted `Lang` via `isLang`, else
+  `DEFAULT_LANG` (FR) — so prerender and tests default deterministically to FR). `setLang` swaps the
+  content **synchronously** via peek (so each route prerenders in its own language), then revalidates
+  asynchronously (**stale-while-revalidate**, last-write-wins so a stale fetch can't clobber a newer
+  language). The language is persisted and mirrored onto `<html lang>`.
+- **i18n facade**: a thin facade re-exposing the store's language / content / loading and forwarding
+  language changes; consumers never touch the store directly.
+- **Theme**: a theme state seeded from the stored preference (DARK only if explicitly stored, else
+  **default LIGHT**), written onto `<html data-theme>` and persisted, with a toggle and a setter.
+- **Player clock**: the simulated playhead described in §4.1 (time + playing state, derived current
+  chapter and elapsed, the 100ms tick, and toggle/play/pause/seek/next-chapter).
+- **SEO**: sets the title, Open Graph / Twitter / canonical / hreflang tags per route plus a
+  route-shaped structured-data graph (`BlogPosting` + `BreadcrumbList` on articles with the canonical
+  `Person` as author, `WebSite` + `Person` on the home, `WebSite` + `ProfilePage` + `Person` on about,
+  a `SoftwareSourceCode` (same `Person` author) + `BreadcrumbList` on a project detail and `WebSite` +
+  `CollectionPage` + `Person` on the projects list).
+  All writes are idempotent (add-or-replace) so
+  re-running per navigation leaves exactly one tag, and the prerenderer freezes the result. Hreflang
+  emits **one alternate per `Lang`** (the same path in each language, looped over `LANGS`) plus
+  `x-default` at the default-language path, and one `og:locale:alternate` per other language.
+  Structured-data is injected into a single script element via text
+  content (no XSS) and removed on demand.

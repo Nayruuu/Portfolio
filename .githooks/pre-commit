@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# Sorts the `using` directives of staged .cs files by increasing length
+# (staircase style), keeping the blank-line family blocks. Self-contained:
+# the sorter lives in this repo, no external vault dependency.
+#
+# One-time per clone: git config core.hooksPath .githooks
+
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT="$ROOT/.githooks/sort-usings.pl"
+
+if [ ! -f "$SCRIPT" ] || ! command -v perl >/dev/null 2>&1; then
+    exit 0
+fi
+
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cs')
+
+if [ -z "$files" ]; then
+    exit 0
+fi
+
+for f in $files; do
+    if [ -f "$f" ]; then
+        perl "$SCRIPT" < "$f" > "$f.tmp"
+        if ! cmp -s "$f" "$f.tmp"; then
+            mv "$f.tmp" "$f"
+            git add "$f"
+        else
+            rm "$f.tmp"
+        fi
+    fi
+done

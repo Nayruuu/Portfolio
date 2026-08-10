@@ -1,0 +1,118 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "super-dev-portfolio": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "sd",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/super-dev-portfolio",
+            "index": "src/index.html",
+            "browser": "src/main.ts",
+            "polyfills": [],
+            "tsConfig": "tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            "styles": ["src/styles.scss"],
+            "stylePreprocessorOptions": { "includePaths": ["src/styles"] },
+            "scripts": [],
+            "loader": {
+              ".md": "text"
+            },
+            "server": "src/main.server.ts",
+            "outputMode": "static",
+            "security": {
+              "allowedHosts": []
+            }
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "10kB",
+                  "maximumError": "16kB"
+                }
+              ],
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ]
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "super-dev-portfolio:build:production"
+            },
+            "development": {
+              "buildTarget": "super-dev-portfolio:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "tsconfig.spec.json",
+            "runner": "vitest",
+            "providersFile": "src/test-providers.ts",
+            "setupFiles": ["src/test-setup.ts"],
+            "include": ["src/**/*.spec.ts"],
+            "coverageReporters": ["text", "json-summary"],
+            "coverageExclude": [
+              "**/features/bsp-demo/bsp-demo.component.ts",
+              "**/features/bsp-demo/bsp-demo.component.html",
+              "**/core/lib/game/render/render-pool.ts",
+              "**/core/lib/game/render/render.worker.ts",
+              "**/core/lib/game/render/atlas.worker.ts",
+              "**/core/lib/game/render/gpu-renderer.ts",
+              "**/core/lib/game/render/render-host.ts",
+              "**/core/lib/game/render/load-textures.ts",
+              "**/core/lib/game/painters/hud-painter.ts",
+              "**/core/lib/game/painters/weapon-painter.ts",
+              "**/core/lib/game/painters/overlay-painter.ts",
+              "**/core/lib/game/painters/world-fx-painter.ts",
+              "**/core/lib/game/presentation/doom-hud.ts",
+              "**/core/lib/game/presentation/weapon-view.ts",
+              "**/core/lib/game/presentation/loaded-image.ts"
+            ],
+            "coverageThresholds": {
+              "statements": 85,
+              "branches": 78,
+              "functions": 67,
+              "lines": 88
+            }
+          }
+        }
+      }
+    }
+  }
+}

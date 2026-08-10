@@ -1,0 +1,19 @@
+@let label = labels();
+<div class="ctabs">
+  <a
+    class="ctab"
+    [routerLink]="links().articles"
+    routerLinkActive
+    #articlesActive="routerLinkActive"
+    [attr.aria-current]="articlesActive.isActive ? 'page' : null"
+    >{{ label.articles }}</a
+  >
+  <a
+    class="ctab"
+    [routerLink]="links().series"
+    routerLinkActive
+    #seriesActive="routerLinkActive"
+    [attr.aria-current]="seriesActive.isActive ? 'page' : null"
+    >{{ label.series }}</a
+  >
+</div>

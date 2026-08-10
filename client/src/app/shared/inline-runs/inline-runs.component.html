@@ -1,0 +1,22 @@
+@for (run of runs(); track $index) {
+  @switch (run.kind) {
+    @case ('bold') {
+      <strong>{{ run.text }}</strong>
+    }
+    @case ('code') {
+      <code class="inline-runs__code">{{ run.text }}</code>
+    }
+    @case ('link') {
+      <a
+        class="inline-runs__link"
+        [href]="run.href"
+        [attr.target]="isExternal(run.href) ? '_blank' : null"
+        [attr.rel]="isExternal(run.href) ? 'noopener noreferrer' : null"
+        >{{ run.text }}</a
+      >
+    }
+    @default {
+      {{ run.text }}
+    }
+  }
+}

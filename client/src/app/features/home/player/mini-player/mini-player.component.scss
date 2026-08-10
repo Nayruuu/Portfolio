@@ -1,0 +1,76 @@
+.mini-player {
+	position: fixed;
+	right: 16px;
+	bottom: 16px;
+	z-index: 100;
+	width: min(480px, 92vw);
+	background: #000;
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	overflow: hidden;
+	box-shadow: var(--sh-2);
+}
+
+.mini-player__frame {
+	position: relative;
+	aspect-ratio: 16 / 9;
+	container-type: size;
+	background: #000;
+}
+
+// Seekable playback bar pinned to the bottom of the frame: a 10px hit area with a 3px track at the
+// very bottom (the gradient) and the accent fill over it.
+.mini-player__progress {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 10px;
+	z-index: 1;
+	cursor: pointer;
+	background: linear-gradient(to top, rgb(255 255 255 / 22%) 3px, transparent 3px);
+}
+
+.mini-player__progress-fill {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	height: 3px;
+	background: var(--accent);
+	pointer-events: none;
+}
+
+.mini-player__bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	background: var(--surface);
+}
+
+.mini-player__btn {
+	display: grid;
+	place-items: center;
+	padding: 4px;
+	background: transparent;
+	border: 0;
+	border-radius: 4px;
+	color: var(--text-dim);
+	cursor: pointer;
+
+	&:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+}
+
+.mini-player__title {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--f-mono);
+	font-size: 11px;
+	color: var(--text-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}

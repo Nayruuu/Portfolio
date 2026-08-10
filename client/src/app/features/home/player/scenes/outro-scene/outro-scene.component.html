@@ -1,0 +1,36 @@
+<div class="scene scene--fit" [class.scene--on]="active()">
+  <div class="scene-outro-rich">
+    <div class="scene-outro-rich__hash">{{ hashTyped() }}<span class="cursor">_</span></div>
+    <div class="scene-outro-rich__sub">
+      <sd-typed
+        [elapsed]="elapsed()"
+        [at]="schedule().subtitleAt"
+        [text]="data().subtitle"
+        [cps]="cps"
+      />
+    </div>
+    <div class="scene-outro-rich__cta">
+      <sd-typed [elapsed]="elapsed()" [at]="schedule().ctaAt" [text]="data().cta" [cps]="cps" />
+    </div>
+    <div class="scene-outro-rich__links">
+      @for (link of data().links; track link.label; let index = $index) {
+        <a
+          class="scene-outro__link"
+          href="#contact"
+          (click)="$event.preventDefault()"
+          [style]="reveal(elapsed(), schedule().linkAts[index], 0.3)"
+        >
+          <span>▸</span>&ngsp;<sd-typed
+            [elapsed]="elapsed()"
+            [at]="schedule().linkAts[index]"
+            [text]="link.label"
+            [cps]="cps"
+          />
+        </a>
+      }
+    </div>
+    <div class="scene-outro-rich__sign">
+      <sd-typed [elapsed]="elapsed()" [at]="schedule().signAt" [text]="data().sign" [cps]="cps" />
+    </div>
+  </div>
+</div>

@@ -1,0 +1,26 @@
+.article-detail__topbar {
+	display: flex;
+	align-items: center;
+	// The FR back label + the two actions exceed a 360px phone's track — let the
+	// actions wrap under the back link instead of widening the page.
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 8px 0 16px;
+
+	&-arrow {
+		margin-right: 4px;
+	}
+
+	&-actions {
+		margin-left: auto;
+		display: flex;
+		gap: 8px;
+	}
+}
+
+.video-meta__author-av {
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	background: var(--surface) url('/avatar.jpg') center / cover;
+}

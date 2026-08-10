@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>404 — super-dev.app</title>
+    <script>
+      // Same pre-paint anti-flash as index.html: stored theme, defaults light.
+      try {
+        var theme = localStorage.getItem('super-dev-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (error) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    </script>
+    <style>
+      :root {
+        --bg: #0a0a0b;
+        --text: #f1f1ef;
+        --text-dim: #a4a4a8;
+        --text-faint: #85858c;
+        --border: #2a2a30;
+        --accent: oklch(66% 0.22 22deg);
+      }
+
+      [data-theme='light'] {
+        --bg: #faf9f6;
+        --text: #1a1a1a;
+        --text-dim: #555;
+        --text-faint: #6b6b6b;
+        --border: #d4d0c7;
+        --accent: oklch(56% 0.21 22deg);
+      }
+
+      * {
+        margin: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+        text-align: center;
+        padding: 24px;
+      }
+
+      h1 {
+        font-size: 72px;
+        letter-spacing: -0.04em;
+        color: var(--accent);
+      }
+
+      p {
+        margin-top: 8px;
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+
+      .path {
+        margin-top: 16px;
+        font-size: 12px;
+        color: var(--text-faint);
+      }
+
+      nav {
+        margin-top: 28px;
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      a {
+        color: var(--text);
+        text-decoration: none;
+        font-size: 13px;
+        padding: 8px 14px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+      }
+
+      a:hover,
+      a:focus-visible {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>404</h1>
+      <p>Page introuvable · Page not found</p>
+      <div class="path">$ cd /fr <span aria-hidden="true">⏎</span></div>
+      <nav aria-label="Languages">
+        <a href="/fr">Français</a>
+        <a href="/en">English</a>
+        <a href="/es">Español</a>
+        <a href="/de">Deutsch</a>
+      </nav>
+    </main>
+  </body>
+</html>

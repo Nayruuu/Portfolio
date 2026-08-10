@@ -1,0 +1,109 @@
+:host {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.prefs__icon-btn {
+	width: 36px;
+	height: 36px;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	background: transparent;
+	border: 1px solid transparent;
+	color: var(--text-dim);
+	cursor: pointer;
+	transition:
+		background 0.15s,
+		color 0.15s,
+		border-color 0.15s;
+
+	&:hover {
+		background: var(--surface);
+		color: var(--text);
+		border-color: var(--border);
+	}
+}
+
+// Language picker — a compact dropdown (current lang + chevron) opening a menu.
+.prefs__lang {
+	position: relative;
+	display: flex;
+	align-items: center;
+	font-family: var(--f-mono);
+	font-size: 11px;
+}
+
+.prefs__lang-toggle {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: 5px 10px;
+	color: var(--text-dim);
+	cursor: pointer;
+	font: inherit;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+
+	&:hover {
+		color: var(--text);
+		border-color: var(--accent-deep);
+	}
+}
+
+.prefs__lang-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 60;
+	display: flex;
+	flex-direction: column;
+	min-width: 100%;
+	padding: 4px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	box-shadow: var(--sh-2);
+}
+
+.prefs__lang-item {
+	background: transparent;
+	border: 0;
+	color: var(--text-dim);
+	padding: 6px 12px;
+	border-radius: var(--r-sm);
+	cursor: pointer;
+	font: inherit;
+	text-align: left;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+
+	&:hover {
+		background: var(--surface-2);
+		color: var(--text);
+	}
+}
+
+.prefs__lang-item.is-active {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+/* In the mobile `.prefs-dock` (fixed at the bottom of the screen) the picker opens UPWARD: anchor the
+   menu by its bottom and clear the default `top`. As a `:host-context` rule this out-specifies the base
+   `.prefs__lang-menu { top: … }` above (a plain `.prefs-dock .prefs__lang-menu` global override only
+   ties it, then loses on source order — leaving both `top` and `bottom` set and collapsing the menu). */
+:host-context(.prefs-dock) .prefs__lang-menu {
+	top: auto;
+	bottom: calc(100% + 6px);
+}
+
+/* Light theme (co-located). */
+:host-context([data-theme='light']) .prefs__icon-btn:hover {
+	background: var(--surface-2);
+	border-color: transparent;
+}

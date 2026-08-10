@@ -1,0 +1,26 @@
+<div class="player-stage__bg"></div>
+<div class="player-stage__grid"></div>
+
+@let currentChapter = player.currentChapter();
+@let elapsed = player.chapterElapsed();
+
+<sd-scene-intro
+  [active]="currentChapter.id === 'intro'"
+  [elapsed]="currentChapter.id === 'intro' ? elapsed : 0"
+/>
+<sd-scene-stack
+  [active]="currentChapter.id === 'stack'"
+  [elapsed]="currentChapter.id === 'stack' ? elapsed : 0"
+/>
+<sd-scene-projects
+  [active]="currentChapter.id === 'projects'"
+  [elapsed]="currentChapter.id === 'projects' ? elapsed : 0"
+/>
+<sd-scene-timeline
+  [active]="currentChapter.id === 'timeline'"
+  [elapsed]="currentChapter.id === 'timeline' ? elapsed : 0"
+/>
+<sd-scene-outro
+  [active]="currentChapter.id === 'outro'"
+  [elapsed]="currentChapter.id === 'outro' ? elapsed : 0"
+/>

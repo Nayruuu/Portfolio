@@ -1,0 +1,40 @@
+@let reviews = i18n.content().reviews;
+<section class="reviews" data-screen-label="04 Reviews">
+  <button
+    class="reviews__toggle"
+    [attr.aria-expanded]="expanded()"
+    (click)="expanded.update((isExpanded) => !isExpanded)"
+  >
+    <span class="reviews__stack" aria-hidden="true">
+      @for (review of reviews.items; track review.who) {
+        <span class="reviews__mini" [style.background]="review.color">{{ initialOf(review) }}</span>
+      }
+    </span>
+    <span class="reviews__teaser">{{ reviews.teaser }}</span>
+    <span class="reviews__source-chip">{{ reviews.source }}</span>
+    <sd-icon [name]="expanded() ? 'chevron-up' : 'chevron-down'" [size]="16" />
+  </button>
+
+  @if (expanded()) {
+    <p class="reviews__subtitle">
+      {{ reviews.subtitle }} —
+      <a class="reviews__link" [href]="reviews.url" target="_blank" rel="noopener"
+        >{{ reviews.linkLabel }} ↗</a
+      >
+    </p>
+    @for (review of reviews.items; track review.who) {
+      <article class="review">
+        <div class="review__avatar" aria-hidden="true" [style.background]="review.color">
+          {{ initialOf(review) }}
+        </div>
+        <div>
+          <div class="review__head">
+            <span class="review__who">{{ review.who }}</span>
+            <span class="review__role">{{ review.role }}</span>
+          </div>
+          <p class="review__body">{{ review.body }}</p>
+        </div>
+      </article>
+    }
+  }
+</section>

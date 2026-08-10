@@ -1,0 +1,15 @@
+@let content = i18n.content();
+<section class="lets-talk" data-screen-label="05 Let's talk">
+  <h2 class="lets-talk__heading">{{ content.discuss.heading }}</h2>
+  <p class="lets-talk__body">{{ content.discuss.body }}</p>
+  <div class="lets-talk__actions">
+    <a class="btn btn--primary" [routerLink]="['/', i18n.lang(), 'contact']">
+      <sd-icon name="mail" [size]="14" /> {{ content.discuss.cta }}
+    </a>
+    @for (profile of profiles(); track profile.kind) {
+      <a class="btn" [href]="linkOf(profile)" target="_blank" rel="noopener">
+        {{ profile.label }}
+      </a>
+    }
+  </div>
+</section>

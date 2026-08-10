@@ -1,0 +1,287 @@
+.bsp-demo {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1rem;
+	padding: 2rem;
+
+	&__viewport {
+		position: relative;
+		width: min(92vw, 960px);
+		line-height: 0;
+	}
+
+	&__canvas {
+		width: 100%;
+		height: auto;
+
+		// The framebuffer is rendered below the display size (see `config` in the component); keep the upscale
+		// crisp/pixelated rather than blurred — the authentic software-renderer look.
+		image-rendering: pixelated;
+
+		// The canvas halves ARE the twin-stick move/look zones — suppress the browser's own scroll/zoom
+		// gestures so a thumb drag drives the game (paired with preventDefault in the touch handlers).
+		touch-action: none;
+	}
+
+	&__hud {
+		position: absolute;
+		inset: auto 0 0;
+		height: 22%;
+		width: auto;
+		max-width: 100%;
+		margin-inline: auto;
+		aspect-ratio: 2117 / 404;
+		pointer-events: none;
+	}
+
+	// Vignette over the game view — cheap oppressive/claustrophobic mood; centre stays clear so gameplay
+	// reads. No z-index: DOM order paints it above the canvas but below the HUD/buttons.
+	&__vignette {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(ellipse at center, transparent 50%, rgb(0 0 0 / 55%) 100%);
+	}
+
+	// Top-right cluster (mirrors `sd-game`): exit (the door, most reachable) then fullscreen. The fullscreen
+	// button only renders when the player passes `fullscreenAvailable` — never on the standalone `/bsp` route.
+	&__exit,
+	&__fullscreen {
+		position: absolute;
+		top: 10px;
+		z-index: 2;
+		width: 36px;
+		height: 36px;
+		border-radius: 999px;
+		display: grid;
+		place-items: center;
+		background: rgb(0 0 0 / 45%);
+		border: 1px solid var(--border);
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	&__exit {
+		right: 10px;
+	}
+
+	&__fullscreen {
+		right: 54px;
+	}
+
+	&__fps {
+		position: absolute;
+		top: 0.5rem;
+		left: 0.5rem;
+		padding: 0.15rem 0.45rem;
+		border-radius: 0.25rem;
+		background: rgb(0 0 0 / 55%);
+		color: rgb(120 255 140);
+		font-family: monospace;
+		font-size: 0.9rem;
+		line-height: 1.4;
+	}
+
+	&__hint {
+		font-family: monospace;
+		opacity: 0.7;
+	}
+
+	// Keyboard-controls recap (top-left, semi-transparent) — mirrors the old `sd-game`'s `.game__controls`.
+	// Hidden by default (the /bsp route shows the dev FPS/hint instead); revealed in the player below.
+	&__controls {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 2;
+		display: none;
+		flex-direction: column;
+		gap: 1px;
+		padding: 5px 8px;
+		border-radius: 6px;
+		background: rgb(0 0 0 / 38%);
+		border: 1px solid var(--border);
+		color: var(--text);
+		font: 500 11px/1.5 var(--f-mono);
+		opacity: 0.62;
+		pointer-events: none;
+	}
+
+	&__control {
+		white-space: nowrap;
+	}
+
+	// ── Twin-stick touch overlay (mobile only) — hidden until the `pointer: coarse` reveal at the bottom.
+	// The move/look zones are the canvas halves; these are the only DOM overlays. The joystick is decorative
+	// (`pointer-events: none`) so it never swallows the drag under it.
+	&__joystick {
+		position: absolute;
+		z-index: 3;
+		display: none;
+		width: 120px;
+		height: 120px;
+		margin: -60px 0 0 -60px;
+		border-radius: 999px;
+		background: rgb(0 0 0 / 22%);
+		border: 1px solid var(--border);
+		pointer-events: none;
+	}
+
+	&__thumb {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 54px;
+		height: 54px;
+		margin: -27px 0 0 -27px;
+		border-radius: 999px;
+		background: rgb(0 0 0 / 45%);
+		border: 1px solid var(--border);
+	}
+
+	&__fire {
+		position: absolute;
+		right: 24px;
+		bottom: 24px;
+		z-index: 3;
+		display: none;
+		place-items: center;
+		width: 84px;
+		height: 84px;
+		border-radius: 999px;
+		background: rgb(0 0 0 / 40%);
+		border: 1px solid var(--border);
+		cursor: pointer;
+		touch-action: none;
+	}
+
+	// The fire target's inner mark — a solid disc reads as "shoot" without leaning on an icon.
+	&__fire::after {
+		content: '';
+		width: 26px;
+		height: 26px;
+		border-radius: 999px;
+		background: var(--text);
+		opacity: 0.85;
+	}
+
+	&__weapon {
+		position: absolute;
+		right: 24px; // stacked ABOVE the fire button (same right column) so it clears the centred status bar
+		bottom: 122px; // fire is bottom:24 + 84 tall → this sits ~14px above it
+		z-index: 3;
+		display: none;
+		place-items: center;
+		width: 58px;
+		height: 58px;
+		border-radius: 999px;
+		background: rgb(0 0 0 / 40%);
+		border: 1px solid var(--border);
+		color: var(--text);
+		cursor: pointer;
+		touch-action: none;
+	}
+
+	// Portrait block over the game (mobile) — an opaque cover so the controls underneath don't peek, and its
+	// own surface swallows touches until the phone is turned. Shown only under coarse + portrait (bottom).
+	&__rotate {
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		display: none;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 18px;
+		padding: 24px;
+		background: var(--bg);
+		color: var(--text);
+		text-align: center;
+	}
+
+	&__rotate-icon {
+		// brand accent — a focal pop on the near-black cover; size comes from sd-icon's [size]
+		color: var(--accent);
+		line-height: 1;
+	}
+
+	&__rotate-text {
+		max-width: 16em;
+		margin: 0;
+		font-family: var(--f-mono);
+		font-size: 15px;
+		line-height: 1.4; // `.bsp-demo` sets `line-height: 0` to kill inline gaps; text must restore it (like `&__hint`)
+		letter-spacing: 0.02em;
+	}
+}
+
+// Mounted inside the player (replacing the old `sd-game`): the host fills the player box and the inner
+// layout drops its standalone centering/padding so the BSP canvas covers the whole player area — exactly
+// as `sd-game` did. The standalone `/bsp` route keeps the centered debug layout above.
+:host-context(.player) {
+	position: absolute;
+	inset: 0;
+	display: block;
+}
+
+:host-context(.player) .bsp-demo {
+	position: absolute;
+	inset: 0;
+	gap: 0;
+	padding: 0;
+	background: var(--bg);
+}
+
+:host-context(.player) .bsp-demo__viewport {
+	position: absolute;
+	inset: 0;
+	width: auto;
+}
+
+:host-context(.player) .bsp-demo__canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
+// The dev readouts (FPS + keyboard hint) are debug-only chrome for the standalone /bsp route — hide them
+// when the game is mounted inside the player, and show the clean controls recap instead.
+:host-context(.player) .bsp-demo__fps,
+:host-context(.player) .bsp-demo__hint {
+	display: none;
+}
+
+:host-context(.player) .bsp-demo__controls {
+	display: flex;
+}
+
+// Touch devices only: reveal the twin-stick overlay and drop the keyboard/mouse chrome (the hint on the
+// standalone route, the keyboard recap inside the player) — those instructions are meaningless on a phone.
+// Placed last so the player-scoped `.bsp-demo__controls` hide wins at equal specificity.
+@media (pointer: coarse) {
+	.bsp-demo__joystick {
+		display: block;
+	}
+
+	.bsp-demo__fire,
+	.bsp-demo__weapon {
+		display: grid;
+	}
+
+	.bsp-demo__hint {
+		display: none;
+	}
+
+	:host-context(.player) .bsp-demo__controls {
+		display: none;
+	}
+}
+
+// A twin-stick FPS needs landscape: in portrait the "rotate your phone" cover replaces the game (no CSS
+// rotation of the overlay, which would misalign the touch coordinates — the player owns that decision too).
+@media (pointer: coarse) and (orientation: portrait) {
+	.bsp-demo__rotate {
+		display: flex;
+	}
+}

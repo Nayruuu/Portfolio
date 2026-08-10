@@ -1,0 +1,114 @@
+@use 'breakpoints' as bp;
+
+// Mobile-first: the section nav is a FIXED BOTTOM BAR on phones (icon over label);
+// restored to the desktop top text-row at `md` (byte-identical to the committed baseline —
+// every base property that differs on desktop is reset in the `bp.from(md)` block; values
+// shared with desktop — colour, mono font, uppercase — are intentionally left in the base).
+// Below the nav scrim (z 55) so an open nav drawer dims the bar too.
+.tabs {
+	position: fixed;
+	inset-inline: 0;
+	bottom: 0;
+	z-index: 40;
+	display: flex;
+	justify-content: space-around;
+	padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+	background: rgb(10 10 11 / 92%);
+	backdrop-filter: blur(12px);
+	border-top: 1px solid var(--border-soft);
+}
+
+.tab {
+	flex: 1 1 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+	min-width: 0;
+	padding: 4px 2px;
+	font-family: var(--f-mono);
+	font-size: 9px;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+	text-decoration: none;
+	line-height: 1.1;
+	transition: color 0.15s;
+}
+
+.tab__label {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tab[aria-selected='true'] {
+	color: var(--accent);
+}
+
+/* UI elements rendered as <a> via routerLink — neutralize the link style. */
+.btn,
+.rel-card,
+.series-row,
+.series-ribbon__btn,
+.series-ribbon__title,
+.vgrid-card,
+.pcard,
+.vid-card {
+	text-decoration: none;
+}
+
+@include bp.from(md) {
+	.tabs {
+		position: static;
+		z-index: auto;
+		inset-inline: auto;
+		max-width: var(--page-w);
+		margin: 0 auto;
+		justify-content: flex-start;
+		gap: 4px;
+		padding: 4px var(--pad) 0;
+		background: none;
+		backdrop-filter: none;
+		border-top: 0;
+		border-bottom: 1px solid var(--border-soft);
+		overflow-x: auto;
+		scrollbar-width: none;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
+	}
+
+	.tab {
+		display: block;
+		flex: 0 0 auto;
+		gap: 0;
+		padding: 12px 16px;
+		font-size: 12px;
+		letter-spacing: 0.06em;
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		line-height: normal;
+	}
+
+	// Qualified with `.tab` so this (0,2,0) hide beats the icon component's own
+	// `:host { display: inline-flex }` (0,1,0) — a bare `.tab__icon` ties and loses
+	// to the later-injected component style, leaking the icon onto desktop.
+	.tab .tab__icon {
+		display: none;
+	}
+
+	.tab:hover {
+		color: var(--text-dim);
+	}
+
+	.tab[aria-selected='true'] {
+		color: var(--text);
+		border-bottom-color: var(--accent);
+	}
+}

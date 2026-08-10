@@ -1,0 +1,132 @@
+@use 'breakpoints' as bp;
+
+.code-block {
+	background: var(--code-bg);
+	border: 1px solid var(--code-border);
+	border-radius: var(--r-md);
+	margin: 22px 0;
+	overflow: hidden;
+	color: var(--code-text);
+	font-family: var(--f-mono);
+}
+
+.code-block__head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 12px;
+	background: var(--code-head);
+	border-bottom: 1px solid var(--code-border);
+	font-size: 11px;
+	color: var(--code-dim);
+}
+
+.code-block__lang {
+	margin-left: 8px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	font-size: 10px;
+}
+
+.code-block__copy {
+	margin-left: auto;
+	background: transparent;
+	border: 1px solid var(--code-border);
+	color: var(--code-dim);
+	font-family: var(--f-mono);
+	font-size: 10.5px;
+	padding: 3px 8px;
+	border-radius: var(--r-sm);
+	cursor: pointer;
+	transition: all 0.15s;
+}
+
+.code-block__copy:hover {
+	color: var(--code-text);
+	border-color: var(--code-mute);
+}
+
+.code-block__body {
+	padding: 14px;
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 1.7;
+	color: var(--code-dim);
+	// A long line keeps its indentation and scrolls horizontally INSIDE the block — it never wraps (which
+	// mangles code + misaligns the gutter) nor widens the page. A visible thin scrollbar advertises the scroll.
+	max-width: 100%;
+	overflow-x: auto;
+	background: var(--code-bg);
+	scrollbar-width: thin;
+	scrollbar-color: var(--code-mute) transparent;
+}
+
+.code-block__body::-webkit-scrollbar {
+	height: 8px;
+}
+
+.code-block__body::-webkit-scrollbar-thumb {
+	border-radius: var(--r-sm);
+	background: var(--code-mute);
+}
+
+.code-block__line {
+	display: flex;
+	// size to the widest content so short lines still fill the width and the body scrolls to the longest
+	width: max-content;
+	min-width: 100%;
+}
+
+.code-block__no {
+	// sticky so the line number stays pinned while the code scrolls under it (its bg hides the passing code)
+	position: sticky;
+	left: 0;
+	flex: none;
+	min-width: 22px;
+	padding-right: 12px;
+	background: var(--code-bg);
+	color: var(--code-mute);
+	text-align: right;
+	user-select: none;
+}
+
+.code-block__code {
+	white-space: pre;
+}
+
+.code-block .k {
+	color: var(--code-kw);
+}
+
+.code-block .s {
+	color: var(--code-str);
+}
+
+.code-block .c {
+	color: var(--code-comment);
+}
+
+.code-block .n {
+	color: var(--code-name);
+}
+
+.code-block .a {
+	color: var(--code-attr);
+}
+
+@include bp.from(md) {
+	.code-block {
+		margin: 30px 0;
+	}
+
+	.code-block__body {
+		padding: 20px;
+		font-size: 12px;
+		line-height: 1.8;
+	}
+
+	.code-block__no {
+		min-width: 28px;
+		padding-right: 14px;
+	}
+}

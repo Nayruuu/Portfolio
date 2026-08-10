@@ -1,0 +1,38 @@
+@let content = i18n.content();
+<section class="tabview" data-screen-label="14 Tab — projects">
+  <div class="tabview__head">
+    <div>
+      <h2 class="tabview__title">
+        <span>{{ content.projectsUi.title }}</span>
+      </h2>
+      <p class="tabview__sub">
+        {{ content.projectsUi.subtitle }}
+      </p>
+    </div>
+    <div class="tabview__count">
+      <span class="tabview__count-v">{{ projects().length }}</span>
+      <span class="tabview__count-lbl">{{ content.projectsUi.countLabel }}</span>
+    </div>
+  </div>
+
+  <div class="proj-list">
+    @for (project of projects(); track project.slug) {
+      <a class="proj-card" [routerLink]="['/', i18n.lang(), 'projects', project.slug]">
+        <div class="proj-card__head">
+          <span class="proj-card__tag">{{ project.tag }}</span>
+          <span class="proj-card__role">{{ project.role }}</span>
+        </div>
+        <h3 class="proj-card__name">{{ project.name }}</h3>
+        <p class="proj-card__desc">{{ project.description }}</p>
+        <ul class="proj-card__stack">
+          @for (tech of project.stack; track tech) {
+            <li class="proj-card__chip">{{ tech }}</li>
+          }
+        </ul>
+        <span class="proj-card__cta"
+          >{{ content.projectsUi.open }} <span aria-hidden="true">→</span></span
+        >
+      </a>
+    }
+  </div>
+</section>

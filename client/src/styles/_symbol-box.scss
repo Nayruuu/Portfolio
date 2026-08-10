@@ -1,0 +1,14 @@
+// 64px monospace "symbol" tile — rendered identically by the series-row stack (series detail)
+// and the rel-card stack (article detail).
+.series-row__sym,
+.rel-card__sym {
+	width: 64px;
+	height: 64px;
+	display: grid;
+	place-items: center;
+	border-radius: 6px;
+	font-family: var(--f-mono);
+	font-size: 28px;
+	font-weight: 700;
+	border: 1px solid var(--border-soft);
+}

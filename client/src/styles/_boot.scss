@@ -1,0 +1,25 @@
+/* boot screen (pre-React) */
+.boot {
+	min-height: 100vh;
+	display: grid;
+	place-items: center;
+	color: var(--accent);
+	font-family: var(--f-mono);
+
+	&__pre {
+		margin: 0;
+		font-size: 13px;
+	}
+
+	&__caret {
+		display: inline-block;
+		width: 8px;
+		animation: blink 1s steps(1) infinite;
+	}
+}
+
+@keyframes blink {
+	50% {
+		opacity: 0;
+	}
+}

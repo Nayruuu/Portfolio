@@ -1,0 +1,21 @@
+// Breakpoints — SCSS variables (NOT CSS custom properties: var() is invalid in
+// a @media condition). Documented exception to design.md's "CSS-tokens-only" rule.
+// Tiers: sm = large phones/small tablets · md = tablet (sidebars & 2-col grids
+// return) · lg = desktop (main 2-col grid: content + 380px sidebar).
+@use 'sass:map';
+
+$breakpoints: (
+	sm: 600px,
+	md: 900px,
+	lg: 1100px,
+);
+
+@mixin from($bp) {
+	@if not map.has-key($breakpoints, $bp) {
+		@error "Unknown breakpoint: #{$bp}";
+	}
+
+	@media (min-width: map.get($breakpoints, $bp)) {
+		@content;
+	}
+}

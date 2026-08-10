@@ -1,0 +1,81 @@
+@if (palette.open()) {
+  @let content = i18n.content();
+  @let pal = content.palette;
+  <div class="cmdk" (click)="close()">
+    <div
+      #dialog
+      class="cmdk__panel"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="pal.title"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="cmdk__search">
+        <span class="cmdk__search-icon"><sd-icon name="search" [size]="18" /></span>
+        <input
+          #searchInput
+          class="cmdk__input"
+          type="text"
+          role="combobox"
+          autocomplete="off"
+          spellcheck="false"
+          aria-expanded="true"
+          aria-controls="cmdk-results"
+          [attr.aria-label]="pal.placeholder"
+          [attr.aria-activedescendant]="activeId()"
+          [placeholder]="pal.placeholder"
+          [value]="query()"
+          (input)="onInput(searchInput.value)"
+        />
+        <span class="cmdk__hint">esc</span>
+      </div>
+
+      <div id="cmdk-results" class="cmdk__results" role="listbox" [attr.aria-label]="pal.title">
+        @for (group of groups(); track group.key) {
+          <div class="cmdk__group">
+            <div class="cmdk__group-label">{{ group.label }}</div>
+            @for (row of group.rows; track row.item.id) {
+              <button
+                type="button"
+                role="option"
+                class="cmdk__row"
+                [id]="'cmdk-option-' + row.item.id"
+                [class.cmdk__row--active]="row.index === selected()"
+                [attr.aria-selected]="row.index === selected()"
+                (click)="runItem(row.item)"
+                (mouseenter)="selected.set(row.index)"
+              >
+                <span class="cmdk__row-icon" [style.color]="row.item.color || null">
+                  <sd-icon [name]="row.item.icon" [size]="16" />
+                </span>
+                <span class="cmdk__row-text">
+                  <span class="cmdk__row-label">
+                    @for (segment of row.segments; track $index) {
+                      @if (segment.hit) {
+                        <mark class="cmdk__hit">{{ segment.text }}</mark>
+                      } @else {
+                        <span>{{ segment.text }}</span>
+                      }
+                    }
+                  </span>
+                  @if (row.item.sub) {
+                    <span class="cmdk__row-sub">{{ row.item.sub }}</span>
+                  }
+                </span>
+              </button>
+            }
+          </div>
+        }
+        @if (empty()) {
+          <div class="cmdk__empty">{{ pal.empty }}</div>
+        }
+      </div>
+
+      <div class="cmdk__footer">
+        <span class="cmdk__foot"><span class="cmdk__key">↑↓</span> {{ pal.navHint }}</span>
+        <span class="cmdk__foot"><span class="cmdk__key">↵</span> {{ pal.runHint }}</span>
+        <span class="cmdk__foot"><span class="cmdk__key">esc</span> {{ pal.closeHint }}</span>
+      </div>
+    </div>
+  </div>
+}

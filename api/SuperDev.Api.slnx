@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SuperDev.Api/SuperDev.Api.csproj" />
+    <Project Path="src/SuperDev.Application/SuperDev.Application.csproj" />
+    <Project Path="src/SuperDev.Infrastructure/SuperDev.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SuperDev.Api.Tests/SuperDev.Api.Tests.csproj" />
+    <Project Path="tests/SuperDev.Application.Tests/SuperDev.Application.Tests.csproj" />
+    <Project Path="tests/SuperDev.Infrastructure.Tests/SuperDev.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

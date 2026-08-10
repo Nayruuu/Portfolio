@@ -1,0 +1,20 @@
+/* Indeterminate top progress bar — shown while the content store revalidates (e.g. language switch). */
+.loadbar {
+	position: fixed;
+	inset: 0 0 auto;
+	height: 2px;
+	z-index: 100;
+	background: linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat;
+	background-size: 40% 100%;
+	animation: loadbar 0.9s ease-in-out infinite;
+}
+
+@keyframes loadbar {
+	0% {
+		background-position: -40% 0;
+	}
+
+	100% {
+		background-position: 140% 0;
+	}
+}

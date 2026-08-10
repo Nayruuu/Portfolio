@@ -1,0 +1,23 @@
+// macOS "traffic-light" window dots — shared chrome for the code-block header and the
+// terminal-styled contact form.
+.contact-form__head-dot,
+.code-block__dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 999px;
+}
+
+.contact-form__head-dot--red,
+.code-block__dot--red {
+	background: #ff5f57;
+}
+
+.contact-form__head-dot--yellow,
+.code-block__dot--yellow {
+	background: #febc2e;
+}
+
+.contact-form__head-dot--green,
+.code-block__dot--green {
+	background: #28c840;
+}
