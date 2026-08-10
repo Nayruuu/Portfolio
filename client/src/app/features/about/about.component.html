@@ -1,0 +1,97 @@
+@let content = i18n.content();
+<section class="tabview" data-screen-label="09 Tab — about">
+  <div class="tabview__head">
+    <div>
+      <h2 class="tabview__title">
+        <span>{{ content.about.heading }}</span>
+      </h2>
+      <p class="tabview__sub">
+        {{ content.about.subtitle }}
+      </p>
+    </div>
+  </div>
+
+  @let realisations = content.about.realisations;
+  <div class="about-grid">
+    <div class="about-main">
+      <div class="about-bio">
+        @for (paragraph of content.about.paragraphs; track $index) {
+          <p class="about-bio__p">{{ paragraph }}</p>
+        }
+      </div>
+
+      <section class="about-work" aria-labelledby="about-work-title">
+        <div class="about-work__head">
+          <h3 class="about-work__title" id="about-work-title">{{ realisations.title }}</h3>
+          <p class="about-work__sub">{{ realisations.subtitle }}</p>
+        </div>
+
+        <div class="about-work__grid">
+          @for (item of realisations.items; track item.title) {
+            <article class="work-card">
+              <h4 class="work-card__title">{{ item.title }}</h4>
+              <p class="work-card__body">{{ item.body }}</p>
+            </article>
+          }
+        </div>
+      </section>
+
+      <sd-reviews class="about-reviews" />
+
+      <div class="about-bio__signature">
+        <span>•</span> {{ content.author }} — super-dev{{ content.brandTld }}
+      </div>
+    </div>
+
+    <aside class="about-side">
+      <div class="about-side__card">
+        <div class="about-side__head">
+          {{ content.about.infoLabel }}
+        </div>
+        <dl class="about-side__list">
+          @for (detail of content.about.details; track detail.label) {
+            <div class="about-side__row">
+              <dt>{{ detail.label }}</dt>
+              <dd>{{ detail.value }}</dd>
+            </div>
+          }
+        </dl>
+      </div>
+
+      <div class="about-side__card">
+        <div class="about-side__head">
+          {{ content.about.linksLabel }}
+        </div>
+        <ul class="about-side__links">
+          @for (link of content.about.links; track link.label) {
+            <li>
+              <a [href]="href(link)" target="_blank" rel="noopener">
+                <span class="about-side__arrow">›</span>{{ link.label }}
+              </a>
+            </li>
+          }
+        </ul>
+      </div>
+
+      <div class="about-side__card">
+        <div class="about-side__head">
+          {{ content.projectsUi.title }}
+        </div>
+        <ul class="about-side__links">
+          @for (project of projects(); track project.slug) {
+            <li>
+              <a [routerLink]="['/', i18n.lang(), 'projects', project.slug]">
+                <span class="about-side__arrow">›</span>{{ project.name }}
+              </a>
+            </li>
+          }
+          <li>
+            <a [routerLink]="['/', i18n.lang(), 'projects']">
+              <span class="about-side__arrow">›</span>{{ content.projectsUi.back }}
+            </a>
+          </li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>

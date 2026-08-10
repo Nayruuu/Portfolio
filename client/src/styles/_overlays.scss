@@ -1,0 +1,75 @@
+@use 'breakpoints' as bp;
+
+.reveal {
+	opacity: 0;
+	transform: translateY(16px);
+	transition:
+		opacity 0.6s ease,
+		transform 0.6s ease;
+}
+
+.reveal.is-in {
+	opacity: 1;
+	transform: none;
+}
+
+.egg {
+	position: fixed;
+	bottom: 24px;
+	right: 24px;
+	z-index: 100;
+	background: var(--surface);
+	border: 1px solid var(--accent);
+	border-radius: var(--r-md);
+	padding: 12px 16px;
+	font-family: var(--f-mono);
+	font-size: 12px;
+	color: var(--text);
+	box-shadow: var(--sh-2);
+	animation: eggIn 0.3s ease;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.egg b {
+	color: var(--accent);
+}
+
+@keyframes eggIn {
+	from {
+		transform: translateY(20px);
+		opacity: 0;
+	}
+
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+// The konami / keyboard-shortcut hint is keyboard-only — pointless on touch —
+// so it is hidden on phones and restored from tablet up, where it renders
+// identically to the desktop baseline.
+.konami {
+	position: fixed;
+	bottom: 24px;
+	left: 24px;
+	display: none;
+	font-family: var(--f-mono);
+	font-size: 11px;
+	// Was `--text-mute` (~2:1) — now it advertises real working shortcuts, so it must be legible.
+	color: var(--text-faint);
+	pointer-events: none;
+	z-index: 100;
+}
+
+.konami b {
+	color: var(--accent);
+}
+
+@include bp.from(md) {
+	.konami {
+		display: block;
+	}
+}

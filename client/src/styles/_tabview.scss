@@ -1,0 +1,55 @@
+.tabview {
+	padding: 8px 4px 40px;
+
+	&__head {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 24px;
+		margin-bottom: 24px;
+		padding-bottom: 18px;
+		border-bottom: 1px solid var(--border-soft);
+	}
+
+	&__title {
+		font-family: var(--f-mono);
+		font-size: 22px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		margin: 0 0 6px;
+		line-height: 1.15;
+
+		/* The marker / heading span inside a tab title is always accent-colored. */
+		span {
+			color: var(--accent);
+		}
+	}
+
+	&__sub {
+		font-family: var(--f-mono);
+		font-size: 12.5px;
+		color: var(--text-dim);
+		margin: 0;
+	}
+
+	&__count {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		font-family: var(--f-mono);
+	}
+
+	&__count-v {
+		font-size: 32px;
+		font-weight: 700;
+		color: var(--accent);
+		letter-spacing: -0.02em;
+	}
+
+	&__count-lbl {
+		font-size: 11px;
+		color: var(--text-faint);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+}

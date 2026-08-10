@@ -1,0 +1,20 @@
+:host {
+	display: contents;
+}
+
+.inline-runs {
+	&__code {
+		padding: 0.1em 0.35em;
+		border-radius: 4px;
+		background: var(--surface-2, #1a1a1e);
+		font-family: var(--f-mono);
+		font-size: 0.9em;
+		overflow-wrap: anywhere; // long identifiers must break, not overflow the 360px column
+	}
+
+	&__link {
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+}

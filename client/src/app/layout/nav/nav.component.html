@@ -1,0 +1,25 @@
+<header class="nav" data-screen-label="00 Top nav">
+  <div class="nav__brand">
+    <span class="nav__brand-mark" aria-hidden>>_</span>
+    <span
+      >super-dev<span class="nav__brand-tld">{{ content().brandTld }}</span></span
+    >
+  </div>
+
+  <button
+    type="button"
+    class="nav__search"
+    aria-haspopup="dialog"
+    [attr.aria-label]="content().search"
+    (click)="palette.show()"
+  >
+    <span class="nav__search-icon"><sd-icon name="search" [size]="16" /></span>
+    <span class="nav__search-text">{{ content().search }}</span>
+    <span class="nav__search-kbd">/</span>
+  </button>
+
+  <div class="nav__actions">
+    <sd-prefs />
+    <div class="nav__avatar" role="img" [attr.aria-label]="i18n.content().author"></div>
+  </div>
+</header>

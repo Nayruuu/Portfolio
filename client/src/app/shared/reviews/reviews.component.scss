@@ -1,0 +1,136 @@
+@use 'breakpoints' as bp;
+
+.reviews {
+	margin-top: 16px;
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 10px 14px;
+		background: var(--surface);
+		border: 1px solid var(--border-soft);
+		border-radius: var(--r-md);
+		color: var(--text-dim);
+		font-family: var(--f-mono);
+		font-size: 12px;
+		cursor: pointer;
+		text-align: left;
+
+		&:hover {
+			border-color: var(--border);
+			color: var(--text);
+		}
+	}
+
+	&__stack {
+		display: flex;
+		flex-shrink: 0;
+	}
+
+	&__mini {
+		width: 22px;
+		height: 22px;
+		border-radius: 999px;
+		display: grid;
+		place-items: center;
+		color: #fff;
+		font-size: 10px;
+		font-weight: 700;
+		border: 2px solid var(--bg);
+
+		& + & {
+			margin-left: -6px;
+		}
+	}
+
+	&__teaser {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	&__source-chip {
+		flex-shrink: 0;
+		font-size: 10.5px;
+		color: var(--text-faint);
+		border: 1px solid var(--border-soft);
+		border-radius: 999px;
+		padding: 1px 8px;
+	}
+
+	&__subtitle {
+		margin: 10px 2px 0;
+		font-family: var(--f-mono);
+		font-size: 11.5px;
+		color: var(--text-faint);
+	}
+
+	&__link {
+		color: var(--text-dim);
+		text-decoration: none;
+
+		&:hover,
+		&:focus-visible {
+			color: var(--accent);
+		}
+	}
+}
+
+.review {
+	display: grid;
+	grid-template-columns: 40px 1fr;
+	gap: 14px;
+	margin-top: 16px;
+
+	&__avatar {
+		width: 40px;
+		height: 40px;
+		border-radius: 999px;
+		display: grid;
+		place-items: center;
+		color: #fff;
+		font-weight: 700;
+		font-size: 15px;
+	}
+
+	&__head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+
+	&__who {
+		font-size: 13.5px;
+		font-weight: 600;
+	}
+
+	&__role {
+		font-family: var(--f-mono);
+		font-size: 10.5px;
+		color: var(--text-dim);
+		background: var(--surface-2);
+		border-radius: 999px;
+		padding: 1px 8px;
+	}
+
+	&__body {
+		margin: 6px 0 0;
+		color: var(--text-dim);
+		font-size: 14.5px;
+		line-height: 1.6;
+		max-width: 640px;
+		white-space: pre-line;
+	}
+}
+
+// Mobile-first readability bump (same rationale as video-meta).
+@include bp.from(md) {
+	.review__body {
+		font-size: 13.5px;
+	}
+}

@@ -1,0 +1,29 @@
+.ctabs {
+	display: inline-flex;
+	gap: 3px;
+	margin-bottom: 20px;
+	padding: 3px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+}
+
+.ctab {
+	font-family: var(--f-mono);
+	font-size: 12px;
+	padding: 6px 16px;
+	border-radius: 999px;
+	color: var(--text-dim);
+	text-decoration: none;
+	cursor: pointer;
+	transition: all 0.15s;
+
+	&:hover {
+		color: var(--text);
+	}
+
+	&[aria-current='page'] {
+		background: var(--text);
+		color: var(--bg);
+	}
+}

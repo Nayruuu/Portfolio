@@ -1,0 +1,28 @@
+@if (player.mini()) {
+  @let content = i18n.content();
+  <div class="mini-player">
+    <div class="mini-player__frame">
+      <sd-player-stage />
+      <div class="mini-player__progress" #bar (click)="seek($event, bar)">
+        <div class="mini-player__progress-fill" [style.width]="progressPercent() + '%'"></div>
+      </div>
+    </div>
+    <div class="mini-player__bar">
+      <button
+        class="mini-player__btn"
+        (click)="player.togglePlay()"
+        [attr.aria-label]="player.playing() ? content.aria.pause : content.aria.play"
+      >
+        <sd-icon [name]="player.playing() ? 'pause' : 'play'" [size]="16" />
+      </button>
+      <span class="mini-player__title">{{ player.currentChapter().title }}</span>
+      <button
+        class="mini-player__btn"
+        (click)="player.closeMini()"
+        [attr.aria-label]="content.playerRestore"
+      >
+        <sd-icon name="full" [size]="15" />
+      </button>
+    </div>
+  </div>
+}

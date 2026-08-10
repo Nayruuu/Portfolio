@@ -1,0 +1,223 @@
+@let content = i18n.content();
+@let currentArticle = article();
+<article class="article-detail" data-screen-label="12 Article detail">
+  <div class="article-detail__progress" [style.width]="progress() * 100 + '%'"></div>
+
+  <div class="article-detail__topbar">
+    <a class="btn btn--ghost btn--sm" [routerLink]="['/', i18n.lang(), 'articles']">
+      <span class="article-detail__topbar-arrow">←</span>
+      {{ content.articlesUi.back }}
+    </a>
+    <div class="article-detail__topbar-actions">
+      <button type="button" class="btn btn--ghost btn--sm" (click)="share()">
+        @if (!copied()) {
+          <sd-icon name="share" [size]="14" />
+        }
+        {{ copied() ? content.copyDone : content.share }}
+      </button>
+    </div>
+  </div>
+
+  <header class="article-detail__hero">
+    <div class="article-hero__art">
+      <div class="article-hero__bg" [style.background]="heroBg(currentArticle)"></div>
+      <div class="article-hero__grid"></div>
+      <div class="article-hero__sym-wrap" [style.color]="currentArticle.accentColor">
+        <div class="article-hero__sym-inner">
+          <div
+            class="article-hero__sym"
+            [style.textShadow]="'0 0 40px ' + currentArticle.accentColor + '80'"
+          >
+            {{ currentArticle.symbol }}
+          </div>
+          <div class="article-hero__tag">{{ currentArticle.tag }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="article-detail__hero-inner">
+      <span
+        class="article-detail__tag"
+        [style.color]="currentArticle.accentColor"
+        [style.borderColor]="currentArticle.accentColor + '60'"
+        >{{ currentArticle.tag }}</span
+      >
+      <h1 class="article-detail__title">{{ currentArticle.title }}</h1>
+      <div class="article-detail__byline">
+        <div class="video-meta__author-av" role="img" [attr.aria-label]="content.author"></div>
+        <div>
+          <div class="article-detail__byline-name">{{ content.author }} <span>✓</span></div>
+          <div class="article-detail__byline-meta">
+            {{ dateOf(currentArticle) }} • {{ currentArticle.readTime }}
+            {{ content.articlesUi.read }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  @if (seriesIndex() >= 0) {
+    @let series = content.series[seriesIndex()];
+    @let seriesArticleIndexes = seriesArticleIdxs();
+    @let position = seriesArticleIndexes.indexOf(articleIndex());
+    @let prevSlug = position > 0 ? content.articles[seriesArticleIndexes[position - 1]].slug : '';
+    @let nextSlug =
+      position < seriesArticleIndexes.length - 1
+        ? content.articles[seriesArticleIndexes[position + 1]].slug
+        : '';
+    <div class="series-ribbon">
+      <div class="series-ribbon__head">
+        <div class="series-ribbon__sym" [style.color]="series.colors[0]">
+          {{ series.symbol }}
+        </div>
+        <div>
+          <div class="series-ribbon__label">
+            {{ content.articlesUi.article }} {{ position + 1 }} {{ content.articlesUi.ofLabel }}
+            {{ seriesArticleIndexes.length }} —
+            <a
+              class="series-ribbon__title"
+              [routerLink]="['/', i18n.lang(), 'series', series.slug]"
+            >
+              {{ series.title }}
+            </a>
+          </div>
+          <div class="series-ribbon__sub">{{ series.description }}</div>
+        </div>
+      </div>
+      <div class="series-ribbon__nav">
+        @if (position > 0) {
+          <a class="series-ribbon__btn" [routerLink]="['/', i18n.lang(), 'articles', prevSlug]">
+            <span>←</span>
+            {{ content.articlesUi.previous }}
+          </a>
+        } @else {
+          <span></span>
+        }
+        @if (position < seriesArticleIndexes.length - 1) {
+          <a
+            class="series-ribbon__btn series-ribbon__btn--next"
+            [routerLink]="['/', i18n.lang(), 'articles', nextSlug]"
+          >
+            {{ content.articlesUi.next }} <span>→</span>
+          </a>
+        } @else {
+          <span></span>
+        }
+      </div>
+    </div>
+  }
+
+  <div class="article-detail__reading">
+    <div class="article-detail__body">
+      @for (block of body(); track $index) {
+        @switch (block.type) {
+          @case ('h2') {
+            @let h2Id = headingId(block);
+            <h2 [id]="h2Id">
+              <a
+                class="article-detail__anchor"
+                href="#{{ h2Id }}"
+                (click)="scrollToHeading(h2Id, $event)"
+                aria-hidden="true"
+                tabindex="-1"
+                >#</a
+              >
+              <sd-inline-runs [runs]="block.runs" />
+            </h2>
+          }
+          @case ('h3') {
+            @let h3Id = headingId(block);
+            <h3 [id]="h3Id">
+              <a
+                class="article-detail__anchor"
+                href="#{{ h3Id }}"
+                (click)="scrollToHeading(h3Id, $event)"
+                aria-hidden="true"
+                tabindex="-1"
+                >#</a
+              >
+              <sd-inline-runs [runs]="block.runs" />
+            </h3>
+          }
+          @case ('p') {
+            <p><sd-inline-runs [runs]="block.runs" /></p>
+          }
+          @case ('ul') {
+            <ul class="article-detail__list">
+              @for (item of block.items; track $index) {
+                <li>
+                  <span [style.color]="currentArticle.accentColor">›</span>
+                  <sd-inline-runs [runs]="item" />
+                </li>
+              }
+            </ul>
+          }
+          @case ('code') {
+            <sd-code-block [code]="block.text" [lang]="block.lang" />
+          }
+          @case ('quote') {
+            <blockquote><sd-inline-runs [runs]="block.runs" /></blockquote>
+          }
+        }
+      }
+      <div class="article-detail__signature">
+        <span>•</span> {{ content.author }} — super-dev{{ content.brandTld }}
+      </div>
+    </div>
+
+    @if (toc().length > 0) {
+      <aside class="article-detail__toc">
+        <nav aria-labelledby="article-detail-toc-label">
+          <div class="article-detail__toc-label" id="article-detail-toc-label">
+            {{ content.articlesUi.onThisPage }}
+          </div>
+          <ul class="article-detail__toc-list">
+            @for (entry of toc(); track entry.id) {
+              <li
+                class="article-detail__toc-item"
+                [class.article-detail__toc-item--h3]="entry.level === 3"
+                [class.article-detail__toc-item--active]="entry.id === activeId()"
+              >
+                <a href="#{{ entry.id }}" (click)="scrollToHeading(entry.id, $event)">{{
+                  entry.text
+                }}</a>
+              </li>
+            }
+          </ul>
+        </nav>
+      </aside>
+    }
+  </div>
+
+  <div class="article-detail__react">
+    <sd-like-bar />
+  </div>
+
+  @if (suggested().length > 0) {
+    <section class="article-detail__related">
+      <div class="article-detail__related-head">
+        <span>// </span>{{ content.articlesUi.moreIn }}{{ currentArticle.tag }}
+      </div>
+      <div class="article-detail__related-grid">
+        @for (row of suggested(); track row.index) {
+          <a class="rel-card" [routerLink]="['/', i18n.lang(), 'articles', row.article.slug]">
+            <div
+              class="rel-card__sym"
+              [style.color]="row.article.accentColor"
+              [style.background]="
+                'radial-gradient(circle at 30% 30%, ' + row.article.accentColor + '30, #0a0a0c)'
+              "
+            >
+              {{ row.article.symbol }}
+            </div>
+            <div>
+              <div class="rel-card__title">{{ row.article.title }}</div>
+              <div class="rel-card__meta">
+                {{ dateOf(row.article) }} • {{ row.article.readTime }}
+              </div>
+            </div>
+          </a>
+        }
+      </div>
+    </section>
+  }
+</article>

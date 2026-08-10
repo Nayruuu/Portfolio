@@ -1,0 +1,52 @@
+name: Deploy - API
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [api/**]
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  FUNCTIONAPP_NAME: afu-sd-api
+  PROJECT: api/src/SuperDev.Api/SuperDev.Api.csproj
+  PUBLISH_DIR: ${{ github.workspace }}/publish
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    environment: api
+
+    permissions:
+      id-token: write # Azure OIDC login
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Test
+        run: dotnet test api --configuration Release
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT }} --configuration Release --output ${{ env.PUBLISH_DIR }}
+
+      - name: Azure Login
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Zip-deploys the pre-published isolated-worker output to the Flex Consumption app.
+      # afu-sd-api / its app settings come from infra/ (Terraform).
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@bc63708cc6539760eea18d8a7de4ce8ef5fdf593 # v1
+        with:
+          app-name: ${{ env.FUNCTIONAPP_NAME }}
+          package: ${{ env.PUBLISH_DIR }}
